@@ -2094,6 +2094,61 @@
     return true;
   };
 
+  // ─── 退勤打刻削除: checkOutのみをNULLにする（admin/manager専用）─────────────────
+  const clearCheckOut = async (tr) => {
+    if (!tr) return;
+    const idRaw = String(tr.dataset.id || '').trim();
+    if (!idRaw) {
+      showErr('保存済みの打刻レコードがありません。');
+      return;
+    }
+    const outEl = tr.querySelector('input.se-time[data-field="checkOut"]');
+    const outVal = String(outEl?.value || '').trim();
+    if (!outVal) {
+      showErr('退勤打刻がありません。');
+      return;
+    }
+    if (!confirm('退勤打刻を削除しますか？\nチェックイン時刻はそのまま残ります。')) return;
+
+    showErr('');
+    try {
+      // Read current checkIn from the row to preserve it
+      const inEl = tr.querySelector('input.se-time[data-field="checkIn"]');
+      const dateStr = String(tr.dataset.date || '').slice(0, 10);
+      const rawIn = String(inEl?.value || '').trim();
+      const core = root.Core || {};
+      const checkInDt = rawIn && core.toDateTime ? core.toDateTime(dateStr, rawIn) : null;
+
+      const r = await fetchJSONAuth(
+        `/api/admin/attendance/${encodeURIComponent(idRaw)}`,
+        { method: 'PATCH', body: JSON.stringify({ checkIn: checkInDt || undefined, checkOut: null }) }
+      );
+      if (r && (r.message === 'Unauthorized' || (r.status && Number(r.status) >= 400))) {
+        throw new Error(String(r.message || '退勤削除に失敗しました'));
+      }
+
+      // Update DOM — clear the checkout field and manual flag
+      if (outEl) { outEl.value = ''; outEl.dataset.manual = ''; }
+
+      // Update local state so re-render stays consistent
+      try {
+        const days = Array.isArray(state.currentMonthDetail?.days) ? state.currentMonthDetail.days : [];
+        const day = days.find(d => String(d?.date || '').slice(0, 10) === dateStr);
+        if (day && Array.isArray(day.segments)) {
+          const seg = day.segments.find(s => String(s?.id || '') === idRaw);
+          if (seg) seg.checkOut = null;
+        }
+      } catch (e) { /* silently ignored */ }
+
+      // Recompute the row visuals (worked hours, status, etc.)
+      try { root.Render?.recomputeRow?.(tr); } catch (e) { /* silently ignored */ }
+
+      if (root.Core?.showToast) root.Core.showToast('退勤打刻を削除しました', 'success');
+    } catch (err) {
+      showErr(err?.message || '退勤削除に失敗しました');
+    }
+  };
+
   const setActingUserId = async (nextUserId) => {
     ctx.actingUserId = String(nextUserId || '').trim();
     try { if (ctx.monthCache instanceof Map) ctx.monthCache.clear(); } catch (e) { /* silently ignored */ }
@@ -2159,6 +2214,7 @@
     tableHistory,
     addSegmentRow,
     clearRow,
+    clearCheckOut,
     checkImportFile,
     setActingUserId
   };

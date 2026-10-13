@@ -1308,8 +1308,13 @@ router.patch('/attendance/:id', authorize('admin','manager'), async (req, res) =
     if (!id) return res.status(400).json({ message: 'Missing id' });
     const current = await attendanceRepo.getById(id, { tenantId: req.tenantId || null });
     if (!current) return res.status(404).json({ message: 'Not found' });
-    await attendanceRepo.updateTimes(id, checkIn || null, checkOut || null, { tenantId: req.tenantId || null });
-    try { await auditRepo.writeLog({ userId: req.user.id, action: 'admin_attendance_update', path: req.path, method: req.method, ip: req.ip, userAgent: req.headers['user-agent'], beforeData: JSON.stringify({ id }), afterData: JSON.stringify({ checkIn, checkOut }) }); } catch (e) { /* silently ignored */ }
+    // checkIn が省略された場合は既存値を使う（退勤だけクリアするケースに対応）
+    const resolvedCheckIn = checkIn !== undefined ? (checkIn || null) : (current.checkIn || null);
+    const resolvedCheckOut = Object.prototype.hasOwnProperty.call(req.body || {}, 'checkOut')
+      ? (checkOut || null)
+      : (current.checkOut || null);
+    await attendanceRepo.updateTimes(id, resolvedCheckIn, resolvedCheckOut, { tenantId: req.tenantId || null });
+    try { await auditRepo.writeLog({ userId: req.user.id, action: 'admin_attendance_update', path: req.path, method: req.method, ip: req.ip, userAgent: req.headers['user-agent'], beforeData: JSON.stringify({ id, checkIn: current.checkIn, checkOut: current.checkOut }), afterData: JSON.stringify({ checkIn: resolvedCheckIn, checkOut: resolvedCheckOut }) }); } catch (e) { /* silently ignored */ }
     res.status(200).json({ id });
   } catch (err) {
     res.status(500).json({ message: err.message });

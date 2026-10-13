@@ -587,9 +587,10 @@
       </td>
       <td style="text-align:center;color:#0f172a;font-weight:800;">${showDateDow ? esc(st.approver) : '—'}</td>
       <td style="text-align:center;">
-         <div style="display:flex; justify-content:center; gap:4px;">
+         <div style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
            ${showDateDow ? `<button type="button" class="se-icon-btn primary" data-action="add" ${(state.editableMonth && canAddMore) ? '' : 'disabled'} title="${canAddMore ? '行追加' : '1日は最大3件まで'}" style="font-weight:bold; font-size:14px; padding:0; width:22px; height:22px;">+</button>` : ''}
            <button type="button" class="se-icon-btn secondary" data-action="clear" ${state.editableMonth ? '' : 'disabled'} title="行クリア" style="padding:0; width:22px; height:22px;">×</button>
+           ${(isAdminView && hasActualOut) ? `<button type="button" class="se-icon-btn warn" data-action="clear-checkout" ${state.editableMonth ? '' : 'disabled'} title="退勤打刻を削除（チェックインのみ残す）" style="font-size:10px; padding:0 3px; width:auto; min-width:30px; height:22px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">退勤削除</button>` : ''}
          </div>
        </td>
       <td style="text-align:center;">${showDateDow ? `<button type="button" class="se-mini-btn" data-action="history">表示</button>` : ''}</td>

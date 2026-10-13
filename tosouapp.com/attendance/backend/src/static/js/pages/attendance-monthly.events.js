@@ -1273,6 +1273,11 @@
       if (action === 'history') {
         controller.tableHistory(dateStr);
       }
+      if (action === 'clear-checkout') {
+        e.preventDefault();
+        try { await controller.clearCheckOut(tr); } catch (e) { console.error(e); }
+        return;
+      }
     });
   };
 
