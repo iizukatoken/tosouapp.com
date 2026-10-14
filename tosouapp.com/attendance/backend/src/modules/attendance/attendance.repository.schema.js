@@ -254,6 +254,19 @@ async function ensureWorkDetailsSchema() {
       CONSTRAINT fk_uwd_user FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
+  // 重複行を削除してから UNIQUE INDEX を追加する（既存の重複データを保護するため）
+  try {
+    await db.query(`
+      DELETE d1 FROM user_work_details d1
+      INNER JOIN user_work_details d2
+        ON d1.userId = d2.userId
+        AND d1.start_date = d2.start_date
+        AND d1.id > d2.id
+    `);
+  } catch (e) { /* 重複なし、または削除済み */ }
+  try {
+    await db.query(`ALTER TABLE user_work_details ADD UNIQUE KEY uniq_uwd_user_start (userId, start_date)`);
+  } catch (e) { /* 既に存在する場合は無視 */ }
 }
 
 async function ensureAttendanceMonthSummarySchema() {

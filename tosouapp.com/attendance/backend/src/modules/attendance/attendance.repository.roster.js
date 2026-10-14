@@ -326,7 +326,8 @@ module.exports = {
     const params = [uid];
     if (tid != null) { where.push('d.tenant_id = ?'); params.push(tid); }
     if (from && to) {
-      where.push('d.start_date <= ?');
+      // start_date が NULL のレコードも含める（期間未設定の契約内容を除外しない）
+      where.push('(d.start_date IS NULL OR d.start_date <= ?)');
       where.push('(d.end_date IS NULL OR d.end_date >= ?)');
       params.push(to, from);
     }
@@ -364,6 +365,14 @@ module.exports = {
     const [res] = await db.query(`
       INSERT INTO user_work_details (userId, start_date, end_date, company_name, work_place_address, work_content, role_title, responsibility_level, tenant_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        id = LAST_INSERT_ID(id),
+        end_date = VALUES(end_date),
+        company_name = VALUES(company_name),
+        work_place_address = VALUES(work_place_address),
+        work_content = VALUES(work_content),
+        role_title = VALUES(role_title),
+        responsibility_level = VALUES(responsibility_level)
     `, [uid, startDate, endDate, company, addr, content, roleTitle, resp, tid]);
     return res?.insertId || null;
   },
