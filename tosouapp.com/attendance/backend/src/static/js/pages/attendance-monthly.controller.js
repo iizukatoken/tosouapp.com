@@ -1350,9 +1350,8 @@
           }
         } else if (inDt) {
           updates.push({ id: xid, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes });
-        } else {
-          return;
         }
+        // inDt なし・時間編集なし → updates は空のまま続行（現場・作業内容だけの保存を許可）
       } else if (inDt) {
         updates.push({ clientId, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes });
       }
