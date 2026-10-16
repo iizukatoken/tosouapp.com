@@ -563,7 +563,9 @@
         })();
         let txt = late && early ? '遅刻/早退' : late ? '遅刻' : early ? '早退' : '—';
         // 休日出勤日は以前 日次画面が自動保存した遅刻・早退分も表示しない (データ自体は変更しない)
-        const lateMin = isHolidayWork ? 0 : Number(daily?.lateMinutes || daily?.late_minutes || 0);
+        // 保存済みの遅刻分が実際の出勤時刻より大きい場合 (例: 打刻13:58で298分 → 調整後08:50) は実際の値を上限にする
+        let lateMin = isHolidayWork ? 0 : Number(daily?.lateMinutes || daily?.late_minutes || 0);
+        if (lateMin > 0 && inM != null && stM != null) lateMin = Math.min(lateMin, Math.max(0, inM - stM));
         const earlyMin = isHolidayWork ? 0 : Number(daily?.earlyMinutes || daily?.early_minutes || 0);
 
         if (txt === '—' && (lateMin > 0 || earlyMin > 0)) {

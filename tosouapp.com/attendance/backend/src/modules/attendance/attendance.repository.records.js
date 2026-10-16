@@ -755,6 +755,25 @@ module.exports = {
             furikaeHolidayDate = /^\d{4}-\d{2}-\d{2}$/.test(fv) ? fv : null;
           }
 
+          // 遅刻 đã lưu lớn hơn mức đi muộn thực tế của ngày (出勤 sớm nhất - giờ bắt đầu ca) → giảm về mức thực tế.
+          // Vd: 打刻 13:58 lưu 遅刻298分, sau đó 調整申請 sửa thành 08:50 / xoá 行 thừa → 保存 sẽ sửa lại.
+          // Chỉ giảm, không bao giờ tăng (không tự sinh 遅刻 mới), và chỉ khi client không gửi 遅刻.
+          const clientSentLate = Object.prototype.hasOwnProperty.call(d, 'late_minutes') || Object.prototype.hasOwnProperty.call(d, 'lateMinutes');
+          if (!clientSentLate && Number(late_minutes || 0) > 0) {
+            try {
+              const [[fi]] = await conn.query(
+                `SELECT DATE_FORMAT(MIN(checkIn), '%H:%i') AS firstIn FROM attendance WHERE userId = ? AND DATE(checkIn) = ?`,
+                [userId, date]
+              );
+              const inMin = hmToMin(fi?.firstIn);
+              const ssMin = hmToMin(String(d.shiftStart || '08:00').trim());
+              if (inMin != null && ssMin != null) {
+                const actualLate = Math.max(0, inMin - ssMin);
+                if (actualLate < Number(late_minutes)) late_minutes = actualLate > 0 ? actualLate : null;
+              }
+            } catch (e) { /* giữ nguyên 遅刻 đã lưu */ }
+          }
+
           // Skip INSERT/UPDATE nếu existing tồn tại và KHÔNG có field nào thay đổi (performance)
           if (existing) {
             const unchanged =
