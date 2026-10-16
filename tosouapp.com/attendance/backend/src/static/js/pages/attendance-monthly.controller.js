@@ -272,6 +272,23 @@
     }
   };
 
+  // Cache bảng tháng được giữ qua các lần đăng nhập để mở ra là thấy ngay. Mỗi entry ghi kèm
+  // "chủ" (email người đăng nhập) và chỉ dùng khi đúng người đó → người khác đăng nhập trên
+  // cùng máy không bao giờ thấy dữ liệu của người trước (dù đăng nhập bằng mật khẩu hay passkey).
+  const cacheOwner = () => {
+    try {
+      const raw = sessionStorage.getItem('user') || localStorage.getItem('user') || '';
+      const u = raw ? JSON.parse(raw) : null;
+      return String(u?.email || u?.username || '').trim().toLowerCase();
+    } catch (e) {
+      return '';
+    }
+  };
+  const isMyCache = (obj) => {
+    const owner = cacheOwner();
+    return !!(obj && owner && String(obj.owner || '') === owner);
+  };
+
   const readFastMonthCache = (cacheKey) => {
     try {
       const k = String(cacheKey || '').trim();
@@ -279,7 +296,7 @@
       const raw = localStorage.getItem(`monthly.cache.fast.${k}`) || '';
       if (!raw) return null;
       const obj = JSON.parse(raw); 
-      if (!obj || typeof obj !== 'object' || !obj.detail) return null;
+      if (!obj || typeof obj !== 'object' || !obj.detail || !isMyCache(obj)) return null;
       return obj;
     } catch (e) {
       return null;
@@ -292,6 +309,7 @@
       localStorage.setItem(`monthly.cache.fast.${k}`, JSON.stringify({
         detail: payload.detail,
         timesheet: payload.timesheet || null,
+        owner: cacheOwner(),
         at: Date.now()
       }));
       // Keep one generic fallback for employee self screen across sessions.
@@ -301,6 +319,7 @@
           ym: String(k.split(':')[1] || ''),
           detail: payload.detail,
           timesheet: payload.timesheet || null,
+          owner: cacheOwner(),
           at: Date.now()
         }));
       }
@@ -647,6 +666,7 @@
       try {
         const raw = sessionStorage.getItem(`monthly.cache.${cacheKey}`);
         if (raw) persisted = JSON.parse(raw);
+        if (!isMyCache(persisted)) persisted = null;
       } catch (e) { /* silently ignored */ }
       if (!persisted) {
         persisted = readFastMonthCache(cacheKey);
@@ -655,7 +675,7 @@
         try {
           const latestRaw = localStorage.getItem('monthly.cache.fast.self.latest') || '';
           const latest = latestRaw ? JSON.parse(latestRaw) : null;
-          if (latest && latest.detail && String(latest.ym || '') === String(ym || '')) persisted = latest;
+          if (latest && latest.detail && isMyCache(latest) && String(latest.ym || '') === String(ym || '')) persisted = latest;
         } catch (e) { /* silently ignored */ }
       }
     }
@@ -664,7 +684,7 @@
       try {
         const latestRaw = localStorage.getItem('monthly.cache.fast.self.latest') || '';
         const latest = latestRaw ? JSON.parse(latestRaw) : null;
-        if (latest && latest.detail) latestFast = latest;
+        if (latest && latest.detail && isMyCache(latest)) latestFast = latest;
       } catch (e) { /* silently ignored */ }
     }
     const instant = cached || persisted || latestFast;
@@ -725,7 +745,7 @@
       if (reqSeq !== ctx.monthReqSeq) return;
       ctx.monthCache.set(cacheKey, { detail, timesheet: null, at: Date.now() });
       try {
-        sessionStorage.setItem(`monthly.cache.${cacheKey}`, JSON.stringify({ detail, timesheet: null, at: Date.now() }));
+        sessionStorage.setItem(`monthly.cache.${cacheKey}`, JSON.stringify({ detail, timesheet: null, owner: cacheOwner(), at: Date.now() }));
       } catch (e) { /* silently ignored */ }
       writeFastMonthCache(cacheKey, { detail, timesheet: null });
       state.currentMonthDetail = detail;
@@ -792,7 +812,7 @@
           try {
             const nextCache = { detail: state.currentMonthDetail, timesheet: state.currentMonthTimesheet, at: Date.now() };
             ctx.monthCache.set(cacheKey, nextCache);
-            sessionStorage.setItem(`monthly.cache.${cacheKey}`, JSON.stringify(nextCache));
+            sessionStorage.setItem(`monthly.cache.${cacheKey}`, JSON.stringify({ ...nextCache, owner: cacheOwner() }));
             writeFastMonthCache(cacheKey, nextCache);
           } catch (e) { /* silently ignored */ }
           try { renderSummary(ctx.summaryHost, state.currentMonthDetail, state.currentMonthTimesheet); } catch (e) { /* silently ignored */ }

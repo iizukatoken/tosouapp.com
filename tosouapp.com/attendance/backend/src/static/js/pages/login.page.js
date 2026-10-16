@@ -38,7 +38,27 @@ function setError(msg) {
 }
 
 
+// Người đăng nhập khác với chủ cache bảng tháng trên máy này → xoá cache của người trước.
+// Cùng người đăng nhập lại → giữ cache để bảng tháng hiển thị ngay.
+function clearMonthlyCacheIfOwnerChanged(email, username) {
+  try {
+    const owner = String(email || username || '').trim().toLowerCase();
+    const prev = String(localStorage.getItem('monthlyCacheOwner') || '');
+    if (!owner || prev !== owner) {
+      localStorage.removeItem('monthly.lastParams');
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('monthly.cache.')) localStorage.removeItem(key);
+      });
+      Object.keys(sessionStorage).forEach(key => {
+        if (key.startsWith('monthly.cache.')) sessionStorage.removeItem(key);
+      });
+    }
+    if (owner) localStorage.setItem('monthlyCacheOwner', owner);
+  } catch (e) { /* silently ignored */ }
+}
+
 function saveAuth({ accessToken, username, email, role, tenants, tenantId, tenantName }) {
+  clearMonthlyCacheIfOwnerChanged(email, username);
   sessionStorage.setItem('accessToken', accessToken);
   // Backup to localStorage so select-company page survives Chrome password popup
   try { localStorage.setItem('accessToken', accessToken); } catch (e) { /* silently ignored */ }
@@ -102,16 +122,6 @@ async function handleSubmit(e) {
     return;
   }
 
-  // Clear localStorage BEFORE login to prevent state leak from previous accounts
-  try {
-    localStorage.removeItem('monthly.lastParams');
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('monthly.cache.')) {
-        localStorage.removeItem(key);
-      }
-    });
-  } catch (e) { /* silently ignored */ }
-
   const btn = $('#loginBtn');
   if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
   if (statusEl) { statusEl.textContent = 'ログイン中...'; }
@@ -166,13 +176,8 @@ document.addEventListener('DOMContentLoaded', () => {
   try {
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('user');
-    // Clear localStorage when returning to login page to prevent state leaks across accounts
-    localStorage.removeItem('monthly.lastParams');
-    Object.keys(localStorage).forEach(key => {
-      if (key.startsWith('monthly.cache.')) {
-        localStorage.removeItem(key);
-      }
-    });
+    // Cache bảng tháng KHÔNG xoá ở đây nữa: giữ lại để cùng người đăng nhập lại mở ra là thấy ngay.
+    // Khi người KHÁC đăng nhập, saveAuth() xoá cache (và bảng tháng chỉ dùng cache đúng chủ).
   } catch (e) { /* silently ignored */ }
   try {
     const ref = document.referrer || '';
@@ -188,13 +193,6 @@ document.addEventListener('DOMContentLoaded', () => {
       try {
         localStorage.removeItem('refreshToken');
         localStorage.removeItem('user');
-        // Clear localStorage when returning to login page to prevent state leak across accounts
-        localStorage.removeItem('monthly.lastParams');
-        Object.keys(localStorage).forEach(key => {
-          if (key.startsWith('monthly.cache.')) {
-            localStorage.removeItem(key);
-          }
-        });
       } catch (e) { /* silently ignored */ }
       try {
         sessionStorage.removeItem('navSpinner');
