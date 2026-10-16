@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>データ移行 - 管理者</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 24px;
+      background: #f9f9f9;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 16px;
+    }
+    .desc {
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+    button {
+      background: #1e40af;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #1e3a8a;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .result {
+      margin-top: 24px;
+      padding: 16px;
+      border-radius: 6px;
+      display: none;
+    }
+    .result.success {
+      background: #d1fae5;
+      border: 1px solid #10b981;
+      color: #065f46;
+    }
+    .result.error {
+      background: #fee2e2;
+      border: 1px solid #ef4444;
+      color: #991b1b;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>🔧 勤怠ステータス修正</h1>
+    <div class="desc">
+      <p>出勤・退勤・作業内容が揃っているのに「未承認」「遅刻」のままになっている古いデータを「確認済み」に更新します。</p>
+      <p><strong>対象:</strong> checkIn + checkOut + 作業内容が全て入力済みのレコード</p>
+    </div>
+    <button id="runBtn" onclick="runMigration()">実行する</button>
+    <div id="result" class="result"></div>
+  </div>
+
+  <script>
+    async function runMigration() {
+      const btn = document.getElementById('runBtn');
+      const resultDiv = document.getElementById('result');
+      
+      btn.disabled = true;
+      btn.textContent = '実行中...';
+      resultDiv.style.display = 'none';
+      
+      try {
+        const res = await fetch('/api/admin/migration/fix-confirmed-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include'
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+          resultDiv.className = 'result success';
+          resultDiv.innerHTML = `
+            <strong>✅ 完了しました</strong><br>
+            更新件数: ${data.changedRows}件
+          `;
+        } else {
+          resultDiv.className = 'result error';
+          resultDiv.innerHTML = `<strong>❌ エラー:</strong> ${data.error || '不明なエラー'}`;
+        }
+      } catch (err) {
+        resultDiv.className = 'result error';
+        resultDiv.innerHTML = `<strong>❌ エラー:</strong> ${err.message}`;
+      } finally {
+        resultDiv.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = '実行する';
+      }
+    }
+  </script>
+</body>
+</html>

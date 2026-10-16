@@ -234,3 +234,9 @@ router.get('/:page.html', (req, res) => {
 });
 
 module.exports = router;
+
+// Admin migration page
+router.get('/admin/migration', authenticateFromCookie, authorizePage('admin'), (req, res) => {
+  setNoStore(res);
+  res.render('admin-migration', { user: req.user || null });
+});
