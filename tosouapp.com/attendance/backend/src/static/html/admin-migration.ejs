@@ -155,5 +155,55 @@
       });
     })();
   </script>
+  <div class="card" style="margin-top:24px">
+    <h1>🔍 重複している勤怠行の確認</h1>
+    <div class="desc">
+      <p>同じ日に時間が重なる勤怠行が2つ以上ある社員を一覧表示します（調整申請の承認で行が二重になったケースなど）。</p>
+      <p><strong>この画面では何も変更しません。</strong>「月次」リンクから該当月を開き、不要な行を行操作の × で削除してください。</p>
+    </div>
+    <div class="btn-row">
+      <button id="dupBtn">直近6か月を確認</button>
+    </div>
+    <div id="dupResult" class="result"></div>
+  </div>
+
+  <script nonce="<%= typeof cspNonce !== 'undefined' ? cspNonce : '' %>">
+    (function () {
+      var btn = document.getElementById('dupBtn');
+      var box = document.getElementById('dupResult');
+      function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+      }
+      btn.addEventListener('click', async function () {
+        btn.disabled = true;
+        try {
+          var res = await fetch('/api/admin/attendance/suspected-duplicates?months=6', { credentials: 'include' });
+          var data = null;
+          try { data = await res.json(); } catch (e) { /* ignore */ }
+          if (!res.ok || !data || !data.ok) throw new Error((data && (data.error || data.message)) || ('HTTP ' + res.status));
+          var rows = (data.rows || []).map(function (r) {
+            var link = '/admin/attendance/monthly?userId=' + encodeURIComponent(r.userId) + '&month=' + encodeURIComponent(String(r.date).slice(0, 7));
+            return '<tr><td>' + esc(r.date) + '</td><td>' + esc(r.employeeCode || '') + ' ' + esc(r.userName || r.userId) + '</td>' +
+              '<td>' + esc(r.in1) + '〜' + esc(r.out1 || '') + '</td><td>' + esc(r.in2) + '〜' + esc(r.out2 || '') + '</td>' +
+              '<td><a href="' + link + '" target="_blank" rel="noopener">月次</a></td></tr>';
+          }).join('');
+          box.className = 'result ' + (data.count ? 'info' : 'success');
+          box.innerHTML = data.count
+            ? '<strong>' + esc(data.count) + '件</strong>' + (data.count >= 500 ? '（最大500件まで表示）' : '') +
+              '<table><thead><tr><th>日付</th><th>社員</th><th>行1</th><th>行2</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
+            : '<strong>✅ 重複している行はありません</strong>';
+          box.style.display = 'block';
+        } catch (err) {
+          box.className = 'result error';
+          box.innerHTML = '<strong>❌ エラー:</strong> ' + esc(err.message);
+          box.style.display = 'block';
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    })();
+  </script>
 </body>
 </html>

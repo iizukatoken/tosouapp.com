@@ -2094,3 +2094,35 @@ router.post('/migration/fix-confirmed-status', authorize('admin'), async (req, r
     if (conn) conn.release();
   }
 });
+
+// Danh sách (CHỈ ĐỌC) các ngày có 2 行 chấm công trùng khung giờ — thường do duyệt 調整申請
+// của đơn gửi trước khi 打刻 (đã sửa từ nay). Không sửa/xoá gì; admin tự xem và xoá 行 thừa bằng nút ×.
+router.get('/attendance/suspected-duplicates', authorize('admin'), async (req, res) => {
+  const tid = req.tenantId ? parseInt(String(req.tenantId), 10) : null;
+  if (!tid) return res.status(400).json({ ok: false, error: 'tenant を特定できません' });
+  const months = Math.min(Math.max(parseInt(String(req.query.months || '6'), 10) || 6, 1), 24);
+  try {
+    const [rows] = await db.query(
+      `SELECT a1.userId, u.username AS userName, u.employee_code AS employeeCode,
+              DATE_FORMAT(a1.checkIn, '%Y-%m-%d') AS date,
+              a1.id AS id1, DATE_FORMAT(a1.checkIn, '%H:%i') AS in1, DATE_FORMAT(a1.checkOut, '%H:%i') AS out1,
+              a2.id AS id2, DATE_FORMAT(a2.checkIn, '%H:%i') AS in2, DATE_FORMAT(a2.checkOut, '%H:%i') AS out2
+         FROM attendance a1
+         JOIN attendance a2
+           ON a2.userId = a1.userId AND a2.id > a1.id
+          AND DATE(a2.checkIn) = DATE(a1.checkIn)
+          AND a1.checkIn < COALESCE(a2.checkOut, a2.checkIn + INTERVAL 1 MINUTE)
+          AND a2.checkIn < COALESCE(a1.checkOut, a1.checkIn + INTERVAL 1 MINUTE)
+         JOIN users u ON u.id = a1.userId
+        WHERE u.tenant_id = ?
+          AND a1.checkIn >= (CURDATE() - INTERVAL ? MONTH)
+        ORDER BY date DESC, u.employee_code ASC
+        LIMIT 500`,
+      [tid, months]
+    );
+    res.json({ ok: true, months, count: rows.length, rows });
+  } catch (err) {
+    console.error('suspected-duplicates failed:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});

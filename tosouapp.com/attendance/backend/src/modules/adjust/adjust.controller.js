@@ -2,6 +2,70 @@ const repo = require('./adjust.repository');
 const attendanceRepo = require('../attendance/attendance.repository');
 const noticesRepo = require('../notices/notices.repository');
 const summaryRepo = require('../attendance/attendance.summary.repository');
+const db = require('../../core/database/mysql');
+const { isHolidayWorkDay, getUserOffDaySet } = require('../attendance/attendance.utils');
+
+// Sau khi duyệt 調整申請: tính lại 遅刻/早退 của ngày đó theo giờ chấm công mới
+// (cùng quy tắc với màn hình: 遅刻 = 出勤 đầu tiên - giờ bắt đầu ca, 早退 = giờ kết thúc ca - 退勤 cuối cùng,
+//  ca mặc định 08:00-17:00, 正社員 đi làm ngày nghỉ thì không tính).
+// Nếu không làm vậy, 遅刻 cũ (vd 298分 tính từ lần 打刻 13:58) vẫn còn dù giờ đã sửa thành 08:50.
+async function recomputeDailyLateEarly(reqRow, tid) {
+  const ds = String(reqRow.requestedCheckIn || reqRow.requestedCheckOut || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds)) return;
+  const userId = reqRow.userId;
+  const [[daily]] = await db.query('SELECT id, kubun, early_minutes FROM attendance_daily WHERE userId = ? AND date = ? LIMIT 1', [userId, ds]);
+  if (!daily) return;
+  const [[span]] = await db.query(
+    `SELECT DATE_FORMAT(MIN(checkIn), '%H:%i') AS firstIn, DATE_FORMAT(MAX(checkOut), '%H:%i') AS lastOut,
+            DATE_FORMAT(MAX(checkOut), '%Y-%m-%d') AS lastOutDate
+       FROM attendance WHERE userId = ? AND DATE(checkIn) = ?`,
+    [userId, ds]
+  );
+  const [[user]] = await db.query('SELECT employment_type FROM users WHERE id = ? LIMIT 1', [userId]);
+  const offSet = await getUserOffDaySet(parseInt(ds.slice(0, 4), 10), userId, tid || 0).catch(() => new Set());
+  if (isHolidayWorkDay({ kubun: daily.kubun, isOffDay: offSet.has(ds), employmentType: user?.employment_type })) {
+    await db.query('UPDATE attendance_daily SET late_minutes = NULL, early_minutes = NULL WHERE id = ?', [daily.id]);
+    return;
+  }
+  let shiftStart = '08:00';
+  let shiftEnd = '17:00';
+  try {
+    // Cùng cách chọn ca như GET month detail (attendance.monthdetail.controller.js shiftForDate)
+    const [defs, assigns] = await Promise.all([
+      attendanceRepo.listShiftDefinitions().catch(() => []),
+      attendanceRepo.listShiftAssignmentsBetween(userId, ds, ds).catch(() => []),
+    ]);
+    let best = null;
+    for (const a of assigns || []) {
+      const sd = String(a?.start_date || '').slice(0, 10);
+      if (!sd || sd > ds) continue;
+      const ed = a?.end_date ? String(a.end_date).slice(0, 10) : '';
+      if (ed && ed < ds) continue;
+      best = a;
+    }
+    if (best) {
+      const def = (defs || []).find(s => best.shiftId != null && String(s.id) === String(best.shiftId))
+        || (defs || []).find(s => best.shift != null && String(s.name) === String(best.shift));
+      if (def?.start_time) shiftStart = String(def.start_time).slice(0, 5);
+      if (def?.end_time) shiftEnd = String(def.end_time).slice(0, 5);
+    }
+  } catch (e) { /* không lấy được ca → dùng ca mặc định */ }
+  const toMin = (hm) => {
+    const m = String(hm || '').match(/^(\d{1,2}):(\d{2})/);
+    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+  };
+  const inMin = toMin(span?.firstIn);
+  // 退勤 sang ngày hôm sau thì không phải 早退
+  const outMin = (span?.lastOutDate && span.lastOutDate > ds) ? null : toMin(span?.lastOut);
+  const ssMin = toMin(shiftStart);
+  const seMin = toMin(shiftEnd);
+  const late = (inMin != null && ssMin != null && inMin > ssMin) ? inMin - ssMin : null;
+  // 早退: chỉ tính lại khi ngày đó vốn đã có 早退 (không tự sinh 早退 mới, vd パート ca ngắn hơn giờ ca chuẩn)
+  const early = daily.early_minutes == null
+    ? null
+    : ((outMin != null && seMin != null && seMin > ssMin && outMin < seMin) ? seMin - outMin : null);
+  await db.query('UPDATE attendance_daily SET late_minutes = ?, early_minutes = ? WHERE id = ?', [late, early, daily.id]);
+}
 // Controller yêu cầu sửa giờ
 exports.create = async (req, res) => {
   try {
@@ -82,6 +146,21 @@ exports.updateStatus = async (req, res) => {
         //   dùng bulkUpsertAttendance (chính là hàm màn 月次 dùng) để TẠO MỚI record
         //   cho đúng ngày, đồng thời đồng bộ attendance_daily.
         try {
+          // Đơn không gắn record (vd nhân viên gửi đơn TRƯỚC khi bấm 打刻 muộn trong ngày) nhưng lúc duyệt
+          // ngày đó đã có record trùng khung giờ với đơn → sửa record đó, KHÔNG tạo thêm 1 行 mới.
+          // Record không trùng giờ (vd 行 họp buổi tối) thì giữ nguyên và tạo mới như trước.
+          if (!reqRow.attendanceId && reqRow.requestedCheckIn) {
+            const reqIn = String(reqRow.requestedCheckIn).replace('T', ' ').slice(0, 19);
+            const reqOut = reqRow.requestedCheckOut ? String(reqRow.requestedCheckOut).replace('T', ' ').slice(0, 19) : reqIn;
+            const [sameDay] = await db.query(
+              `SELECT id, checkIn, checkOut FROM attendance
+                WHERE userId = ? AND DATE(checkIn) = DATE(?)
+                  AND checkIn <= ? AND COALESCE(checkOut, checkIn) >= ?
+                ORDER BY checkIn ASC`,
+              [reqRow.userId, reqIn, reqOut, reqIn]
+            );
+            if (sameDay && sameDay.length) reqRow.attendanceId = sameDay[0].id;
+          }
           if (reqRow.attendanceId) {
             await attendanceRepo.updateTimes(
               reqRow.attendanceId,
@@ -113,6 +192,11 @@ exports.updateStatus = async (req, res) => {
         } catch (e) {
           // Không chặn việc duyệt nếu ghi giờ lỗi; log để theo dõi.
           console.error('[adjust.approve] write attendance failed:', e && e.message);
+        }
+        try {
+          await recomputeDailyLateEarly(reqRow, tid);
+        } catch (e) {
+          console.error('[adjust.approve] recompute late/early failed:', e && e.message);
         }
         try {
           const ds = String(reqRow.requestedCheckIn || reqRow.requestedCheckOut || '').slice(0, 10);
