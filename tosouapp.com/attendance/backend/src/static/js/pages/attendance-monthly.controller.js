@@ -1483,6 +1483,18 @@
         console.warn('Local state sync failed:', err);
       }
 
+      // Cập nhật dailyStatus trong dataset để recomputeRow hiển thị 確認済み ngay
+      try {
+        const hasIn  = !!rawIn;
+        const hasOut = !!rawOut;
+        const hasMemoNow = !!memoRaw;
+        if (hasIn && hasOut && hasMemoNow) {
+          tr.dataset.dailyStatus = '確認済み';
+        } else if (tr.dataset.dailyStatus === '確認済み') {
+          tr.dataset.dailyStatus = '未承認';
+        }
+      } catch (e) { /* silently ignored */ }
+
       markRowSaved(tr);
       try { draft?.clear?.(ctx, ym); } catch (e) { /* silently ignored */ }
       try {
@@ -1958,13 +1970,87 @@
     const days = Array.isArray(state.currentMonthDetail?.days) ? state.currentMonthDetail.days : [];
     const day = days.find(d => String(d?.date || '') === dateStr);
     const segs = Array.isArray(day?.segments) ? day.segments : [];
-    const lines = segs.map(s => {
-      const inHm = fromDateTime(s?.checkIn);
-      const outHm = fromDateTime(s?.checkOut);
-      const wt = workTypeLabel(s?.workType);
-      return `#${s?.id || 'new'} ${inHm || '--:--'}-${outHm || '--:--'} ${wt || ''}`.trim();
+    const daily = day?.daily || null;
+    const dowJa = core.dowJa || (() => '');
+
+    // ── モーダル生成 ──────────────────────────────────────────────────
+    const existing = document.getElementById('historyModal');
+    if (existing) existing.remove();
+
+    const backdrop = document.createElement('div');
+    backdrop.id = 'historyModal';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
+
+    const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const dow = dowJa(dateStr);
+    const dateFmt = dateStr ? `${dateStr.slice(5).replace('-','/')}（${dow}）` : '—';
+
+    // 打刻セグメント行
+    const segRows = segs.length ? segs.map((s, i) => {
+      const inHm  = fromDateTime(s?.checkIn)  || '—';
+      const outHm = fromDateTime(s?.checkOut) || '—';
+      const wt    = workTypeLabel(s?.workType) || '—';
+      const loc   = String(s?.location || daily?.location || '').trim() || '—';
+      const memo  = String(s?.memo || daily?.memo || '').trim() || '—';
+      return `
+        <tr style="background:${i % 2 ? '#f8fafc' : '#fff'};">
+          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:600;color:#334155;">${i + 1}</td>
+          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;font-family:monospace;color:#0f172a;">${esc(inHm)}</td>
+          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;font-family:monospace;color:#0f172a;">${esc(outHm)}</td>
+          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;color:#475569;">${esc(wt)}</td>
+          <td style="padding:7px 10px;border:1px solid #e2e8f0;color:#475569;">${esc(loc)}</td>
+          <td style="padding:7px 10px;border:1px solid #e2e8f0;color:#334155;max-width:220px;word-break:break-word;">${esc(memo)}</td>
+        </tr>`;
+    }).join('') : `<tr><td colspan="6" style="padding:16px;text-align:center;color:#94a3b8;border:1px solid #e2e8f0;">打刻データがありません</td></tr>`;
+
+    // daily 情報
+    const kubun   = String(daily?.kubun   || '').trim() || '—';
+    const status  = String(daily?.status  || '').trim() || '—';
+    const breakM  = daily?.breakMinutes  != null ? `${daily.breakMinutes}分` : '—';
+    const statusColor = status === '確認済み' ? '#16a34a' : status === '承認済み' ? '#0369a1' : '#64748b';
+
+    const panel = document.createElement('div');
+    panel.style.cssText = 'background:#fff;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.25);width:min(680px,96vw);max-height:88vh;overflow-y:auto;';
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #e2e8f0;background:#0f2c62;border-radius:10px 10px 0 0;">
+        <div style="font-size:15px;font-weight:700;color:#fff;">📋 履歴 — ${esc(dateFmt)}</div>
+        <button id="historyClose" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:0 4px;">&times;</button>
+      </div>
+      <div style="padding:14px 18px 6px;">
+        <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:#334155;margin-bottom:12px;">
+          <span>勤務区分：<strong>${esc(kubun)}</strong></span>
+          <span>ステータス：<strong style="color:${statusColor};">${esc(status)}</strong></span>
+          <span>休憩：<strong>${esc(breakM)}</strong></span>
+        </div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px;">
+          <thead>
+            <tr style="background:#0f2c62;">
+              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;width:32px;">No</th>
+              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">開始時間</th>
+              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">終了時間</th>
+              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">勤務形態</th>
+              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">現場</th>
+              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">作業内容</th>
+            </tr>
+          </thead>
+          <tbody>${segRows}</tbody>
+        </table>
+      </div>
+      <div style="padding:10px 18px 14px;display:flex;justify-content:flex-end;">
+        <button id="historyCloseBtn" style="padding:6px 20px;background:#0f2c62;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">閉じる</button>
+      </div>
+    `;
+
+    backdrop.appendChild(panel);
+    document.body.appendChild(backdrop);
+
+    const close = () => { try { backdrop.remove(); } catch {} };
+    panel.querySelector('#historyClose')?.addEventListener('click', close);
+    panel.querySelector('#historyCloseBtn')?.addEventListener('click', close);
+    backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
+    document.addEventListener('keydown', function onEsc(e) {
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); }
     });
-    alert(lines.length ? lines.join('\n') : '履歴がありません');
   };
 
   const addSegmentRow = async (dateStr) => {

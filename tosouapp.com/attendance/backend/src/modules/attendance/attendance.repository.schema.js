@@ -172,7 +172,7 @@ async function ensureAttendanceDailySchema() {
     if (!set.has('early_minutes')) alters.push(`ADD COLUMN early_minutes INT NULL`);
     if (!set.has('break_minutes')) alters.push(`ADD COLUMN break_minutes INT NULL`);
     if (!set.has('night_break_minutes')) alters.push(`ADD COLUMN night_break_minutes INT NULL`);
-    if (!set.has('status')) alters.push(`ADD COLUMN status ENUM('未入力','未承認','遅刻','承認待ち','承認済み') NULL DEFAULT '未入力'`);
+    if (!set.has('status')) alters.push(`ADD COLUMN status ENUM('未入力','未承認','遅刻','確認済み','承認待ち','承認済み') NULL DEFAULT '未入力'`);
     if (!set.has('furikae_holiday_date')) alters.push(`ADD COLUMN furikae_holiday_date DATE NULL`);
     if (!set.has('created_at')) alters.push(`ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP`);
     if (!set.has('updated_at')) alters.push(`ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`);
@@ -184,8 +184,8 @@ async function ensureAttendanceDailySchema() {
       try {
         const [typeCols] = await db.query(`SELECT COLUMN_TYPE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'attendance_daily' AND COLUMN_NAME = 'status'`);
         const colType = typeCols && typeCols[0] ? String(typeCols[0].COLUMN_TYPE) : '';
-        if (colType && !colType.includes('遅刻')) {
-          await db.query(`ALTER TABLE attendance_daily MODIFY COLUMN status ENUM('未入力','未承認','遅刻','承認待ち','承認済み') NULL DEFAULT '未入力'`);
+        if (colType && (!colType.includes('遅刻') || !colType.includes('確認済み'))) {
+          await db.query(`ALTER TABLE attendance_daily MODIFY COLUMN status ENUM('未入力','未承認','遅刻','確認済み','承認待ち','承認済み') NULL DEFAULT '未入力'`);
         }
       } catch {}
     }

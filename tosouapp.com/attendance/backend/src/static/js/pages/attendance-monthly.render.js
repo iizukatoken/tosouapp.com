@@ -326,10 +326,16 @@
       const leaveKubunSet = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
       const isRegularOffRow = !!isOff && !hasActual && (effectiveKubun === '休日' || effectiveKubun === '代替休日');
       const isLeaveApplied = !!kubunInit && leaveKubunSet.has(effectiveKubun) && !hasActual && !isRegularOffRow;
+      // 確認済み: checkIn + checkOut + memo (作業内容) がすべて揃っている場合に自動設定
+      const dbDailyStatus = String(daily?.status || '');
+      const isConfirmed = !approved && dbDailyStatus === '確認済み' && hasActualIn && hasActualOut && !!String(daily?.memo || '').trim();
       let text = '未承認';
       let cls = 'warn';
       if (approved) {
         text = '承認済み';
+        cls = 'ok';
+      } else if (isConfirmed) {
+        text = '確認済み';
         cls = 'ok';
       } else if (isPlanned && !hasActual) {
         text = '未申請';
@@ -373,6 +379,7 @@
       tr.dataset.lateMinutes = String(daily?.lateMinutes || daily?.late_minutes || '');
       tr.dataset.earlyMinutes = String(daily?.earlyMinutes || daily?.early_minutes || '');
       tr.dataset.reasonBase = String(daily?.reason || (shiftRequest && !isPartTime && shiftRequest.status === 'LEAVE' ? shiftRequest.reason : ''));
+      tr.dataset.dailyStatus = String(daily?.status || '');
 
       const wtValRaw = (() => {
         const dailyWt = allowDailyAsActual && primary ? daily?.workType : '';
@@ -859,10 +866,19 @@
         const isRegularOffRowNow = !!offDay && !hasActualNow && (effectiveKubun === '休日' || effectiveKubun === '代替休日');
         const leaveKubunSetNow = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
         const isLeaveAppliedNow = !!cls && leaveKubunSetNow.has(cls) && !hasActualNow && !isRegularOffRowNow;
+        // 確認済み: dataset に保存した DB ステータスを参照（チェックイン・アウト・メモ全揃い）
+        const dbStatusNow = String(rowEl.dataset.dailyStatus || '');
+        const memoValNow = String(rowEl.querySelector('[data-field="memo"]')?.value || '').trim();
+        const inValNow2 = String(inEl?.value || '').trim();
+        const outValNow2 = String(outEl?.value || '').trim();
+        const isConfirmedNow = !monthApproved && dbStatusNow === '確認済み' && !!inValNow2 && !!outValNow2 && !!memoValNow;
         let stText = '未承認';
         let stCls = 'warn';
         if (monthApproved) {
           stText = '承認済み';
+          stCls = 'ok';
+        } else if (isConfirmedNow) {
+          stText = '確認済み';
           stCls = 'ok';
         } else if (isPlanned && !hasActualNow) {
           stText = '未申請';

@@ -455,8 +455,8 @@ module.exports = {
       return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
     };
 
-    // Suy ra trạng thái từ kubun, có checkIn hay chưa, và có đi trễ hay không
-    const deriveStatus = (kubun, checkInTime, shiftStart) => {
+    // Suy ra trạng thái từ kubun, có checkIn/checkOut hay chưa, có đi trễ hay không, và có memo không
+    const deriveStatus = (kubun, checkInTime, shiftStart, checkOutTime, memo) => {
       const workKubunSet = new Set(['出勤', '半休', '半休(有給)', '振替出勤', '休日出勤', '代替出勤']);
       const nonWorkKubunSet = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
       const k = String(kubun || '').trim();
@@ -470,6 +470,11 @@ module.exports = {
         if (!k || workKubunSet.has(k)) return '未入力';
         return '未承認';
       }
+
+      // checkIn + checkOut + memo đầy đủ → 確認済み
+      const hasMemo = !!String(memo || '').trim();
+      const hasCheckOut = !!String(checkOutTime || '').trim();
+      if (hasCheckOut && hasMemo) return '確認済み';
 
       // Đã có check-in: so với giờ bắt đầu ca
       const ciMin = hmToMin(checkInTime);
@@ -486,9 +491,10 @@ module.exports = {
       let segUpdated = 0;
       const createdIds = [];
 
-      // Map date → checkInTime lấy từ payload updates (các segment đang lưu)
-      // Để dailyUpdates tính trạng thái theo check-in MỚI thay vì dữ liệu trong DB
+      // Map date → checkInTime / checkOutTime lấy từ payload updates (các segment đang lưu)
+      // Để dailyUpdates tính trạng thái theo check-in/out MỚI thay vì dữ liệu trong DB
       const checkInByDate = new Map();
+      const checkOutByDate = new Map();
       if (Array.isArray(updates)) {
         for (const u of updates) {
           if (u?.delete === true) continue;
@@ -499,6 +505,10 @@ module.exports = {
           const timePart = ci.slice(11, 16); // "HH:MM"
           if (dateStr && timePart && !checkInByDate.has(dateStr)) {
             checkInByDate.set(dateStr, timePart);
+          }
+          const co = String(u?.checkOut || '').trim();
+          if (co && dateStr && !checkOutByDate.has(dateStr)) {
+            checkOutByDate.set(dateStr, co.slice(11, 16));
           }
         }
       }
@@ -602,17 +612,21 @@ module.exports = {
           datesToLookup.push(date);
         }
         const dbCheckInByDate = new Map();
+        const dbCheckOutByDate = new Map();
         if (datesToLookup.length) {
           try {
             const placeholders = datesToLookup.map(() => '?').join(',');
             const [attRows] = await conn.query(
-              `SELECT DATE(checkIn) AS d, checkIn FROM attendance WHERE userId = ? AND DATE(checkIn) IN (${placeholders}) ORDER BY checkIn ASC`,
+              `SELECT DATE(checkIn) AS d, checkIn, checkOut FROM attendance WHERE userId = ? AND DATE(checkIn) IN (${placeholders}) ORDER BY checkIn ASC`,
               [userId, ...datesToLookup]
             );
             for (const row of (attRows || [])) {
               const ds = String(row.d || '').slice(0, 10);
               if (ds && !dbCheckInByDate.has(ds)) {
                 dbCheckInByDate.set(ds, String(row.checkIn).slice(11, 16));
+              }
+              if (ds && row.checkOut && !dbCheckOutByDate.has(ds)) {
+                dbCheckOutByDate.set(ds, String(row.checkOut).slice(11, 16));
               }
             }
           } catch (e) { /* bỏ qua */ }
@@ -766,8 +780,13 @@ module.exports = {
           if (!checkInTime) {
             checkInTime = dbCheckInByDate.get(date) || null;
           }
+          // Tương tự cho checkOut
+          let checkOutTime = checkOutByDate.get(date) || null;
+          if (!checkOutTime) {
+            checkOutTime = dbCheckOutByDate.get(date) || null;
+          }
           const shiftStart = String(d.shiftStart || '08:00').trim();
-          const status = deriveStatus(kubun, checkInTime, shiftStart);
+          const status = deriveStatus(kubun, checkInTime, shiftStart, checkOutTime, memo);
 
           await conn.query(
             `
