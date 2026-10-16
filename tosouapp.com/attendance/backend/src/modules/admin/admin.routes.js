@@ -2014,3 +2014,35 @@ router.post('/shifts/backfill', authorize('admin'), async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// Migration endpoint: Fix confirmed status for existing records
+router.post('/migration/fix-confirmed-status', authorize('admin'), async (req, res) => {
+  try {
+    const sql = `
+      UPDATE attendance_daily ad
+      SET ad.status = '確認済み'
+      WHERE ad.status IN ('未承認', '遅刻', '未入力')
+        AND ad.memo IS NOT NULL 
+        AND ad.memo != ''
+        AND EXISTS (
+          SELECT 1 
+          FROM attendance a
+          WHERE a.userId = ad.userId
+            AND DATE(a.checkIn) = ad.date
+            AND a.checkOut IS NOT NULL
+        )
+    `;
+    
+    const [result] = await db.query(sql);
+    
+    res.json({
+      ok: true,
+      message: 'Migration completed successfully',
+      affectedRows: result.affectedRows,
+      changedRows: result.changedRows
+    });
+  } catch (err) {
+    console.error('Migration failed:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
