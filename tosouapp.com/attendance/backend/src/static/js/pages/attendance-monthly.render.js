@@ -18,6 +18,20 @@
     showErr
   } = core;
 
+  // 出勤しない日を自動で「確認済み」とするか (今日までの日のみ、実績が無い日):
+  // - 会社/部署カレンダーの休日 (土日祝・工事部の第4土曜など) で区分が 未設定/休日 → 正社員・パート共通で確認済み
+  // - パートはシフトが不定期なので、出勤予定 (シフト登録 WORKING) の無い日で区分が 未設定/休日 → 確認済み
+  // 有給休暇・無給休暇・欠勤・代替休日、正社員が平日に 休日 を選んだ日は 承認待ち のまま。
+  const isAutoConfirmedNoWorkDay = ({ dateStr, hasActual, isOff, isPartTime, kubun, shiftWorking }) => {
+    if (hasActual) return false;
+    const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    if (!dateStr || String(dateStr) > todayStr) return false;
+    const k = String(kubun || '').trim();
+    if (k !== '' && k !== '休日') return false;
+    if (isOff) return true;
+    return !!isPartTime && !shiftWorking;
+  };
+
   const renderTableFull = (host, detail, profile) => {
     if (!host) return;
     const days = Array.isArray(detail?.days) ? detail.days : [];
@@ -333,7 +347,7 @@
       if (approved) {
         text = '承認済み';
         cls = 'ok';
-      } else if (isConfirmed) {
+      } else if (isConfirmed || isAutoConfirmedNoWorkDay({ dateStr, hasActual, isOff, isPartTime, kubun: kubunInit, shiftWorking: shiftRequest?.status === 'WORKING' })) {
         text = '確認済み';
         cls = 'ok';
       } else if (isPlanned && !hasActual) {
@@ -370,6 +384,8 @@
       tr.dataset.row = '1';
       tr.dataset.date = dateStr;
       tr.dataset.baseOff = isOff ? '1' : '0';
+      tr.dataset.partTime = isPartTime ? '1' : '';
+      tr.dataset.shiftWorking = shiftRequest?.status === 'WORKING' ? '1' : '';
       tr.dataset.id = seg?.id ? String(seg.id) : '';
       tr.dataset.clientId = tr.dataset.id ? '' : (seg?.clientId || makeClientId());
       tr.dataset.primary = primary ? '1' : '0';
@@ -873,7 +889,7 @@
         if (monthApproved) {
           stText = '承認済み';
           stCls = 'ok';
-        } else if (isConfirmedNow) {
+        } else if (isConfirmedNow || isAutoConfirmedNoWorkDay({ dateStr, hasActual: hasActualNow, isOff: offDay, isPartTime: rowEl.dataset.partTime === '1', kubun: cls, shiftWorking: rowEl.dataset.shiftWorking === '1' })) {
           stText = '確認済み';
           stCls = 'ok';
         } else if (isPlanned && !hasActualNow) {
