@@ -2016,33 +2016,81 @@ router.post('/shifts/backfill', authorize('admin'), async (req, res) => {
 });
 
 // Migration endpoint: Fix confirmed status for existing records
+// - Mặc định là dry-run (chỉ đếm + xem mẫu). Chỉ UPDATE khi body.dryRun === false.
+// - Chỉ áp dụng cho công ty (tenant) của admin đang đăng nhập.
+// - 遅刻 được giữ nguyên (không ghi đè thông tin đi muộn).
+// - Trước khi UPDATE, lưu status cũ vào bảng migration_backup_confirmed_status để có thể khôi phục.
 router.post('/migration/fix-confirmed-status', authorize('admin'), async (req, res) => {
-  try {
-    const sql = `
-      UPDATE attendance_daily ad
-      SET ad.status = '確認済み'
-      WHERE ad.status IN ('未承認', '遅刻', '未入力')
-        AND ad.memo IS NOT NULL 
+  const tid = req.tenantId ? parseInt(String(req.tenantId), 10) : null;
+  if (!tid) return res.status(400).json({ ok: false, error: 'tenant を特定できません' });
+  const dryRun = req.body?.dryRun !== false;
+  const where = `
+      ad.tenant_id = ?
+        AND ad.status IN ('未承認', '未入力')
+        AND ad.memo IS NOT NULL
         AND ad.memo != ''
         AND EXISTS (
-          SELECT 1 
+          SELECT 1
           FROM attendance a
           WHERE a.userId = ad.userId
             AND DATE(a.checkIn) = ad.date
             AND a.checkOut IS NOT NULL
         )
-    `;
-    
-    const [result] = await db.query(sql);
-    
-    res.json({
-      ok: true,
-      message: 'Migration completed successfully',
-      affectedRows: result.affectedRows,
-      changedRows: result.changedRows
-    });
+  `;
+  let conn = null;
+  try {
+    if (dryRun) {
+      const [[cnt]] = await db.query(`SELECT COUNT(*) AS n FROM attendance_daily ad WHERE ${where}`, [tid]);
+      const [sample] = await db.query(
+        `SELECT ad.id, ad.userId, u.username AS userName, DATE_FORMAT(ad.date, '%Y-%m-%d') AS date, ad.status
+           FROM attendance_daily ad LEFT JOIN users u ON u.id = ad.userId
+          WHERE ${where} ORDER BY ad.date DESC LIMIT 50`,
+        [tid]
+      );
+      return res.json({ ok: true, dryRun: true, count: Number(cnt?.n || 0), sample });
+    }
+
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS migration_backup_confirmed_status (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        run_id VARCHAR(40) NOT NULL,
+        tenant_id BIGINT UNSIGNED NOT NULL,
+        daily_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        date DATE NOT NULL,
+        old_status VARCHAR(32) NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_mbcs_run (run_id)
+      )
+    `);
+    const runId = `${Date.now()}-${req.user.id}`;
+    conn = await db.getConnection();
+    await conn.beginTransaction();
+    const [ids] = await conn.query(`SELECT ad.id FROM attendance_daily ad WHERE ${where} FOR UPDATE`, [tid]);
+    const idList = ids.map(r => r.id);
+    let changedRows = 0;
+    if (idList.length) {
+      await conn.query(
+        `INSERT INTO migration_backup_confirmed_status (run_id, tenant_id, daily_id, user_id, date, old_status)
+         SELECT ?, ad.tenant_id, ad.id, ad.userId, ad.date, ad.status FROM attendance_daily ad WHERE ad.id IN (?)`,
+        [runId, idList]
+      );
+      const [result] = await conn.query(
+        `UPDATE attendance_daily SET status = '確認済み' WHERE id IN (?) AND tenant_id = ?`,
+        [idList, tid]
+      );
+      changedRows = result.changedRows;
+    }
+    await conn.commit();
+    try {
+      await auditRepo.writeLog({ userId: req.user.id, action: 'admin_migration_fix_confirmed_status', path: req.path, method: req.method, ip: req.ip, userAgent: req.headers['user-agent'], beforeData: JSON.stringify({ runId, tenantId: tid, count: idList.length }), afterData: JSON.stringify({ changedRows }) });
+    } catch (e) { /* silently ignored */ }
+    res.json({ ok: true, dryRun: false, runId, changedRows });
   } catch (err) {
+    if (conn) { try { await conn.rollback(); } catch (e) { /* silently ignored */ } }
     console.error('Migration failed:', err);
     res.status(500).json({ ok: false, error: err.message });
+  } finally {
+    if (conn) conn.release();
   }
 });

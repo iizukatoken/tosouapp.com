@@ -57,56 +57,103 @@
       border: 1px solid #ef4444;
       color: #991b1b;
     }
+    .btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+    button.danger { background: #b91c1c; }
+    button.danger:hover { background: #991b1b; }
+    .result.info {
+      background: #eff6ff;
+      border: 1px solid #3b82f6;
+      color: #1e3a8a;
+    }
+    table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 13px; }
+    th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: left; }
   </style>
 </head>
 <body>
   <div class="card">
     <h1>🔧 勤怠ステータス修正</h1>
     <div class="desc">
-      <p>出勤・退勤・作業内容が揃っているのに「未承認」「遅刻」のままになっている古いデータを「確認済み」に更新します。</p>
-      <p><strong>対象:</strong> checkIn + checkOut + 作業内容が全て入力済みのレコード</p>
+      <p>出勤・退勤・作業内容が揃っているのに「未承認」「未入力」のままになっている古いデータを「確認済み」に更新します。</p>
+      <p><strong>対象:</strong> 自社のみ / checkIn + checkOut + 作業内容が全て入力済みのレコード（「遅刻」は変更しません）</p>
+      <p>まず「対象を確認」で件数を確認してから実行してください。実行前の状態はバックアップされます。</p>
     </div>
-    <button id="runBtn" onclick="runMigration()">実行する</button>
+    <div class="btn-row">
+      <button id="previewBtn">対象を確認</button>
+      <button id="runBtn" class="danger" disabled>実行する</button>
+    </div>
     <div id="result" class="result"></div>
   </div>
 
-  <script>
-    async function runMigration() {
-      const btn = document.getElementById('runBtn');
-      const resultDiv = document.getElementById('result');
-      
-      btn.disabled = true;
-      btn.textContent = '実行中...';
-      resultDiv.style.display = 'none';
-      
-      try {
-        const res = await fetch('/api/admin/migration/fix-confirmed-status', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include'
+  <script nonce="<%= typeof cspNonce !== 'undefined' ? cspNonce : '' %>">
+    (function () {
+      var previewBtn = document.getElementById('previewBtn');
+      var runBtn = document.getElementById('runBtn');
+      var resultDiv = document.getElementById('result');
+      var lastCount = 0;
+
+      function esc(v) {
+        return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+          return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
-        
-        const data = await res.json();
-        
-        if (data.ok) {
-          resultDiv.className = 'result success';
-          resultDiv.innerHTML = `
-            <strong>✅ 完了しました</strong><br>
-            更新件数: ${data.changedRows}件
-          `;
-        } else {
-          resultDiv.className = 'result error';
-          resultDiv.innerHTML = `<strong>❌ エラー:</strong> ${data.error || '不明なエラー'}`;
-        }
-      } catch (err) {
-        resultDiv.className = 'result error';
-        resultDiv.innerHTML = `<strong>❌ エラー:</strong> ${err.message}`;
-      } finally {
-        resultDiv.style.display = 'block';
-        btn.disabled = false;
-        btn.textContent = '実行する';
       }
-    }
+      function csrf() {
+        var m = document.cookie.match(/(?:^|; )csrfToken=([^;]+)/);
+        return m ? decodeURIComponent(m[1]) : '';
+      }
+      function show(cls, html) {
+        resultDiv.className = 'result ' + cls;
+        resultDiv.innerHTML = html;
+        resultDiv.style.display = 'block';
+      }
+      async function call(dryRun) {
+        var res = await fetch('/api/admin/migration/fix-confirmed-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrf() },
+          credentials: 'include',
+          body: JSON.stringify({ dryRun: dryRun })
+        });
+        var data = null;
+        try { data = await res.json(); } catch (e) { /* ignore */ }
+        if (!res.ok || !data || !data.ok) throw new Error((data && (data.error || data.message)) || ('HTTP ' + res.status));
+        return data;
+      }
+
+      previewBtn.addEventListener('click', async function () {
+        previewBtn.disabled = true;
+        runBtn.disabled = true;
+        try {
+          var data = await call(true);
+          lastCount = data.count;
+          var rows = (data.sample || []).map(function (r) {
+            return '<tr><td>' + esc(r.date) + '</td><td>' + esc(r.userName || r.userId) + '</td><td>' + esc(r.status) + '</td></tr>';
+          }).join('');
+          show('info', '<strong>対象件数: ' + esc(data.count) + '件</strong>' +
+            (data.count > (data.sample || []).length ? '（最新' + esc((data.sample || []).length) + '件を表示）' : '') +
+            (rows ? '<table><thead><tr><th>日付</th><th>社員</th><th>現在のステータス</th></tr></thead><tbody>' + rows + '</tbody></table>' : ''));
+          runBtn.disabled = data.count === 0;
+        } catch (err) {
+          show('error', '<strong>❌ エラー:</strong> ' + esc(err.message));
+        } finally {
+          previewBtn.disabled = false;
+        }
+      });
+
+      runBtn.addEventListener('click', async function () {
+        if (!confirm(lastCount + '件を「確認済み」に更新します。よろしいですか？')) return;
+        runBtn.disabled = true;
+        previewBtn.disabled = true;
+        runBtn.textContent = '実行中...';
+        try {
+          var data = await call(false);
+          show('success', '<strong>✅ 完了しました</strong><br>更新件数: ' + esc(data.changedRows) + '件<br>バックアップID: ' + esc(data.runId));
+        } catch (err) {
+          show('error', '<strong>❌ エラー:</strong> ' + esc(err.message));
+        } finally {
+          runBtn.textContent = '実行する';
+          previewBtn.disabled = false;
+        }
+      });
+    })();
   </script>
 </body>
 </html>
