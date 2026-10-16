@@ -67,11 +67,24 @@ pool.query = async function(...args) {
 const origGetConnection = pool.getConnection.bind(pool);
 pool.getConnection = async function() {
   const conn = await origGetConnection();
-  try {
-    await conn.query(`SET NAMES utf8mb4`);
-    try { await conn.query(`SET collation_connection = utf8mb4_0900_ai_ci`); } catch (e) { /* silently ignored */ }
-    try { await conn.query(`SET time_zone = '+09:00'`); } catch (e) { /* silently ignored */ }
-  } catch (e) { /* silently ignored */ }
+  // Biến session (charset/collation/time_zone) tồn tại suốt đời kết nối vật lý, nên chỉ cần SET
+  // lần đầu. Trước đây chạy 3 câu SET nối tiếp MỖI lần getConnection → thêm ~3 round-trip
+  // (~0.3s vì DB ở xa) cho mỗi transaction (確定/保存...). Giờ gộp 1 câu và chỉ chạy 1 lần / kết nối.
+  const core = conn.connection || conn;
+  if (!core.__sessionInit) {
+    try {
+      await conn.query(`SET NAMES utf8mb4 COLLATE utf8mb4_0900_ai_ci, time_zone = '+09:00'`);
+      core.__sessionInit = true;
+    } catch (e) {
+      // MySQL cũ không có utf8mb4_0900_ai_ci → chạy từng câu như trước
+      try {
+        await conn.query(`SET NAMES utf8mb4`);
+        try { await conn.query(`SET collation_connection = utf8mb4_0900_ai_ci`); } catch (e2) { /* silently ignored */ }
+        try { await conn.query(`SET time_zone = '+09:00'`); } catch (e2) { /* silently ignored */ }
+        core.__sessionInit = true;
+      } catch (e2) { /* silently ignored */ }
+    }
+  }
   const origConnQuery = conn.query.bind(conn);
   conn.query = async function(...args) {
     const t0 = Date.now();
