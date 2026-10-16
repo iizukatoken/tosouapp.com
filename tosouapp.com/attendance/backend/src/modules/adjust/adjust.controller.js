@@ -66,6 +66,65 @@ async function recomputeDailyLateEarly(reqRow, tid) {
     : ((outMin != null && seMin != null && seMin > ssMin && outMin < seMin) ? seMin - outMin : null);
   await db.query('UPDATE attendance_daily SET late_minutes = ?, early_minutes = ? WHERE id = ?', [late, early, daily.id]);
 }
+// Ghi giờ của 調整申請 đã duyệt vào bảng chấm công, để quản lý KHÔNG phải nhập lại ở 月次勤怠入力.
+// - Tìm record cần sửa: attendanceId của đơn; nếu không có thì record cùng ngày trùng khung giờ
+//   (đơn có 出勤) hoặc record còn mở chưa 退勤 (đơn chỉ có 退勤). Không thấy → tạo mới.
+// - Chỉ thay phần nhân viên xin sửa; phần còn lại giữ nguyên giá trị đang có (trước đây bị xoá thành NULL).
+// - Tìm theo id + userId (đơn đã được kiểm tra thuộc công ty này), không lọc tenant_id của record,
+//   vì record chấm công cũ có tenant_id NULL → trước đây không tìm thấy và bị bỏ qua âm thầm.
+async function applyApprovedTimes(reqRow, tid) {
+  const norm = (v) => (v ? String(v).replace('T', ' ').slice(0, 19) : null);
+  const reqIn = norm(reqRow.requestedCheckIn);
+  const reqOut = norm(reqRow.requestedCheckOut);
+  const userId = reqRow.userId;
+  if (!reqIn && !reqOut) return { ok: false, error: '申請に時刻がありません' };
+
+  let target = null;
+  if (reqRow.attendanceId) {
+    const [[row]] = await db.query('SELECT id, checkIn, checkOut FROM attendance WHERE id = ? AND userId = ? LIMIT 1', [reqRow.attendanceId, userId]);
+    target = row || null;
+  }
+  if (!target && reqIn) {
+    const [rows] = await db.query(
+      `SELECT id, checkIn, checkOut FROM attendance
+        WHERE userId = ? AND DATE(checkIn) = DATE(?)
+          AND checkIn <= ? AND COALESCE(checkOut, checkIn) >= ?
+        ORDER BY checkIn ASC LIMIT 1`,
+      [userId, reqIn, reqOut || reqIn, reqIn]
+    );
+    target = rows && rows[0] ? rows[0] : null;
+  }
+  if (!target && !reqIn && reqOut) {
+    // Chỉ xin sửa 退勤: record còn mở (chưa 退勤) bắt đầu trong ngày đó hoặc hôm trước (ca qua đêm)
+    const [rows] = await db.query(
+      `SELECT id, checkIn, checkOut FROM attendance
+        WHERE userId = ? AND checkOut IS NULL
+          AND checkIn <= ? AND DATE(checkIn) >= DATE(?) - INTERVAL 1 DAY
+        ORDER BY checkIn DESC LIMIT 1`,
+      [userId, reqOut, reqOut]
+    );
+    target = rows && rows[0] ? rows[0] : null;
+  }
+
+  if (target) {
+    const nextIn = reqIn || norm(target.checkIn);
+    const nextOut = reqOut || norm(target.checkOut);
+    if (!nextIn) return { ok: false, error: '出勤時刻が不明のため反映できません', attendanceId: target.id };
+    await db.query('UPDATE attendance SET checkIn = ?, checkOut = ? WHERE id = ? AND userId = ?', [nextIn, nextOut, target.id, userId]);
+    if (nextIn && nextOut) {
+      try { await db.query('UPDATE attendance SET is_anomaly = 0, anomaly_type = NULL WHERE id = ?', [target.id]); } catch (e) { /* cột không tồn tại */ }
+    }
+    reqRow.attendanceId = target.id;
+    return { ok: true, mode: 'updated', attendanceId: target.id, checkIn: nextIn, checkOut: nextOut };
+  }
+  if (!reqIn) return { ok: false, error: '修正対象の勤怠が見つかりません（出勤時刻なし）' };
+  await attendanceRepo.bulkUpsertAttendance(
+    userId,
+    { updates: [{ checkIn: reqIn, checkOut: reqOut || null }], dailyUpdates: [] },
+    { tenantId: tid }
+  );
+  return { ok: true, mode: 'created', checkIn: reqIn, checkOut: reqOut };
+}
 // Controller yêu cầu sửa giờ
 exports.create = async (req, res) => {
   try {
@@ -136,6 +195,7 @@ exports.updateStatus = async (req, res) => {
     }
     const tid = req.tenantId || null;
     await repo.updateStatus(id, status, adminNote, tid, req.user?.id || null);
+    let applied = null;
     if (status === 'approved') {
       const reqRow = await repo.getById(id, tid);
       if (reqRow) {
@@ -146,51 +206,10 @@ exports.updateStatus = async (req, res) => {
         //   dùng bulkUpsertAttendance (chính là hàm màn 月次 dùng) để TẠO MỚI record
         //   cho đúng ngày, đồng thời đồng bộ attendance_daily.
         try {
-          // Đơn không gắn record (vd nhân viên gửi đơn TRƯỚC khi bấm 打刻 muộn trong ngày) nhưng lúc duyệt
-          // ngày đó đã có record trùng khung giờ với đơn → sửa record đó, KHÔNG tạo thêm 1 行 mới.
-          // Record không trùng giờ (vd 行 họp buổi tối) thì giữ nguyên và tạo mới như trước.
-          if (!reqRow.attendanceId && reqRow.requestedCheckIn) {
-            const reqIn = String(reqRow.requestedCheckIn).replace('T', ' ').slice(0, 19);
-            const reqOut = reqRow.requestedCheckOut ? String(reqRow.requestedCheckOut).replace('T', ' ').slice(0, 19) : reqIn;
-            const [sameDay] = await db.query(
-              `SELECT id, checkIn, checkOut FROM attendance
-                WHERE userId = ? AND DATE(checkIn) = DATE(?)
-                  AND checkIn <= ? AND COALESCE(checkOut, checkIn) >= ?
-                ORDER BY checkIn ASC`,
-              [reqRow.userId, reqIn, reqOut, reqIn]
-            );
-            if (sameDay && sameDay.length) reqRow.attendanceId = sameDay[0].id;
-          }
-          if (reqRow.attendanceId) {
-            await attendanceRepo.updateTimes(
-              reqRow.attendanceId,
-              reqRow.requestedCheckIn,
-              reqRow.requestedCheckOut,
-              { tenantId: tid }
-            );
-          } else if (reqRow.requestedCheckIn) {
-            await attendanceRepo.bulkUpsertAttendance(
-              reqRow.userId,
-              {
-                updates: [{
-                  checkIn: reqRow.requestedCheckIn,
-                  checkOut: reqRow.requestedCheckOut || null
-                }],
-                dailyUpdates: []
-              },
-              { tenantId: tid }
-            );
-          } else {
-            // Đơn chỉ có giờ 退勤, không có record gốc → giữ hành vi cũ.
-            await attendanceRepo.updateTimes(
-              reqRow.attendanceId,
-              reqRow.requestedCheckIn,
-              reqRow.requestedCheckOut,
-              { tenantId: tid }
-            );
-          }
+          applied = await applyApprovedTimes(reqRow, tid);
         } catch (e) {
-          // Không chặn việc duyệt nếu ghi giờ lỗi; log để theo dõi.
+          // Không chặn việc duyệt nếu ghi giờ lỗi, nhưng báo lại cho màn hình quản lý.
+          applied = { ok: false, error: String(e && e.message || e) };
           console.error('[adjust.approve] write attendance failed:', e && e.message);
         }
         try {
@@ -230,7 +249,7 @@ exports.updateStatus = async (req, res) => {
         });
       }
     } catch (e) { /* silently ignored */ }
-    res.status(200).json({ id, status });
+    res.status(200).json({ id, status, applied });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
