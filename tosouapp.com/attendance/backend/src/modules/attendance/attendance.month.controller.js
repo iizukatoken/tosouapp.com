@@ -4,6 +4,7 @@ const repo = require('./attendance.repository');
 const userRepo = require('../users/user.repository');
 const noticesRepo = require('../notices/notices.repository');
 const log = require('../../core/logger');
+const db = require('../../core/database/mysql');
 const {
   resolveTargetUserId,
   isEditableMonth,
@@ -296,6 +297,37 @@ exports.getMonthMissingMe = async (req, res) => {
     const missing = (detailed || [])
       .filter(it => String(it.date) < todayJst)
       .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)); // mới nhất lên đầu
+
+    // Gắn trạng thái 調整申請 mới nhất của từng ngày (pending / rejected) để màn hình
+    // không bảo nhân viên "hãy 申請" lại khi đơn đã gửi và đang chờ quản lý duyệt.
+    if (missing.length) {
+      try {
+        const mm = String(m).padStart(2, '0');
+        const start = `${y}-${mm}-01`;
+        const end = `${y}-${mm}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+        const [reqRows] = await db.query(
+          `SELECT r.id, r.status, r.admin_note,
+                  DATE_FORMAT(COALESCE(DATE(a.checkIn), DATE(r.requestedCheckIn), DATE(r.requestedCheckOut)), '%Y-%m-%d') AS d
+             FROM time_adjust_requests r
+             LEFT JOIN attendance a ON a.id = r.attendanceId
+            WHERE r.userId = ?
+              AND COALESCE(DATE(a.checkIn), DATE(r.requestedCheckIn), DATE(r.requestedCheckOut)) BETWEEN ? AND ?
+            ORDER BY r.id DESC`,
+          [userId, start, end]
+        );
+        const latestByDate = new Map();
+        for (const r of (reqRows || [])) {
+          if (r.d && !latestByDate.has(r.d)) latestByDate.set(r.d, r);
+        }
+        for (const it of missing) {
+          const r = latestByDate.get(String(it.date));
+          const st = String(r?.status || '');
+          if (st === 'pending' || st === 'rejected') {
+            it.adjust = { id: r.id, status: st, adminNote: st === 'rejected' ? (r.admin_note || null) : null };
+          }
+        }
+      } catch (e) { /* bảng chưa tồn tại → hiển thị cảnh báo như cũ */ }
+    }
 
     res.status(200).json({ userId, year: y, month: m, missing });
   } catch (err) {

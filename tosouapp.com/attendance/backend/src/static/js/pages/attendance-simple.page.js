@@ -404,11 +404,25 @@ const renderNotices = async (date) => {
 
     const items = missing.map(it => {
       const d = it.date;
+      const adjStatus = String(it?.adjust?.status || '');
+      // 調整申請済み・承認待ち: 再申請を促さず、申請中であることだけを表示
+      if (adjStatus === 'pending') {
+        return `
+      <div class="simple-notice-miss-item is-pending">
+        <span class="simple-notice-miss-date">${escHtml(fmtYmd(d))}</span>
+        <span class="simple-notice-miss-msg">調整申請中（承認待ち）です。管理者の承認をお待ちください。</span>
+      </div>
+    `;
+      }
+      // 差戻し: 理由を添えて再申請を促す
+      const rejectedNote = adjStatus === 'rejected'
+        ? `調整申請が差戻されました。${it?.adjust?.adminNote ? `（理由：${escHtml(it.adjust.adminNote)}）` : ''}`
+        : '';
       return `
       <div class="simple-notice-miss-item">
         <span class="simple-notice-miss-date">${escHtml(fmtYmd(d))}</span>
-        <span class="simple-notice-miss-msg">${escHtml(missMsg(it))}調整申請を行うか、管理者へご連絡ください。</span>
-        <a class="simple-notice-miss-btn" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(d)}">調整申請</a>
+        <span class="simple-notice-miss-msg">${rejectedNote}${escHtml(missMsg(it))}調整申請を行うか、管理者へご連絡ください。</span>
+        <a class="simple-notice-miss-btn" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(d)}">${adjStatus === 'rejected' ? '再申請' : '調整申請'}</a>
       </div>
     `;
     }).join('');
@@ -683,8 +697,10 @@ const getSimpleStatusMeta = () => {
   if (monthApproved) return { text: '承認済み', cls: 'ok' };
   
   if (hasActualNow) {
-    if (window.state && window.state.hasEndedToday) {
-      return { text: '打刻済み', cls: 'ok' };
+    // 簡易登録画面: 出勤・退勤の両方が揃っていれば自動で確認済み
+    const hasBothNow = !!(effectiveHm($('#startTime')) && effectiveHm($('#endTime')));
+    if (hasBothNow || (window.state && window.state.hasEndedToday)) {
+      return { text: '確認済み', cls: 'ok' };
     }
     if (window.state && window.state.lastGoOutRecord && window.state.lastGoOutRecord.return_time) {
       return { text: '戻り済み', cls: 'warn' };

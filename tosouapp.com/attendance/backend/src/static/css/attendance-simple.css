@@ -1591,3 +1591,11 @@ body {
 .simple-notice-miss-btn:hover {
   background: #d97706;
 }
+/* 調整申請中（承認待ち） */
+.simple-notice-miss-item.is-pending {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  border-left-color: #3b82f6;
+}
+.simple-notice-miss-item.is-pending .simple-notice-miss-date { color: #1d4ed8; }
+.simple-notice-miss-item.is-pending .simple-notice-miss-msg { color: #1e3a8a; }

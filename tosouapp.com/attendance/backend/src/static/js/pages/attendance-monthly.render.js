@@ -326,9 +326,8 @@
       const leaveKubunSet = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
       const isRegularOffRow = !!isOff && !hasActual && (effectiveKubun === '休日' || effectiveKubun === '代替休日');
       const isLeaveApplied = !!kubunInit && leaveKubunSet.has(effectiveKubun) && !hasActual && !isRegularOffRow;
-      // 確認済み: checkIn + checkOut + memo (作業内容) がすべて揃っている場合に自動設定
-      const dbDailyStatus = String(daily?.status || '');
-      const isConfirmed = !approved && dbDailyStatus === '確認済み' && hasActualIn && hasActualOut && !!String(daily?.memo || '').trim();
+      // 確認済み: checkIn + checkOut + memo (作業内容) がすべて揃っていれば自動で確認済み（管理者の操作は不要）
+      const isConfirmed = !approved && hasActualIn && hasActualOut && !!String(daily?.memo || '').trim();
       let text = '未承認';
       let cls = 'warn';
       if (approved) {
@@ -866,12 +865,9 @@
         const isRegularOffRowNow = !!offDay && !hasActualNow && (effectiveKubun === '休日' || effectiveKubun === '代替休日');
         const leaveKubunSetNow = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
         const isLeaveAppliedNow = !!cls && leaveKubunSetNow.has(cls) && !hasActualNow && !isRegularOffRowNow;
-        // 確認済み: dataset に保存した DB ステータスを参照（チェックイン・アウト・メモ全揃い）
-        const dbStatusNow = String(rowEl.dataset.dailyStatus || '');
+        // 確認済み: チェックイン・アウト・メモ (作業内容) が全て揃っていれば自動で確認済み
         const memoValNow = String(rowEl.querySelector('[data-field="memo"]')?.value || '').trim();
-        const inValNow2 = String(inEl?.value || '').trim();
-        const outValNow2 = String(outEl?.value || '').trim();
-        const isConfirmedNow = !monthApproved && dbStatusNow === '確認済み' && !!inValNow2 && !!outValNow2 && !!memoValNow;
+        const isConfirmedNow = !monthApproved && hasActualInNow && hasActualOutNow && !!memoValNow;
         let stText = '未承認';
         let stCls = 'warn';
         if (monthApproved) {
