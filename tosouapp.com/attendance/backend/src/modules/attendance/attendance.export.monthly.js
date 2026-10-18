@@ -23,6 +23,23 @@ const {
   getUserOffDaySet
 } = require('./attendance.utils');
 const { timesheetMaxDays } = require('../../config/env');
+
+// 遅刻/早退 の表示 (分単位の出勤・退勤・ca). Khớp đúng rule bảng tháng (attendance-monthly.render.js):
+// muộn nếu vào > giờ ca bắt đầu, sớm nếu ra < giờ ca kết thúc. Ca qua đêm (vd 22:00-06:00): giờ kết thúc
+// và giờ ra sau 0:00 cộng 24h trước khi so sánh, nếu không ra 06:00 bị tính là 早退.
+function lateEarlyLabel(inMin, outMin, startMin, endMin, isHolidayWork) {
+  if (isHolidayWork) return '';
+  const late = inMin > startMin;
+  const overnight = endMin < startMin;
+  const endAbs = overnight ? endMin + 24 * 60 : endMin;
+  const outAbs = overnight && outMin < startMin ? outMin + 24 * 60 : outMin;
+  const early = outAbs < endAbs;
+  if (late && early) return '遅刻/早退';
+  if (late) return '遅刻';
+  if (early) return '早退';
+  return '';
+}
+exports._lateEarlyLabel = lateEarlyLabel;
 const { nowJSTMySQL } = require('../../utils/dateTime');
 
 exports.exportMonthXlsx = async (req, res) => {
@@ -438,13 +455,7 @@ exports.exportMonthXlsx = async (req, res) => {
         const se = shiftForDate(ds);
         const startBase = se?.startMin ?? (8 * 60);
         const endBase = se?.endMin ?? (17 * 60);
-        // Khớp đúng rule bảng tháng: muộn nếu vào > giờ ca bắt đầu, sớm nếu ra < giờ ca kết thúc.
-        const late = !isHolidayWork && a > startBase;
-        const early = !isHolidayWork && b < endBase;
-        if (late && early) return '遅刻/早退';
-        if (late) return '遅刻';
-        if (early) return '早退';
-        return '';
+        return lateEarlyLabel(a, b, startBase, endBase, isHolidayWork);
       })();
 
       const workLocation = (() => {
