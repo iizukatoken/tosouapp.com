@@ -1,5 +1,6 @@
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const { nowJSTMySQL } = require('../../utils/dateTime');
 const { validationResult } = require('express-validator');
 const authRepository = require('./auth.repository');
 const { jwtSecretCurrent, bcryptRounds, accessTokenExpires, refreshTokenExpiresDays, idleTimeoutSeconds, resetTokenExpiresMinutes, appBaseUrl } = require('../../config/env');
@@ -491,7 +492,7 @@ exports.superBootstrap = async (req, res) => {
       role: 'admin',
       departmentId: null,
       employmentType: 'full_time',
-      hireDate: new Date().toISOString().slice(0,10),
+      hireDate: nowJSTMySQL().slice(0, 10),
       level: null,
       managerId: null,
       phone: null,

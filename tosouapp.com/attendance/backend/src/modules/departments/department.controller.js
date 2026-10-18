@@ -1,4 +1,5 @@
 const repo = require('./department.repository');
+const { nowJSTMySQL } = require('../../utils/dateTime');
 const historyService = require('./department.history.service');
 const auditRepo = require('../audit/audit.repository');
 const userRepo = require('../users/user.repository');
@@ -82,7 +83,7 @@ exports.createBulk = async (req, res) => {
 exports.listDepartmentUsers = async (req, res) => {
   try {
     const id = req.params.id;
-    const asOf = String(req.query.asOf || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+    const asOf = String(req.query.asOf || '').slice(0, 10) || nowJSTMySQL().slice(0, 10);
     const userIds = await historyService.getUsersInDepartmentAsOf(id, asOf, { tenantId: req.tenantId || null });
     res.status(200).json({ departmentId: Number(id), asOf, userIds });
   } catch (err) {

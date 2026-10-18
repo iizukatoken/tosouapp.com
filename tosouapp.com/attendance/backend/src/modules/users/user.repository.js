@@ -10,6 +10,7 @@
 'use strict';
 
 const db = require('../../core/database/mysql');
+const { nowJSTMySQL } = require('../../utils/dateTime');
 const { tenantScope } = require('../../core/database/tenantDb');
 
 const _multiTenantEnabled = () => String(process.env.ENABLE_MULTI_TENANT || '').toLowerCase() === 'true';
@@ -174,7 +175,7 @@ module.exports = {
     return _sanitizeUserRow(rows[0]);
   },
   async createUser({ employeeCode = null, username, email, password, role = 'employee', departmentId = null, branchId = null, employmentType = 'full_time', hireDate = null, level = null, managerId = null, phone = null, birthDate = null, gender = null, avatarUrl = null, probationDate = null, officialDate = null, contractEnd = null, baseSalary = null, shiftId = null, employmentStatus = null, joinDate = null, tenantId = null }) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = nowJSTMySQL().slice(0, 10); // ngày hôm nay theo giờ Nhật (server chạy UTC)
     const tid = _tid(tenantId);
     const cols = [
       'employee_code',
