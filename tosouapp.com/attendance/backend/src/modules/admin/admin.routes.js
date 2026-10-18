@@ -1802,12 +1802,15 @@ router.post('/calendar/import', authorize('admin'), excelUpload.single('file'), 
       return res.status(400).json({ message: '有効なデータが見つかりませんでした。' });
     }
 
+    // Lưu vào đúng công ty của admin. Trước đây thiếu tenant_id → mặc định 0 = ngày nghỉ CHUNG,
+    // nên lịch nghỉ một công ty nhập vào hiện ra (và ghi đè) ở cả các công ty khác.
+    const holidayTid = req.tenantId ? Number(req.tenantId) : 0;
     for (const r of records) {
       await db.query(`
-        INSERT INTO company_holidays (date, type, name, is_off) 
-        VALUES (?, ?, ?, ?)
+        INSERT INTO company_holidays (tenant_id, date, type, name, is_off)
+        VALUES (?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE type=VALUES(type), name=VALUES(name), is_off=VALUES(is_off)
-      `, [r.date, r.type, r.name, r.is_off]);
+      `, [holidayTid, r.date, r.type, r.name, r.is_off]);
     }
 
     res.status(200).json({ ok: true, count: records.length });

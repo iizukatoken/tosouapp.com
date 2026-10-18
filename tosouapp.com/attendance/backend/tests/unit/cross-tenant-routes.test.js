@@ -138,3 +138,23 @@ describe('work reports resolve the tenant', () => {
     expect(r.status).toBe(409);
   });
 });
+
+describe('calendar import saves holidays for the caller company only', () => {
+  test('imported holidays get the caller tenant_id (not 0 = shared by every company)', async () => {
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('カレンダー');
+    ws.addRow(['日付', '種別', '休日', '名称']);
+    ws.addRow(['2026-12-29', '会社', '休', '年末休暇']);
+    const buf = Buffer.from(await wb.xlsx.writeBuffer());
+
+    const db = require('../../src/core/database/mysql');
+    const r = await request(app).post('/api/admin/calendar/import')
+      .attach('file', buf, { filename: 'calendar.xlsx', contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    expect(r.status).toBe(200);
+    const insert = db.query.mock.calls.find(([sql]) => /INSERT INTO company_holidays/.test(String(sql)));
+    expect(insert).toBeDefined();
+    expect(insert[0]).toContain('tenant_id');
+    expect(insert[1]).toEqual([CALLER_TENANT, '2026-12-29', 'fixed', '年末休暇', 1]);
+  }, 20000); // exceljs の初回読み込みが遅いことがある
+});
