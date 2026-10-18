@@ -194,36 +194,58 @@ exports.updateStatus = async (req, res) => {
       return res.status(400).json({ message: '差戻し理由を入力してください' });
     }
     const tid = req.tenantId || null;
-    await repo.updateStatus(id, status, adminNote, tid, req.user?.id || null);
+    const before = await repo.getById(id, tid);
+    if (!before) return res.status(404).json({ message: 'Not found' });
+    // manager chỉ xử lý đơn của nhân viên (giống danh sách listForManager), và không tự duyệt đơn của mình.
+    const role = String(req.user?.role || '').toLowerCase();
+    if (role === 'manager') {
+      if (String(before.userId) === String(req.user?.id)) {
+        return res.status(403).json({ message: '自分の申請は処理できません' });
+      }
+      const [[target]] = await db.query('SELECT role FROM users WHERE id = ? LIMIT 1', [before.userId]);
+      if (!target || String(target.role || '').toLowerCase() !== 'employee') {
+        return res.status(403).json({ message: 'Forbidden' });
+      }
+    }
     let applied = null;
     if (status === 'approved') {
-      const reqRow = await repo.getById(id, tid);
-      if (reqRow) {
-        // Ghi giờ đã duyệt vào bảng chấm công của nhân viên để admin KHÔNG phải
-        // sang màn 月次勤怠入力 nhập lại.
-        // - Nếu đơn gắn với record chấm công có sẵn (attendanceId) → update record đó.
-        // - Nếu ngày đó CHƯA có record (attendanceId null) và có giờ 出勤 →
-        //   dùng bulkUpsertAttendance (chính là hàm màn 月次 dùng) để TẠO MỚI record
-        //   cho đúng ngày, đồng thời đồng bộ attendance_daily.
-        try {
-          applied = await applyApprovedTimes(reqRow, tid);
-        } catch (e) {
-          // Không chặn việc duyệt nếu ghi giờ lỗi, nhưng báo lại cho màn hình quản lý.
-          applied = { ok: false, error: String(e && e.message || e) };
-          console.error('[adjust.approve] write attendance failed:', e && e.message);
-        }
-        try {
-          await recomputeDailyLateEarly(reqRow, tid);
-        } catch (e) {
-          console.error('[adjust.approve] recompute late/early failed:', e && e.message);
-        }
-        try {
-          const ds = String(reqRow.requestedCheckIn || reqRow.requestedCheckOut || '').slice(0, 10);
-          if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
-            await summaryRepo.markDirty(reqRow.userId, parseInt(ds.slice(0, 4), 10), parseInt(ds.slice(5, 7), 10), tid);
-          }
-        } catch (e) { /* silently ignored */ }
+      // Chỉ một lần duyệt được ghi nhận: đơn đã approved (hoặc đang được người khác duyệt) → 409.
+      const claimed = await repo.claimApproval(id, tid, req.user?.id || null);
+      if (!claimed) return res.status(409).json({ message: 'この申請は既に承認済みです' });
+      const reqRow = { ...before };
+      // Ghi giờ đã duyệt vào bảng chấm công của nhân viên để admin KHÔNG phải
+      // sang màn 月次勤怠入力 nhập lại.
+      // - Nếu đơn gắn với record chấm công có sẵn (attendanceId) → update record đó.
+      // - Nếu ngày đó CHƯA có record (attendanceId null) và có giờ 出勤 →
+      //   dùng bulkUpsertAttendance (chính là hàm màn 月次 dùng) để TẠO MỚI record
+      //   cho đúng ngày, đồng thời đồng bộ attendance_daily.
+      try {
+        applied = await applyApprovedTimes(reqRow, tid);
+      } catch (e) {
+        applied = { ok: false, error: String(e && e.message || e) };
+        console.error('[adjust.approve] write attendance failed:', e && e.message);
       }
+      if (!applied || !applied.ok) {
+        // Không ghi được giờ → trả đơn về trạng thái cũ, để không có đơn "承認済み" mà giờ chấm công không đổi.
+        await repo.restoreStatus(id, before, tid);
+        return res.status(422).json({
+          message: `勤怠への反映に失敗したため承認していません: ${applied?.error || 'unknown'}`,
+          applied
+        });
+      }
+      try {
+        await recomputeDailyLateEarly(reqRow, tid);
+      } catch (e) {
+        console.error('[adjust.approve] recompute late/early failed:', e && e.message);
+      }
+      try {
+        const ds = String(reqRow.requestedCheckIn || reqRow.requestedCheckOut || '').slice(0, 10);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(ds)) {
+          await summaryRepo.markDirty(reqRow.userId, parseInt(ds.slice(0, 4), 10), parseInt(ds.slice(5, 7), 10), tid);
+        }
+      } catch (e) { /* silently ignored */ }
+    } else {
+      await repo.updateStatus(id, status, adminNote, tid, req.user?.id || null);
     }
     try {
       const reqRow2 = await repo.getById(id, tid);

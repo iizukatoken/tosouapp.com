@@ -61,6 +61,40 @@ module.exports = {
     `;
     await db.query(sql, [...setParams, ...whereParams]);
   },
+  // 承認を1回だけ確定させる (同じ申請の二重承認・同時承認を防ぐ)。
+  // 既に approved の行は更新されず 0 を返す。
+  async claimApproval(id, tenantId = null, processedBy = null) {
+    const tid = _tid(tenantId);
+    const where = ['id = ?', "status <> 'approved'"];
+    const whereParams = [id];
+    if (tid != null) { where.push('tenant_id = ?'); whereParams.push(tid); }
+    const sql = `
+      UPDATE time_adjust_requests
+      SET status = 'approved', admin_note = NULL, processed_by = ?, processed_at = ?
+      WHERE ${where.join(' AND ')}
+    `;
+    const [res] = await db.query(sql, [processedBy || null, processedBy ? new Date() : null, ...whereParams]);
+    return Number(res?.affectedRows || 0);
+  },
+  // 勤怠への反映に失敗したとき、承認前の状態 (status / admin_note / processed_*) に戻す。
+  async restoreStatus(id, prev, tenantId = null) {
+    const tid = _tid(tenantId);
+    const where = ['id = ?'];
+    const whereParams = [id];
+    if (tid != null) { where.push('tenant_id = ?'); whereParams.push(tid); }
+    const sql = `
+      UPDATE time_adjust_requests
+      SET status = ?, admin_note = ?, processed_by = ?, processed_at = ?
+      WHERE ${where.join(' AND ')}
+    `;
+    await db.query(sql, [
+      prev.status || 'pending',
+      prev.admin_note ?? null,
+      prev.processed_by ?? null,
+      prev.processed_at ?? null,
+      ...whereParams
+    ]);
+  },
   async getById(id, tenantId = null) {
     const tid = _tid(tenantId);
     const where = ['id = ?'];
