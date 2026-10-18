@@ -223,8 +223,14 @@ exports.remove = async (req, res) => {
   try {
     const id = req.params.id;
     if (!id) return res.status(400).json({ message: 'Missing id' });
-    await repo.deleteUser(id, req.tenantId || null);
-    res.status(200).json({ id });
+    // Trước đây là DELETE FROM users → ON DELETE CASCADE xoá luôn chấm công, báo cáo, lương của nhân viên.
+    // Giờ chỉ vô hiệu hoá (giống DELETE /api/admin/employees/:id), dữ liệu được giữ nguyên.
+    const before = await repo.getUserById(id, req.tenantId || null);
+    if (!before) return res.status(404).json({ message: 'User not found' });
+    await repo.updateUser(id, { employmentStatus: 'inactive', tenantId: req.tenantId || null });
+    try { await refreshRepo.deleteUserTokens(id); } catch (e) { /* silently ignored */ }
+    try { invalidateUserCache && await invalidateUserCache(id, req.tenantId); } catch (e) { /* silently ignored */ }
+    res.status(200).json({ id, status: 'inactive' });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
