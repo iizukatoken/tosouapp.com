@@ -27,6 +27,9 @@ jobs:
         run: npm ci || npm install
       - name: Run unit tests
         run: npx jest attendance/backend/tests/unit/ --testPathIgnorePatterns='auth.test' --forceExit --maxWorkers=2
+      # Mock-only (no real DB): tenant isolation checks for every repository
+      - name: Run integration tests
+        run: npx jest attendance/backend/tests/integration/ --forceExit --maxWorkers=2
       - name: Test summary
         if: always()
         run: echo "Unit tests completed"

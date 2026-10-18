@@ -307,13 +307,14 @@ describe('Multi-Tenant Data Isolation', () => {
       expect(selectCall[0]).toContain('tenant_id = ?');
     });
 
-    test('deleteDepartment with tenantId prevents cross-tenant delete', async () => {
+    // 部署は削除ではなく無効化 (is_active = 0) になった。他社の部署を無効化できないことを確認する。
+    test('deactivateDepartment with tenantId prevents cross-tenant deactivate', async () => {
       mockQuery.mockResolvedValue([{ affectedRows: 0 }]);
-      await deptRepo.deleteDepartment(1, 999);
-      // Find the DELETE query (skip CREATE TABLE / ALTER TABLE)
-      const deleteCall = mockQuery.mock.calls.find(c => c[0].includes('DELETE FROM departments'));
-      expect(deleteCall).toBeDefined();
-      expect(deleteCall[0]).toContain('tenant_id = ?');
+      await deptRepo.deactivateDepartment(1, 999);
+      const updateCall = mockQuery.mock.calls.find(c => c[0].includes('UPDATE departments SET is_active = 0'));
+      expect(updateCall).toBeDefined();
+      expect(updateCall[0]).toContain('tenant_id = ?');
+      expect(updateCall[1]).toEqual([1, 999]);
     });
   });
 
