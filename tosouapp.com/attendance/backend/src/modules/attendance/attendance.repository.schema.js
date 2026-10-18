@@ -78,24 +78,21 @@ async function ensureAttendanceSchema() {
       try {
         await db.query(`ALTER TABLE attendance ADD CONSTRAINT unique_user_checkin UNIQUE (userId, checkIn)`);
       } catch (err) {
+        // Không tự xoá dòng trùng khi khởi động (dòng bị xoá có thể là dòng đúng, không backup).
+        // Chỉ báo số dòng trùng; dọn trùng phải làm thủ công: backup → dry-run → xác nhận.
         try {
-          console.warn('⚠️ Could not add unique constraint, maybe duplicates already exist:', err.message);
-          // Dọn trùng: giữ lại id nhỏ nhất cho mỗi cặp (userId, checkIn)
-          await db.query(`
-            DELETE a FROM attendance a
-            JOIN (
-              SELECT userId, checkIn, MIN(id) AS keep_id, COUNT(*) AS cnt
-              FROM attendance
+          const [[dup]] = await db.query(`
+            SELECT COUNT(*) AS groups_cnt, COALESCE(SUM(cnt - 1), 0) AS extra_rows FROM (
+              SELECT COUNT(*) AS cnt FROM attendance
               WHERE checkIn IS NOT NULL
               GROUP BY userId, checkIn
               HAVING cnt > 1
             ) d
-              ON d.userId = a.userId AND d.checkIn = a.checkIn AND a.id <> d.keep_id
           `);
-          await db.query(`ALTER TABLE attendance ADD CONSTRAINT unique_user_checkin UNIQUE (userId, checkIn)`);
-          console.warn('[repair] duplicate attendance rows cleaned and unique index added');
+          console.warn('⚠️ unique_user_checkin not added (duplicates must be resolved manually):', err.message,
+            { duplicateGroups: Number(dup?.groups_cnt || 0), extraRows: Number(dup?.extra_rows || 0) });
         } catch (e2) {
-          console.warn('⚠️ Unique constraint still not added:', e2.message);
+          console.warn('⚠️ unique_user_checkin not added:', err.message);
         }
       }
     }
@@ -254,19 +251,16 @@ async function ensureWorkDetailsSchema() {
       CONSTRAINT fk_uwd_user FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
-  // 重複行を削除してから UNIQUE INDEX を追加する（既存の重複データを保護するため）
-  try {
-    await db.query(`
-      DELETE d1 FROM user_work_details d1
-      INNER JOIN user_work_details d2
-        ON d1.userId = d2.userId
-        AND d1.start_date = d2.start_date
-        AND d1.id > d2.id
-    `);
-  } catch (e) { /* 重複なし、または削除済み */ }
-  try {
-    await db.query(`ALTER TABLE user_work_details ADD UNIQUE KEY uniq_uwd_user_start (userId, start_date)`);
-  } catch (e) { /* 既に存在する場合は無視 */ }
+  // UNIQUE INDEX を追加する。起動時に重複行を自動削除はしない (社員データを勝手に消さない)。
+  // 重複があって追加できない場合は件数だけ警告し、手動で 退避 → dry-run → 確認 の上で解消する。
+  const [uwdIdx] = await db.query(`SHOW INDEX FROM user_work_details WHERE Key_name = 'uniq_uwd_user_start'`);
+  if (!uwdIdx.length) {
+    try {
+      await db.query(`ALTER TABLE user_work_details ADD UNIQUE KEY uniq_uwd_user_start (userId, start_date)`);
+    } catch (e) {
+      console.warn('⚠️ uniq_uwd_user_start not added (duplicates must be resolved manually):', e.message);
+    }
+  }
 }
 
 async function ensureAttendanceMonthSummarySchema() {
