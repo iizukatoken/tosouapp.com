@@ -110,6 +110,15 @@ async function start() {
         initBackupCronJob();
     }
 
+    // Kiểm tra dữ liệu trùng hằng tuần, gửi email khi có (chỉ đọc, chỉ production)
+    if (process.env.NODE_ENV === 'production' && !disableSchedulers) {
+      try {
+        require('./cron/duplicateCheckCron').initDuplicateCheckCron();
+      } catch (e) {
+        console.error('[DuplicateCheck] init error', e && e.message);
+      }
+    }
+
     // Initialize health monitor (all environments except test)
     initHealthMonitor();
 
