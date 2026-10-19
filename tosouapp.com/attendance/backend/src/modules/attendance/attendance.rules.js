@@ -38,7 +38,12 @@ const CoreRules = {
     const outJ = parseMySQLJSTToDate(checkOut);
 
     if (outJ < inJ) {
-      throw new Error('Invalid time order: Checkout before Checkin');
+      // Dữ liệu sai (退勤 trước 出勤): chỉ ngày này tính 0 và gắn cờ bất thường.
+      // Trước đây ném lỗi → computeRange hỏng → API tháng / 給与 / 台帳 lỗi 500 cho CẢ THÁNG.
+      return {
+        regularMinutes: 0, overtimeMinutes: 0, nightMinutes: 0,
+        isAnomaly: true, anomalyType: 'CHECKOUT_BEFORE_CHECKIN'
+      };
     }
 
     const worked = minutesBetween(inJ, outJ);
