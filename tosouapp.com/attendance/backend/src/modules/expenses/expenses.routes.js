@@ -12,6 +12,8 @@ const salaryRepo = require('../salary/salary.repository');
 const s3Service = require('../../core/services/s3.service');
 const fileStore = require('../../core/services/fileStore.service');
 const { uploadMemory, safeFilename } = require('../../core/middleware/uploadR2');
+// 社員が自分で修正・削除できる状態
+const EMPLOYEE_EDITABLE_STATUSES = new Set(['draft', 'pending', 'rejected']);
 const metrics = require('../../core/metrics');
 const db = require('../../core/database/mysql');
 const { companyName } = require('../../config/env');
@@ -837,6 +839,10 @@ router.delete('/:id',
       if (String(r.status || '').toLowerCase() === 'paid') {
         return res.status(409).json({ message: '支給済みの申請は削除できません。' });
       }
+      // 社員本人は 下書き・差戻し のみ削除できる (申請中・総務確認済み・承認済みは管理側で処理中のため)
+      if (!(role === 'manager' || role === 'admin') && !EMPLOYEE_EDITABLE_STATUSES.has(String(r.status || '').toLowerCase())) {
+        return res.status(409).json({ message: '申請中・承認済みの申請は削除できません。' });
+      }
       const ok = await repo.deleteMine(id, req.tenantId || null);
       if (!ok) return res.status(404).json({ message: 'Not Found' });
       res.status(200).json({ ok: true });
@@ -1104,6 +1110,10 @@ router.patch('/:id',
         return res.status(409).json({ message: '支給済みの申請は編集できません。' });
       }
       const role = String(req.user.role || '').toLowerCase();
+      // 社員本人は 下書き・差戻し のみ修正できる (以前は申請中・承認済みでも金額などを変えられた)
+      if (!(role === 'manager' || role === 'admin') && !EMPLOYEE_EDITABLE_STATUSES.has(String(cur.status || '').toLowerCase())) {
+        return res.status(409).json({ message: '申請中・承認済みの申請は修正できません。' });
+      }
       const ok = role === 'manager' || role === 'admin'
         ? await repo.updateByAdmin(id, req.body || {}, req.tenantId || null)
         : await repo.updateMine(id, req.user.id, req.body || {}, req.tenantId || null);
