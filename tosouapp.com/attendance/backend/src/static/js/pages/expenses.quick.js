@@ -1,23 +1,27 @@
-// 交通費申請 (社員画面) — シンプルでクラシックな画面。expenses.page.js の処理は変えずに上に重ねる。
+// 交通費申請 (社員画面) — シンプルでクラシックな 1 画面。従来の画面 (expenses.page.js) は隠して使わない。
 //
-//   一覧: 「新規申請」ボタン + 件数 1 行 + 最近の申請の表 (従来のカード・サイドメニュー・年選択は隠す)
-//   入力: 1 枚のフォーム (日付・種別・区間・片道/往復・金額・用途・領収書、任意項目は「詳細」)
-//   送信: 「申請する」1 回で送信 (= 明細を作成 → その月を申請。従来の 内容確認→申請 と同じ API)
-//
-// 物品購入・別の月の申請・月別の詳細は「従来の画面」リンクから今までどおり使える。
+//   一覧: 月ごとの表 (対象月・件数・合計金額・状態)。月を押すと明細。
+//         下書き・差戻しの明細は「修正」「削除」、その月は「この月を申請する」。「印刷」で月別明細。
+//   入力: 1 枚のフォーム (日付・種別・区間・片道/往復・金額・用途・領収書、物品購入は 品名・購入先)
+//   送信: 「申請する」= 保存 → その月を申請 (従来の 内容確認→申請 と同じ API)
 import { fetchJSONAuth } from '/static/js/api/http.api.js?v=20260416-1';
 
 const $ = (id) => document.getElementById(id);
 const todayJST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const yen = (n) => Math.round(Number(n) || 0).toLocaleString('ja-JP') + '円';
-const TYPES = [['train', '電車'], ['bus', 'バス'], ['taxi', 'タクシー'], ['car', '自家用車'], ['parking', '駐車場代'], ['highway', '高速料金']];
-const TYPE_NAME = Object.fromEntries([...TYPES, ['goods', '物品購入']]);
+const TYPES = [['train', '電車'], ['bus', 'バス'], ['taxi', 'タクシー'], ['car', '自家用車'], ['parking', '駐車場代'], ['highway', '高速料金'], ['goods', '物品購入']];
+const TYPE_NAME = Object.fromEntries(TYPES);
 const STATUS = {
   draft: ['下書き', '#6b7280'], pending: ['下書き', '#6b7280'],
   applied: ['申請中', '#b45309'], soumu_checked: ['総務確認済み', '#1d4ed8'],
   approved: ['承認済み', '#15803d'], paid: ['支給済み', '#374151'], rejected: ['差戻し', '#b91c1c'],
 };
+// 社員が修正・削除・再申請できる状態 (サーバー側の制限と同じ)
+const EDITABLE = new Set(['draft', 'pending', 'rejected']);
+// 添付ファイルの制限 (サーバー側 uploadR2.js と同じ): 画像または PDF、1 件 10MB まで、1 申請 8 件まで
+const MAX_FILES = 8;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 // ---------------- スタイル ----------------
 const NAVY = '#0b2c66';
@@ -26,45 +30,48 @@ function ensureStyle() {
   const st = document.createElement('style');
   st.id = 'qxStyle';
   st.textContent = `
-    /* かんたん画面のときは従来の部品を隠す */
-    body.qx-simple #exSummaryCards, body.qx-simple #exMonthlyBoardHost,
-    body.qx-simple #exListWrapper, body.qx-simple #exListHost,
+    /* 従来の画面の部品はすべて隠す */
+    body.qx-simple #homeSection, body.qx-simple #historySection, body.qx-simple #helpSection,
+    body.qx-simple #monthSelectModal, body.qx-simple #exItemModal,
     body.qx-simple .expense-side-tabs, body.qx-simple #expToggleSidebarBtn,
     body.qx-simple .expense-standalone-header-center { display: none !important; }
     body.qx-simple .expense-layout { padding-left: 0 !important; transform: none !important; }
     body.qx-simple .expense-main { background: #fff !important; }
-    #historySection:not(.applied-month-mode) #qxHome, body:not(.qx-simple) #qxHome,
-    body:not(.qx-simple) #qxHeaderTitle { display: none !important; }
 
     .qx { font-size: 14px; color: #1f2937; max-width: 880px; margin: 0 auto; }
-    .qx-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 6px; }
+    .qx-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 10px; }
     .qx-h { font-size: 16px; font-weight: 700; margin: 0; }
     .qx-btn { height: 34px; padding: 0 14px; font-size: 14px; border: 1px solid #9ca3af; background: #fff; color: #1f2937; border-radius: 3px; cursor: pointer; }
     .qx-btn:hover { background: #f3f4f6; }
     .qx-btn.primary { background: ${NAVY}; border-color: ${NAVY}; color: #fff; font-weight: 600; }
     .qx-btn.primary:hover { background: #092352; }
+    .qx-btn.small { height: 26px; padding: 0 8px; font-size: 12px; }
     .qx-btn:disabled { opacity: .6; cursor: default; }
     .qx-sub { font-size: 13px; color: #6b7280; margin: 0 0 10px; }
+    .qx-notice { font-size: 13px; color: #b91c1c; margin: 0 0 10px; }
     .qx-table { width: 100%; border-collapse: collapse; border: 1px solid #d1d5db; background: #fff; }
     .qx-table th { background: #f3f4f6; font-weight: 600; font-size: 13px; text-align: left; padding: 8px 10px; border-bottom: 1px solid #d1d5db; white-space: nowrap; }
     .qx-table td { padding: 8px 10px; border-top: 1px solid #e5e7eb; vertical-align: top; }
     .qx-table .num { text-align: right; white-space: nowrap; }
     .qx-table .note { font-size: 12px; color: #b91c1c; margin-top: 2px; }
+    .qx-table .acts { white-space: nowrap; text-align: right; }
+    .qx-table .acts .qx-btn + .qx-btn { margin-left: 4px; }
     .qx-month-row { cursor: pointer; }
     .qx-month-row:focus { outline: none; }
-    .qx-month-row:focus-visible { outline: 2px solid #0b2c6655; outline-offset: -2px; }
+    .qx-month-row:focus-visible { outline: 2px solid ${NAVY}55; outline-offset: -2px; }
     .qx-month-row:hover td { background: #f9fafb; }
     .qx-month-row td { font-weight: 600; }
     .qx-caret { display: inline-block; width: 12px; color: #6b7280; }
     .qx-detail > td { padding: 0 0 10px 22px; background: #fafafa; }
+    .qx-month-acts { display: flex; gap: 8px; justify-content: flex-end; align-items: center; padding: 8px 0; }
+    .qx-month-acts a { font-size: 13px; color: ${NAVY}; }
     .qx-sub-table { border: none; border-left: 2px solid #d1d5db; background: #fff; }
     .qx-sub-table th { background: #fafafa; font-weight: 500; color: #4b5563; }
-    .qx-links { font-size: 13px; margin: 10px 0 20px; color: #6b7280; }
-    .qx-links a { color: ${NAVY}; }
     @media (max-width: 600px) {
       .qx { padding: 0 12px; }
       .qx-table .col-type { display: none; }
       .qx-table th, .qx-table td { padding: 7px 6px; font-size: 13px; }
+      .qx-detail > td { padding-left: 8px; }
     }
 
     .qx-overlay { display: none; position: fixed; inset: 0; z-index: 10050; background: rgba(0,0,0,.4); overflow: auto; }
@@ -80,16 +87,17 @@ function ensureStyle() {
     .qx-radio { display: flex; gap: 18px; }
     .qx-radio label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
     .qx-amount { display: flex; align-items: center; gap: 6px; max-width: 200px; }
-    .qx-more { grid-column: 1 / -1; border-top: 1px dashed #d1d5db; padding-top: 8px; }
-    .qx-more summary { cursor: pointer; font-size: 13px; color: #374151; }
-    .qx-more .qx-form { padding: 10px 0 0; }
     .qx-hint { font-size: 12px; color: #6b7280; margin-top: 4px; }
     .qx-files { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
     .qx-files li { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
     .qx-files li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .qx-files button { border: 1px solid #9ca3af; background: #fff; border-radius: 3px; font-size: 12px; padding: 1px 8px; cursor: pointer; }
+    .qx-more { grid-column: 1 / -1; border-top: 1px dashed #d1d5db; padding-top: 8px; }
+    .qx-more summary { cursor: pointer; font-size: 13px; color: #374151; }
+    .qx-more .qx-form { padding: 10px 0 0; }
     .qx-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid #d1d5db; padding: 10px 14px; background: #fafafa; }
     .qx-err { flex: 1; color: #b91c1c; font-size: 13px; }
+    .qx-hide { display: none !important; }
     @media (max-width: 600px) {
       .qx-form { grid-template-columns: 1fr; gap: 4px; }
       .qx-form .l { margin-top: 8px; }
@@ -102,31 +110,24 @@ function ensureStyle() {
 }
 
 // ---------------- データ ----------------
-let myRows = null;
-let myRowsAt = 0;
-async function loadMine(force = false) {
-  if (!force && myRows && Date.now() - myRowsAt < 30_000) return myRows;
+let myRows = [];
+async function loadMine() {
   try {
     const rows = await fetchJSONAuth('/api/expenses/my');
     myRows = Array.isArray(rows) ? rows : [];
-  } catch (e) {
-    myRows = myRows || [];
-  }
-  myRowsAt = Date.now();
+  } catch (e) { /* 取得できないときは前回の一覧のまま */ }
   return myRows;
 }
 const byNewest = (a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id) - Number(a.id);
+const monthOf = (r) => String(r.date || '').slice(0, 7);
 
-// 添付ファイルの制限 (サーバー側 uploadR2.js と同じ): 画像または PDF、1 件 10MB まで、1 申請 8 件まで
-const MAX_FILES = 8;
-const MAX_FILE_BYTES = 10 * 1024 * 1024;
+// ---------------- 一覧 (月ごと) ----------------
+const openMonths = new Set();
+let openMonthsInit = false;
 
-// ---------------- 一覧 ----------------
-function renderHome() {
-  const host = $('historySection');
-  if (!host) return;
+function mountHome() {
   ensureStyle();
-  // ヘッダーにページ名 (サイドメニューを隠すため)
+  document.body.classList.add('qx-simple');
   const left = document.querySelector('.expense-standalone-header-left');
   if (left && !$('qxHeaderTitle')) {
     const t = document.createElement('span');
@@ -135,51 +136,32 @@ function renderHome() {
     t.style.cssText = 'font-size:16px;font-weight:700;color:#1f2937;';
     left.appendChild(t);
   }
+  const main = document.querySelector('.expense-main');
+  if (!main) return false;
   let home = $('qxHome');
   if (!home) {
     home = document.createElement('div');
     home.id = 'qxHome';
     home.className = 'qx';
-    host.insertBefore(home, host.firstChild);
+    const header = main.querySelector('.expense-standalone-header');
+    if (header && header.nextSibling) main.insertBefore(home, header.nextSibling);
+    else main.appendChild(home);
   }
   home.innerHTML = `
     <div class="qx-bar">
       <h2 class="qx-h">申請一覧</h2>
       <button type="button" class="qx-btn primary" id="qxNewBtn">新規申請</button>
     </div>
-    <p class="qx-sub" id="qxCounts"></p>
-    <div id="qxList"><p class="qx-sub">読み込み中…</p></div>
-    <div class="qx-links">
-      物品購入・他の月の申請・月別の詳細は <a href="#" id="qxShowOld">従来の画面</a> から行えます。
-    </div>`;
-  $('qxNewBtn').addEventListener('click', () => openForm());
-  $('qxShowOld').addEventListener('click', (e) => { e.preventDefault(); toggleOldHome(true); });
-  toggleOldHome(false);
-  refreshList();
+    <p class="qx-notice" id="qxNotice" style="display:none;"></p>
+    <div id="qxList"><p class="qx-sub">読み込み中…</p></div>`;
+  $('qxNewBtn').addEventListener('click', () => openForm(null));
+  $('qxList').addEventListener('click', onListClick);
+  $('qxList').addEventListener('keydown', (e) => {
+    const tr = e.target.closest('.qx-month-row');
+    if (tr && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleMonth(tr.dataset.month); }
+  });
+  return true;
 }
-
-function toggleOldHome(show) {
-  ensureStyle();
-  document.body.classList.toggle('qx-simple', !show);
-  if (show) {
-    if (!$('qxBackSimple')) {
-      const a = document.createElement('a');
-      a.href = '#';
-      a.id = 'qxBackSimple';
-      a.textContent = '← かんたん画面に戻る';
-      a.style.cssText = `display:inline-block;margin:0 0 12px;font-size:14px;color:${NAVY};`;
-      a.addEventListener('click', (e) => { e.preventDefault(); toggleOldHome(false); });
-      $('historySection')?.insertBefore(a, $('historySection').firstChild);
-    }
-    $('qxBackSimple').style.display = '';
-  } else if ($('qxBackSimple')) {
-    $('qxBackSimple').style.display = 'none';
-  }
-}
-
-// 申請は月単位 (月ごとに申請・承認) なので、一覧も月ごとにまとめる。月の行を押すと明細が開く。
-const openMonths = new Set();
-let openMonthsInit = false;
 
 function monthStatus(items) {
   const st = items.map((r) => String(r.status));
@@ -198,42 +180,47 @@ function monthStatus(items) {
 function itemRows(items) {
   return items.map((r) => {
     const [label, color] = STATUS[String(r.status)] || [String(r.status || ''), '#374151'];
-    const route = r.type === 'goods' ? esc(r.item_name || '物品購入') : `${esc(r.origin)} → ${esc(r.destination)}`;
+    const what = r.type === 'goods'
+      ? `${esc(r.item_name || '物品購入')}${r.vendor ? `（${esc(r.vendor)}）` : ''}`
+      : `${esc(r.origin)} → ${esc(r.destination)}`;
     const note = r.status === 'rejected' && r.manager_note ? `<div class="note">理由：${esc(r.manager_note)}</div>` : '';
     const files = Number(r.file_count || 0) > 0 ? ` <span style="font-size:12px;color:#6b7280;">（添付${Number(r.file_count)}件）</span>` : '';
+    const acts = EDITABLE.has(String(r.status))
+      ? `<button type="button" class="qx-btn small" data-edit="${r.id}">修正</button><button type="button" class="qx-btn small" data-del="${r.id}">削除</button>`
+      : '';
     return `<tr>
       <td style="white-space:nowrap;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}</td>
-      <td>${route}${files}${note}</td>
+      <td>${what}${files}${note}</td>
       <td class="col-type">${esc(TYPE_NAME[r.type] || '')}</td>
       <td class="num">${yen(r.amount)}</td>
       <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
+      <td class="acts">${acts}</td>
     </tr>`;
   }).join('');
 }
 
-async function refreshList(force = false) {
+function renderList() {
   const list = $('qxList');
   if (!list) return;
-  const rows = (await loadMine(force)).slice().sort(byNewest);
+  const rows = myRows.slice().sort(byNewest);
   const rejected = rows.filter((r) => String(r.status) === 'rejected').length;
-  $('qxCounts').innerHTML = rejected
-    ? `<span style="color:#b91c1c;">差戻しが ${rejected} 件あります。該当する月を開いて理由を確認してください。</span>`
-    : '';
-  $('qxCounts').style.display = rejected ? '' : 'none';
+  const notice = $('qxNotice');
+  notice.textContent = rejected ? `差戻しが ${rejected} 件あります。該当する月を開いて理由を確認し、修正して再申請してください。` : '';
+  notice.style.display = rejected ? '' : 'none';
   if (!rows.length) {
     list.innerHTML = '<p class="qx-sub">まだ申請はありません。「新規申請」から申請してください。</p>';
     return;
   }
   const byMonth = new Map();
   for (const r of rows) {
-    const ym = String(r.date || '').slice(0, 7);
+    const ym = monthOf(r);
     if (!byMonth.has(ym)) byMonth.set(ym, []);
     byMonth.get(ym).push(r);
   }
   const months = [...byMonth.keys()].sort().reverse();
   if (!openMonthsInit) { openMonths.add(months[0]); openMonthsInit = true; }
   list.innerHTML = `
-    <table class="qx-table qx-months">
+    <table class="qx-table">
       <thead><tr><th>対象月</th><th class="num">件数</th><th class="num">合計金額</th><th>状態</th></tr></thead>
       <tbody>
         ${months.map((ym) => {
@@ -241,6 +228,7 @@ async function refreshList(force = false) {
           const total = items.reduce((a, r) => a + (Number(r.amount) || 0), 0);
           const [label, color] = monthStatus(items);
           const open = openMonths.has(ym);
+          const canApply = items.some((r) => EDITABLE.has(String(r.status)));
           return `<tr class="qx-month-row" data-month="${ym}" tabindex="0" role="button" aria-expanded="${open}">
               <td style="white-space:nowrap;"><span class="qx-caret">${open ? '▾' : '▸'}</span> ${ym.slice(0, 4)}年${ym.slice(5, 7)}月</td>
               <td class="num">${items.length}件</td>
@@ -248,26 +236,73 @@ async function refreshList(force = false) {
               <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
             </tr>
             ${open ? `<tr class="qx-detail"><td colspan="4">
+              <div class="qx-month-acts">
+                <a href="/api/expenses/my/monthly-detail/print?month=${ym}" target="_blank" rel="noopener">印刷</a>
+                ${canApply ? `<button type="button" class="qx-btn primary small" data-apply-month="${ym}">この月を申請する</button>` : ''}
+              </div>
               <table class="qx-table qx-sub-table">
-                <thead><tr><th>日付</th><th>区間</th><th class="col-type">種別</th><th class="num">金額</th><th>状態</th></tr></thead>
+                <thead><tr><th>日付</th><th>内容</th><th class="col-type">種別</th><th class="num">金額</th><th>状態</th><th></th></tr></thead>
                 <tbody>${itemRows(items)}</tbody>
               </table>
             </td></tr>` : ''}`;
         }).join('')}
       </tbody>
     </table>`;
-  list.querySelectorAll('.qx-month-row').forEach((tr) => {
-    const toggle = () => {
-      const ym = tr.dataset.month;
-      if (openMonths.has(ym)) openMonths.delete(ym); else openMonths.add(ym);
-      refreshList();
-    };
-    tr.addEventListener('click', toggle);
-    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
-  });
+}
+
+async function refreshList() {
+  await loadMine();
+  renderList();
+}
+
+function toggleMonth(ym) {
+  if (openMonths.has(ym)) openMonths.delete(ym); else openMonths.add(ym);
+  renderList();
+}
+
+async function onListClick(e) {
+  const editBtn = e.target.closest('[data-edit]');
+  if (editBtn) { const r = myRows.find((x) => String(x.id) === editBtn.dataset.edit); if (r) openForm(r); return; }
+  const delBtn = e.target.closest('[data-del]');
+  if (delBtn) { await deleteItem(delBtn.dataset.del); return; }
+  const applyBtn = e.target.closest('[data-apply-month]');
+  if (applyBtn) { await applyMonth(applyBtn.dataset.applyMonth, applyBtn); return; }
+  if (e.target.closest('a')) return;
+  const tr = e.target.closest('.qx-month-row');
+  if (tr) toggleMonth(tr.dataset.month);
+}
+
+async function deleteItem(id) {
+  const r = myRows.find((x) => String(x.id) === String(id));
+  if (!r || !window.confirm(`${String(r.date || '').slice(0, 10)} の明細を削除しますか？`)) return;
+  try {
+    await fetchJSONAuth(`/api/expenses/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await refreshList();
+    toast('削除しました。');
+  } catch (e) {
+    alert((e && e.message) || '削除に失敗しました。');
+  }
+}
+
+async function applyMonth(ym, btn) {
+  const items = myRows.filter((r) => monthOf(r) === ym && EDITABLE.has(String(r.status)));
+  if (!items.length) return;
+  if (!window.confirm(`${ym.slice(0, 4)}年${ym.slice(5, 7)}月の 下書き・差戻し ${items.length} 件を申請します。よろしいですか？`)) return;
+  if (btn) btn.disabled = true;
+  try {
+    await fetchJSONAuth('/api/expenses/months/apply', { method: 'POST', body: JSON.stringify({ month: ym }) });
+    await refreshList();
+    toast('申請しました。');
+  } catch (e) {
+    alert((e && e.message) || '申請に失敗しました。');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // ---------------- 入力フォーム ----------------
+let editing = null; // 修正中の明細 (新規は null)
+
 function ensureForm() {
   if ($('qxModal')) return;
   ensureStyle();
@@ -282,17 +317,21 @@ function ensureForm() {
         <input class="qx-in" id="qxDate" type="date" style="max-width:200px;">
         <label class="l req" for="qxType">種別</label>
         <select class="qx-in" id="qxType" style="max-width:200px;">${TYPES.map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select>
-        <label class="l req" for="qxOrigin">区間</label>
-        <div class="qx-route">
+        <label class="l req qx-trip-only" for="qxOrigin">区間</label>
+        <div class="qx-route qx-trip-only">
           <input class="qx-in" id="qxOrigin" type="text" placeholder="出発地">
           <span>→</span>
           <input class="qx-in" id="qxDest" type="text" placeholder="到着地">
         </div>
-        <span class="l req">片道/往復</span>
-        <div class="qx-radio">
+        <span class="l req qx-trip-only">片道/往復</span>
+        <div class="qx-radio qx-trip-only">
           <label><input type="radio" name="qxTrip" value="one_way" checked> 片道</label>
           <label><input type="radio" name="qxTrip" value="round_trip"> 往復</label>
         </div>
+        <label class="l req qx-goods-only" for="qxItem">購入物品名</label>
+        <input class="qx-in qx-goods-only" id="qxItem" type="text" placeholder="例）ビス・釘">
+        <label class="l qx-goods-only" for="qxVendor">購入先</label>
+        <input class="qx-in qx-goods-only" id="qxVendor" type="text" placeholder="例）〇〇ホームセンター">
         <label class="l req" for="qxAmount">金額</label>
         <div class="qx-amount"><input class="qx-in" id="qxAmount" type="text" inputmode="numeric" placeholder="0" style="text-align:right;"><span>円</span></div>
         <label class="l req" for="qxPurpose">用途</label>
@@ -301,12 +340,13 @@ function ensureForm() {
         <div>
           <input id="qxFiles" type="file" accept="image/*,application/pdf" multiple style="font-size:13px;max-width:100%;">
           <div class="qx-hint">画像またはPDF（1件10MBまで・8件まで）。スマホではカメラで撮影できます。</div>
+          <div class="qx-hint" id="qxExistingFiles"></div>
           <ul id="qxFileList" class="qx-files"></ul>
         </div>
         <details class="qx-more" id="qxMore">
           <summary>詳細（任意）</summary>
           <div class="qx-form">
-            <label class="l" for="qxVia">経由</label><input class="qx-in" id="qxVia" type="text">
+            <label class="l qx-trip-only" for="qxVia">経由</label><input class="qx-in qx-trip-only" id="qxVia" type="text">
             <label class="l" for="qxSite">現場名</label><input class="qx-in" id="qxSite" type="text">
             <label class="l" for="qxMemo">メモ</label><input class="qx-in" id="qxMemo" type="text">
           </div>
@@ -323,6 +363,7 @@ function ensureForm() {
   $('qxClose').addEventListener('click', closeForm);
   $('qxCancel').addEventListener('click', closeForm);
   m.addEventListener('click', (e) => { if (e.target === m) closeForm(); });
+  $('qxType').addEventListener('change', applyTypeLayout);
   $('qxAmount').addEventListener('input', () => {
     const digits = String($('qxAmount').value).replace(/[^\d]/g, '');
     $('qxAmount').value = digits ? Number(digits).toLocaleString('ja-JP') : '';
@@ -341,6 +382,12 @@ function ensureForm() {
   $('qxDraft').addEventListener('click', () => submit(false));
 }
 
+const isGoods = () => $('qxType').value === 'goods';
+function applyTypeLayout() {
+  const goods = isGoods();
+  document.querySelectorAll('#qxModal .qx-trip-only').forEach((el) => el.classList.toggle('qx-hide', goods));
+  document.querySelectorAll('#qxModal .qx-goods-only').forEach((el) => el.classList.toggle('qx-hide', !goods));
+}
 const tripValue = () => document.querySelector('input[name="qxTrip"]:checked')?.value || 'one_way';
 function setTrip(v) { const el = document.querySelector(`input[name="qxTrip"][value="${v === 'round_trip' ? 'round_trip' : 'one_way'}"]`); if (el) el.checked = true; }
 
@@ -349,11 +396,12 @@ let pickedFiles = [];
 function addFiles(files) {
   const err = $('qxErr');
   err.textContent = '';
+  const already = editing ? Number(editing.file_count || 0) : 0;
   for (const f of files) {
     const okType = String(f.type || '').startsWith('image/') || f.type === 'application/pdf';
     if (!okType) { err.textContent = `「${f.name}」は添付できません（画像またはPDFのみ）。`; continue; }
     if (f.size > MAX_FILE_BYTES) { err.textContent = `「${f.name}」は10MBを超えています。`; continue; }
-    if (pickedFiles.length >= MAX_FILES) { err.textContent = `添付は${MAX_FILES}件までです。`; break; }
+    if (already + pickedFiles.length >= MAX_FILES) { err.textContent = `添付は${MAX_FILES}件までです。`; break; }
     pickedFiles.push(f);
   }
   renderFiles();
@@ -381,70 +429,109 @@ async function uploadFiles(expenseId) {
   }
 }
 
-async function openForm() {
+function openForm(item) {
   ensureForm();
-  $('qxDate').value = todayJST();
-  $('qxType').value = 'train';
-  setTrip('one_way');
-  for (const id of ['qxOrigin', 'qxDest', 'qxAmount', 'qxPurpose', 'qxVia', 'qxSite', 'qxMemo']) $(id).value = '';
+  editing = item || null;
+  $('qxTitle').textContent = editing ? (String(editing.status) === 'rejected' ? '差戻しの修正' : '明細の修正') : '交通費の申請';
+  $('qxDate').value = editing ? String(editing.date || '').slice(0, 10) : todayJST();
+  $('qxType').value = editing && TYPE_NAME[editing.type] ? editing.type : 'train';
+  setTrip(editing ? editing.trip_type : 'one_way');
+  const v = (x) => (x == null ? '' : String(x));
+  $('qxOrigin').value = editing ? v(editing.origin) : '';
+  $('qxDest').value = editing ? v(editing.destination) : '';
+  $('qxItem').value = editing ? v(editing.item_name) : '';
+  $('qxVendor').value = editing ? v(editing.vendor) : '';
+  $('qxAmount').value = editing ? Math.round(Number(editing.amount) || 0).toLocaleString('ja-JP') : '';
+  $('qxPurpose').value = editing ? v(editing.purpose) : '';
+  $('qxVia').value = editing ? v(editing.via) : '';
+  $('qxSite').value = editing ? v(editing.site_name) : '';
+  $('qxMemo').value = editing ? v(editing.memo) : '';
+  $('qxMore').open = !!(editing && (editing.via || editing.site_name || editing.memo));
+  const existing = editing ? Number(editing.file_count || 0) : 0;
+  $('qxExistingFiles').textContent = existing ? `添付済み：${existing}件（追加するファイルを選択できます）` : '';
   pickedFiles = [];
   renderFiles();
-  $('qxMore').open = false;
+  applyTypeLayout();
   $('qxErr').textContent = '';
   $('qxModal').style.display = 'block';
 }
 
-function closeForm() { const m = $('qxModal'); if (m) m.style.display = 'none'; }
+function closeForm() { const m = $('qxModal'); if (m) m.style.display = 'none'; editing = null; }
 
 async function submit(apply) {
   const err = $('qxErr');
   err.textContent = '';
+  const goods = isGoods();
   const date = String($('qxDate').value || '');
   const origin = $('qxOrigin').value.trim();
   const destination = $('qxDest').value.trim();
+  const itemName = $('qxItem').value.trim();
   const purpose = $('qxPurpose').value.trim();
   const amount = Number(String($('qxAmount').value).replace(/[^\d]/g, '')) || 0;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { err.textContent = '日付を入力してください。'; return; }
-  if (!origin || !destination) { err.textContent = '出発地と到着地を入力してください。'; return; }
+  if (goods && !itemName) { err.textContent = '購入物品名を入力してください。'; return; }
+  if (!goods && (!origin || !destination)) { err.textContent = '出発地と到着地を入力してください。'; return; }
   if (!amount) { err.textContent = '金額を入力してください。'; return; }
   if (!purpose) { err.textContent = '用途を入力してください。'; return; }
   const month = date.slice(0, 7);
 
-  // その月に下書きが残っていれば、一緒に申請されることを確認する (従来の「申請」と同じく月単位で送るため)
+  // その月にほかの下書き・差戻しが残っていれば、一緒に申請されることを確認する (申請は月単位のため)
   if (apply) {
-    const otherDrafts = (await loadMine(true)).filter((r) => String(r.date || '').slice(0, 7) === month && ['draft', 'pending'].includes(String(r.status)));
-    if (otherDrafts.length && !window.confirm(`${month.replace('-', '年')}月の下書き ${otherDrafts.length} 件も一緒に申請されます。よろしいですか？`)) return;
+    await loadMine();
+    const others = myRows.filter((r) => monthOf(r) === month && EDITABLE.has(String(r.status)) && (!editing || String(r.id) !== String(editing.id)));
+    if (others.length && !window.confirm(`${month.replace('-', '年')}月の 下書き・差戻し ${others.length} 件も一緒に申請されます。よろしいですか？`)) return;
   }
 
+  const fields = {
+    date, type: $('qxType').value, purpose, amount,
+    origin: goods ? '' : origin, destination: goods ? '' : destination, via: goods ? '' : $('qxVia').value.trim(),
+    siteName: $('qxSite').value.trim(), memo: $('qxMemo').value.trim(),
+    itemName: goods ? itemName : '', vendor: goods ? $('qxVendor').value.trim() : '',
+  };
   const btns = [$('qxSubmit'), $('qxDraft'), $('qxCancel')];
   btns.forEach((b) => { b.disabled = true; });
-  const label = (apply ? $('qxSubmit') : $('qxDraft'));
+  const label = apply ? $('qxSubmit') : $('qxDraft');
   const original = label.textContent;
   label.textContent = apply ? '申請中…' : '保存中…';
   try {
-    const created = await fetchJSONAuth('/api/expenses', {
-      method: 'POST',
-      body: JSON.stringify({
-        date, type: $('qxType').value, origin, destination, tripType: tripValue(), tripCount: 1, purpose, amount,
-        via: $('qxVia').value.trim(), siteName: $('qxSite').value.trim(), memo: $('qxMemo').value.trim(),
-        teiki: false, clientToken: `qx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      }),
-    });
+    let id;
+    if (editing) {
+      id = editing.id;
+      await fetchJSONAuth(`/api/expenses/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          date: fields.date, type: fields.type, category: fields.type, purpose: fields.purpose, amount: fields.amount,
+          origin: fields.origin, destination: fields.destination, via: fields.via,
+          trip_type: goods ? null : tripValue(), trip_count: 1,
+          site_name: fields.siteName, memo: fields.memo, item_name: fields.itemName, vendor: fields.vendor,
+        }),
+      });
+    } else {
+      const created = await fetchJSONAuth('/api/expenses', {
+        method: 'POST',
+        body: JSON.stringify({
+          ...fields, tripType: goods ? null : tripValue(), tripCount: 1, teiki: false,
+          clientToken: `qx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        }),
+      });
+      id = created?.id;
+    }
     // 領収書: 送れなかったら申請はせず下書きのまま (領収書なしで申請されるのを防ぐ)
     if (pickedFiles.length) {
       try {
-        await uploadFiles(created?.id);
+        await uploadFiles(id);
       } catch (upErr) {
         closeForm();
-        await refreshList(true);
-        alert(`領収書の送信に失敗したため、申請はせず下書きとして保存しました。\n（${upErr?.message || 'エラー'}）\n\n「従来の画面」から領収書を添付して申請してください。`);
+        await refreshList();
+        alert(`領収書の送信に失敗したため、申請はせず保存のみ行いました。\n（${upErr?.message || 'エラー'}）\n\n該当の明細の「修正」から、もう一度領収書を添付して申請してください。`);
         return;
       }
     }
     if (apply) await fetchJSONAuth('/api/expenses/months/apply', { method: 'POST', body: JSON.stringify({ month }) });
+    openMonths.add(month);
     closeForm();
-    await refreshList(true);
-    toast(apply ? '申請しました。' : '下書きに保存しました。');
+    await refreshList();
+    toast(apply ? '申請しました。' : '保存しました。');
   } catch (e) {
     err.textContent = (e && e.message) || '送信に失敗しました。もう一度お試しください。';
   } finally {
@@ -462,8 +549,11 @@ function toast(msg) {
 }
 
 function boot() {
-  try { ensureForm(); } catch (e) { /* 失敗しても従来の画面で使える */ }
-  try { renderHome(); } catch (e) { /* ignore */ }
+  try {
+    if (!mountHome()) return;
+    ensureForm();
+    refreshList();
+  } catch (e) { /* ignore */ }
 }
 
 // ポータルからのソフト遷移 (portal.page.js) では bootExpensesQuick() を呼ぶ。直接開いたときは自動で起動。
