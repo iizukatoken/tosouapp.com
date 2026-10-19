@@ -2188,6 +2188,25 @@
               }
             }
           } catch (e) { /* bỏ qua nếu không đo/scale được */ }
+          // Tháng 31 ngày (hoặc ngày có 2 dòng) với hàng cố định 28px thì vượt 1 trang
+          // → overflow:hidden cắt mất dòng cuối (tên công ty). Chỉ khi tràn mới hạ
+          // chiều cao hàng từng 1px (tối thiểu 20px) cho đến khi tên công ty nằm gọn
+          // trong trang. Tháng vừa trang thì giữ nguyên 28px như cũ.
+          try {
+            const doc = iframe.contentWindow.document;
+            const scaleEl = doc.getElementById('printScale');
+            const lastEl = scaleEl && scaleEl.querySelector('.enm-company-bottom');
+            const rowsEls = scaleEl ? scaleEl.querySelectorAll('.enm-daily-table tbody tr') : [];
+            if (scaleEl && lastEl && rowsEls.length) {
+              const mmPx = scaleEl.getBoundingClientRect().height / (pageHmm - 0.6);
+              const limit = () => scaleEl.getBoundingClientRect().bottom - (PAD_MM + 2) * mmPx;
+              const setRowH = (h) => rowsEls.forEach((r) => {
+                r.style.setProperty('height', `${h}px`, 'important');
+                r.querySelectorAll('td').forEach((c) => c.style.setProperty('height', `${h}px`, 'important'));
+              });
+              for (let h = 27; h >= 20 && lastEl.getBoundingClientRect().bottom > limit(); h--) setRowH(h);
+            }
+          } catch (e) { /* bỏ qua nếu không đo được */ }
           // Chờ thêm 1 nhịp để layout sau zoom/giãn áp dụng xong (đặc biệt trên
           // điện thoại chậm) rồi mới trả iframe → print/chụp đúng trạng thái đã fit.
           setTimeout(() => resolve(iframe), 150);

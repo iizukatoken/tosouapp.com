@@ -21,7 +21,7 @@
   <script src="/static/vendor/pdfgen/html2canvas.min.js?v=1.4.1" defer></script>
   <script src="/static/vendor/pdfgen/jspdf.umd.min.js?v=2.5.1" defer></script>
   <!-- cache buster -->
-  <script src="/static/js/pages/attendance-monthly.events.js?v=navy-20261019-marume2" defer></script>
+  <script src="/static/js/pages/attendance-monthly.events.js?v=navy-20261019-printfit1" defer></script>
   <script src="/static/js/pages/attendance-monthly.page.js?v=navy-20260703-7" defer></script>
 </head>
 <body class="nav-js">
@@ -319,7 +319,7 @@
             <div class="enm-footer-text" style="margin-top: 8px; font-size: 15px; text-align: right;">
               上記の通り、就業状況を通知いたします。
             </div>
-            <div class="enm-company-bottom">飯塚塗研株式会社</div>
+            <div class="enm-company-bottom"><%= (typeof tenant !== 'undefined' && tenant && tenant.name) ? tenant.name : '飯塚塗研株式会社' %></div>
           </div>
         </div>
         <div class="enm-footer">
