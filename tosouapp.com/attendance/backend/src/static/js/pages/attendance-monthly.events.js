@@ -2197,6 +2197,34 @@
             const scaleEl = doc.getElementById('printScale');
             const lastEl = scaleEl && scaleEl.querySelector('.enm-company-bottom');
             const rowsEls = scaleEl ? scaleEl.querySelectorAll('.enm-daily-table tbody tr') : [];
+            // Chữ dài trong 事由 (tên ngày lễ…) / 備考 / 作業内容: thu nhỏ cỡ chữ cho
+            // vừa ô (chiều cao hàng cố định) thay vì làm hàng phình to hoặc tràn ra ngoài.
+            const FIT_SEL = 'td.enm-reason, td.enm-note, td.enm-work';
+            const fitCells = (rowH) => {
+              scaleEl.querySelectorAll(`.enm-daily-table tbody ${FIT_SEL.split(', ').join(', .enm-daily-table tbody ')}`).forEach((td) => {
+                if (!td.textContent.trim()) return;
+                let box = td.firstElementChild && td.firstElementChild.classList.contains('enm-fit') ? td.firstElementChild : null;
+                if (!box) {
+                  box = doc.createElement('div');
+                  box.className = 'enm-fit';
+                  while (td.firstChild) box.appendChild(td.firstChild);
+                  td.appendChild(box);
+                  td.dataset.fs = String(parseFloat(iframe.contentWindow.getComputedStyle(td).fontSize) || 12);
+                }
+                const maxH = rowH - 3;
+                td.style.setProperty('vertical-align', 'middle', 'important');
+                let fs = Number(td.dataset.fs);
+                box.style.cssText = `overflow:hidden;white-space:normal;word-break:break-all;line-height:1.1;font-size:${fs}px;max-height:none;`;
+                while (fs > 5 && (box.scrollHeight > maxH || box.scrollWidth > box.clientWidth + 1)) {
+                  fs -= 0.5;
+                  box.style.fontSize = `${fs}px`;
+                }
+                box.style.maxHeight = `${maxH}px`;
+              });
+            };
+            if (scaleEl && rowsEls.length) {
+              fitCells(28);
+            }
             if (scaleEl && lastEl && rowsEls.length) {
               const mmPx = scaleEl.getBoundingClientRect().height / (pageHmm - 0.6);
               const limit = () => scaleEl.getBoundingClientRect().bottom - (PAD_MM + 2) * mmPx;
@@ -2204,7 +2232,8 @@
                 r.style.setProperty('height', `${h}px`, 'important');
                 r.querySelectorAll('td').forEach((c) => c.style.setProperty('height', `${h}px`, 'important'));
               });
-              for (let h = 27; h >= 20 && lastEl.getBoundingClientRect().bottom > limit(); h--) setRowH(h);
+              let h = 28;
+              for (; h >= 20 && lastEl.getBoundingClientRect().bottom > limit(); h--) { setRowH(h); fitCells(h); }
             }
           } catch (e) { /* bỏ qua nếu không đo được */ }
           // Chờ thêm 1 nhịp để layout sau zoom/giãn áp dụng xong (đặc biệt trên
