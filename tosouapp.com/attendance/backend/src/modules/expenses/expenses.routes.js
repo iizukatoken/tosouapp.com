@@ -1183,13 +1183,14 @@ router.get('/admin/monthly-detail/print',
       const params = [userId, month];
       if (tenantId != null) params.push(tenantId);
       const [expenses] = await db.query(`
-        SELECT * FROM expense_claims ec
+        SELECT ec.*, (SELECT COUNT(*) FROM expense_files f WHERE f.expense_id = ec.id) AS file_count
+        FROM expense_claims ec
         WHERE ec.userId = ? AND DATE_FORMAT(ec.date, '%Y-%m') = ?${tenantClause}
         ORDER BY ec.date ASC, ec.created_at ASC
         LIMIT 1000
       `, params);
       const [[userRow]] = await db.query(
-        'SELECT id, username, email, employee_code, birth_date FROM users WHERE id = ? LIMIT 1',
+        'SELECT u.id, u.username, u.email, u.employee_code, u.birth_date, d.name AS department_name FROM users u LEFT JOIN departments d ON d.id = u.departmentId WHERE u.id = ? LIMIT 1',
         [userId]
       );
       res.render('expenses-monthly-print', {
@@ -1219,13 +1220,14 @@ router.get('/my/monthly-detail/print',
       const params = [userId, month];
       if (tenantId != null) params.push(tenantId);
       const [expenses] = await db.query(`
-        SELECT * FROM expense_claims ec
+        SELECT ec.*, (SELECT COUNT(*) FROM expense_files f WHERE f.expense_id = ec.id) AS file_count
+        FROM expense_claims ec
         WHERE ec.userId = ? AND DATE_FORMAT(ec.date, '%Y-%m') = ?${tenantClause}
         ORDER BY ec.date ASC, ec.created_at ASC
         LIMIT 1000
       `, params);
       const [[userRow]] = await db.query(
-        'SELECT id, username, email, employee_code, birth_date FROM users WHERE id = ? LIMIT 1',
+        'SELECT u.id, u.username, u.email, u.employee_code, u.birth_date, d.name AS department_name FROM users u LEFT JOIN departments d ON d.id = u.departmentId WHERE u.id = ? LIMIT 1',
         [userId]
       );
       res.render('expenses-monthly-print', {

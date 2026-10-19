@@ -9,7 +9,11 @@
     try {
       noPrint && (noPrint.style.visibility = 'hidden');
 
-      const canvas = await window.html2canvas(document.body, {
+      // 用紙部分 (.sheet) だけを PDF にする (画面の灰色の背景・影は入れない)
+      const sheet = document.querySelector('.sheet') || document.body;
+      const prevShadow = sheet.style.boxShadow;
+      sheet.style.boxShadow = 'none';
+      const canvas = await window.html2canvas(sheet, {
         scale: 2,
         useCORS: true,
         backgroundColor: '#ffffff',
@@ -17,6 +21,7 @@
         windowWidth: document.body.scrollWidth,
         windowHeight: document.body.scrollHeight
       });
+      sheet.style.boxShadow = prevShadow;
 
       noPrint && (noPrint.style.visibility = '');
 

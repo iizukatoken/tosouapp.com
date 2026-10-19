@@ -4,113 +4,221 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>交通費精算書 <%= month %></title>
+<%
+  // ---- 表示用の値 (社員用・管理者用の印刷で共通) ----
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const y = Number(String(month).slice(0, 4));
+  const m = Number(String(month).slice(5, 7));
+  const lastDay = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const nowJst = new Date(Date.now() + 9 * 3600 * 1000);
+  const todayLabel = `${nowJst.getUTCFullYear()}年${nowJst.getUTCMonth() + 1}月${nowJst.getUTCDate()}日`;
+  const printedAt = `${nowJst.getUTCFullYear()}/${pad2(nowJst.getUTCMonth() + 1)}/${pad2(nowJst.getUTCDate())} ${pad2(nowJst.getUTCHours())}:${pad2(nowJst.getUTCMinutes())}`;
+  const WD = ['日', '月', '火', '水', '木', '金', '土'];
+  const dayLabel = (d) => {
+    const s = String(d || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const dt = new Date(s + 'T00:00:00Z');
+    return `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))}（${WD[dt.getUTCDay()]}）`;
+  };
+  const TYPE = { train: '電車', bus: 'バス', taxi: 'タクシー', car: '自家用車', private_car: '自家用車', parking: '駐車場', highway: '高速料金', goods: '物品購入' };
+  const GROUP = { train: '電車・バス', bus: '電車・バス', taxi: 'タクシー', car: '自家用車', private_car: '自家用車', parking: '駐車場・高速', highway: '駐車場・高速', goods: '物品購入' };
+  const STATUS = { applied: '申請中', soumu_checked: '総務確認済', approved: '承認済', rejected: '差戻し', draft: '下書き', pending: '下書き', denied: '却下', paid: '支給済' };
+  const yen = (n) => Math.round(Number(n) || 0).toLocaleString('ja-JP');
+  let total = 0;
+  const byGroup = {};
+  const rows = (expenses || []).map((e, i) => {
+    const t = String(e.type || e.category || '').toLowerCase();
+    const amount = Number(e.amount || 0);
+    total += amount;
+    const g = GROUP[t] || 'その他';
+    byGroup[g] = byGroup[g] || { count: 0, amount: 0 };
+    byGroup[g].count += 1;
+    byGroup[g].amount += amount;
+    const isGoods = t === 'goods';
+    const route = isGoods
+      ? [e.item_name || '物品購入', e.vendor ? `（${e.vendor}）` : ''].join('')
+      : [e.origin || '', e.destination || ''].filter(Boolean).join(' → ') + (e.via ? `（経由：${e.via}）` : '');
+    const purpose = [e.purpose || '', e.site_name ? `［${e.site_name}］` : ''].filter(Boolean).join(' ');
+    return {
+      no: i + 1,
+      day: dayLabel(e.date),
+      type: TYPE[t] || e.type || '',
+      route: route || '－',
+      trip: isGoods ? '－' : (e.trip_type === 'round_trip' ? '往復' : '片道'),
+      purpose,
+      memo: e.memo || '',
+      receipt: Number(e.file_count || 0) > 0 ? `有（${Number(e.file_count)}）` : '－',
+      amount,
+      status: STATUS[String(e.status || '').toLowerCase()] || String(e.status || ''),
+    };
+  });
+  const docNo = `${String(user.employee_code || user.id || '').replace(/\s/g, '') || '-'}-${String(month).replace('-', '')}`;
+  const userName = user.username || user.email || '';
+%>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: "Meiryo", "Yu Gothic", "Hiragino Sans", sans-serif; color: #000; background: #fff; padding: 32px 40px; }
+    body { font-family: "Yu Mincho", "YuMincho", "Hiragino Mincho ProN", "MS PMincho", serif; color: #111; background: #e5e7eb; padding: 24px 12px; }
+    .sheet { width: 190mm; max-width: 100%; margin: 0 auto; background: #fff; padding: 14mm 12mm 12mm; box-shadow: 0 2px 12px rgba(0,0,0,.15); }
+    .sans { font-family: "Yu Gothic", "YuGothic", "Hiragino Kaku Gothic ProN", "Meiryo", sans-serif; }
 
-    h1 { text-align: center; font-size: 22px; font-weight: bold; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 2px solid #000; }
+    .top { display: flex; justify-content: space-between; align-items: flex-start; font-size: 11px; }
+    .top .company { font-size: 13px; font-weight: bold; }
+    .top .meta { text-align: right; line-height: 1.7; }
+    h1 { text-align: center; font-size: 24px; letter-spacing: .45em; font-weight: bold; margin: 10px 0 14px; padding-bottom: 6px; border-bottom: 3px double #111; }
 
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 20px; margin-bottom: 24px; font-size: 13px; }
-    .info-item { display: flex; align-items: baseline; }
-    .info-label { width: 90px; font-weight: bold; flex-shrink: 0; }
+    .head { display: flex; gap: 10px; align-items: stretch; margin-bottom: 12px; }
+    .info { flex: 1; border-collapse: collapse; font-size: 12px; }
+    .info th, .info td { border: 1px solid #333; padding: 6px 8px; }
+    .info th { width: 76px; background: #f2f2f2; font-weight: normal; text-align: center; white-space: nowrap; }
+    .stamps { display: flex; border: 1px solid #333; }
+    .stamp { width: 21mm; display: flex; flex-direction: column; border-left: 1px solid #333; }
+    .stamp:first-child { border-left: none; }
+    .stamp .lbl { font-size: 10.5px; text-align: center; padding: 3px 0; border-bottom: 1px solid #333; background: #f2f2f2; }
+    .stamp .box { flex: 1; min-height: 20mm; }
 
-    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
-    th, td { border: 1px solid #555; padding: 6px 8px; }
-    th { background: #e0e0e0; text-align: center; font-weight: bold; white-space: nowrap; }
-    .right { text-align: right; }
-    .center { text-align: center; white-space: nowrap; }
-    .total-row td { background: #f0f0f0; font-weight: bold; }
+    .amount { display: flex; align-items: center; border: 2px solid #111; margin-bottom: 12px; }
+    .amount .lbl { padding: 8px 14px; font-size: 13px; border-right: 1px solid #111; background: #f2f2f2; white-space: nowrap; }
+    .amount .val { flex: 1; text-align: center; font-size: 22px; font-weight: bold; letter-spacing: .05em; }
+    .amount .cnt { padding: 8px 14px; font-size: 12px; white-space: nowrap; border-left: 1px solid #111; }
 
-    .no-print { margin-top: 28px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-    button { padding: 8px 20px; cursor: pointer; border: 1px solid #aaa; background: #fff; font-size: 13px; border-radius: 2px; }
-    button.primary { background: #1e4d8c; color: #fff; border-color: #1e4d8c; }
-    button.primary:hover { background: #163d72; }
-    button:disabled { opacity: 0.6; cursor: default; }
-    .hint { font-size: 12px; color: #666; }
+    table.detail { width: 100%; border-collapse: collapse; font-size: 10.5px; }
+    .detail th, .detail td { border: 1px solid #333; padding: 4px 5px; vertical-align: middle; }
+    .detail th { background: #f2f2f2; font-weight: normal; white-space: nowrap; }
+    .detail tbody tr:nth-child(even) td { background: #fafafa; }
+    .c { text-align: center; white-space: nowrap; }
+    .r { text-align: right; white-space: nowrap; }
+    .memo { color: #555; font-size: 9.5px; }
+    .detail tfoot td { font-weight: bold; background: #f2f2f2; }
 
-    @page { size: A4 portrait; margin: 20mm 25mm; }
+    .bottom { display: flex; gap: 10px; margin-top: 12px; align-items: flex-start; }
+    table.sum { border-collapse: collapse; font-size: 11px; min-width: 62mm; }
+    .sum th, .sum td { border: 1px solid #333; padding: 4px 8px; }
+    .sum th { background: #f2f2f2; font-weight: normal; }
+    .remarks { flex: 1; border: 1px solid #333; min-height: 24mm; font-size: 11px; }
+    .remarks .lbl { background: #f2f2f2; border-bottom: 1px solid #333; padding: 3px 8px; }
+    .foot { margin-top: 10px; font-size: 9.5px; color: #666; display: flex; justify-content: space-between; }
+
+    .no-print { width: 190mm; max-width: 100%; margin: 14px auto 0; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+    .no-print button { padding: 8px 18px; cursor: pointer; border: 1px solid #9ca3af; background: #fff; font-size: 13px; border-radius: 3px; }
+    .no-print button.primary { background: #0b2c66; color: #fff; border-color: #0b2c66; }
+    .no-print button:disabled { opacity: .6; cursor: default; }
+    .no-print .hint { font-size: 12px; color: #4b5563; }
+
+    @page { size: A4 portrait; margin: 10mm; }
     @media print {
-      body { padding: 0; background: #fff; }
+      body { background: #fff; padding: 0; }
+      .sheet { box-shadow: none; padding: 0; width: auto; }
       .no-print { display: none !important; }
-      th { background: #e0e0e0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-      .total-row td { background: #f0f0f0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .info th, .stamp .lbl, .amount .lbl, .detail th, .detail tfoot td, .sum th, .remarks .lbl, .detail tbody tr:nth-child(even) td {
+        -webkit-print-color-adjust: exact; print-color-adjust: exact;
+      }
+      .detail tr { page-break-inside: avoid; }
+    }
+    @media (max-width: 640px) {
+      body { padding: 8px 0; }
+      .sheet { padding: 10px; }
+      .head { flex-direction: column; }
+      .stamps { align-self: flex-end; }
+      .detail { font-size: 9.5px; }
     }
   </style>
 </head>
 <body>
-  <div id="printMeta" data-month="<%= month %>" data-user="<%= (user.username || user.email || '').replace(/"/g, '') %>" style="display:none;"></div>
+  <div id="printMeta" data-month="<%= month %>" data-user="<%= String(userName).replace(/"/g, '') %>" style="display:none;"></div>
+  <div class="sheet">
+    <div class="top sans">
+      <div class="company"><%= companyName %></div>
+      <div class="meta">
+        <div>提出日：<%= todayLabel %></div>
+        <div>精算書番号：<%= docNo %></div>
+      </div>
+    </div>
 
-  <h1>交通費精算書</h1>
+    <h1>交通費精算書</h1>
 
-  <div class="info-grid">
-    <div class="info-item"><span class="info-label">会社名</span><span><%= companyName %></span></div>
-    <div class="info-item"><span class="info-label">対象月</span><span><%= month %></span></div>
-    <div class="info-item"><span class="info-label">社員番号</span><span><%= user.employee_code || '' %></span></div>
-    <div class="info-item"><span class="info-label">氏名</span><span><%= user.username || user.email || '' %></span></div>
-    <% if (user.birth_date) { %>
-    <div class="info-item"><span class="info-label">生年月日</span><span><%= String(user.birth_date).slice(0,10) %></span></div>
-    <% } %>
+    <div class="head">
+      <table class="info sans">
+        <tr><th>対象期間</th><td colspan="3"><%= y %>年<%= m %>月1日 ～ <%= y %>年<%= m %>月<%= lastDay %>日</td></tr>
+        <tr><th>所属</th><td colspan="3"><%= user.department_name || '' %></td></tr>
+        <tr><th>社員番号</th><td><%= user.employee_code || '' %></td><th>氏名</th><td><%= userName %></td></tr>
+      </table>
+      <div class="stamps sans">
+        <div class="stamp"><div class="lbl">承認</div><div class="box"></div></div>
+        <div class="stamp"><div class="lbl">総務確認</div><div class="box"></div></div>
+        <div class="stamp"><div class="lbl">申請者</div><div class="box"></div></div>
+      </div>
+    </div>
+
+    <div class="amount sans">
+      <div class="lbl">精算金額合計</div>
+      <div class="val">¥<%= yen(total) %>－</div>
+      <div class="cnt">明細 <%= rows.length %> 件</div>
+    </div>
+
+    <table class="detail sans">
+      <thead>
+        <tr>
+          <th style="width:6mm;">No.</th>
+          <th style="width:17mm;">日付</th>
+          <th style="width:15mm;">区分</th>
+          <th>区間・品名</th>
+          <th style="width:9mm;">片/往</th>
+          <th>用途・現場</th>
+          <th style="width:12mm;">領収書</th>
+          <th style="width:19mm;">金額（円）</th>
+          <th style="width:14mm;">状態</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rows.forEach(function (r) { %>
+        <tr>
+          <td class="c"><%= r.no %></td>
+          <td class="c"><%= r.day %></td>
+          <td class="c"><%= r.type %></td>
+          <td><%= r.route %></td>
+          <td class="c"><%= r.trip %></td>
+          <td><%= r.purpose %><% if (r.memo) { %><div class="memo">備考：<%= r.memo %></div><% } %></td>
+          <td class="c"><%= r.receipt %></td>
+          <td class="r"><%= yen(r.amount) %></td>
+          <td class="c"><%= r.status %></td>
+        </tr>
+        <% }); %>
+        <% if (!rows.length) { %>
+        <tr><td colspan="9" class="c" style="padding:14px;color:#666;">この月の明細はありません</td></tr>
+        <% } %>
+      </tbody>
+      <tfoot>
+        <tr><td colspan="7" class="r">合計</td><td class="r"><%= yen(total) %></td><td></td></tr>
+      </tfoot>
+    </table>
+
+    <div class="bottom sans">
+      <table class="sum">
+        <thead><tr><th>区分</th><th>件数</th><th>金額（円）</th></tr></thead>
+        <tbody>
+          <% Object.keys(byGroup).forEach(function (g) { %>
+          <tr><td><%= g %></td><td class="r"><%= byGroup[g].count %></td><td class="r"><%= yen(byGroup[g].amount) %></td></tr>
+          <% }); %>
+          <% if (!Object.keys(byGroup).length) { %><tr><td colspan="3" class="c">－</td></tr><% } %>
+        </tbody>
+      </table>
+      <div class="remarks"><div class="lbl">備考</div></div>
+    </div>
+
+    <div class="foot sans">
+      <span>上記のとおり精算いたします。</span>
+      <span>出力日時：<%= printedAt %></span>
+    </div>
   </div>
 
-  <table>
-    <thead>
-      <tr>
-        <th>日付</th>
-        <th>用途</th>
-        <th>経路</th>
-        <th>交通機関</th>
-        <th>種別</th>
-        <th>備考</th>
-        <th>金額</th>
-        <th>状態</th>
-        <th>申請日時</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% let grandTotal = 0; %>
-      <% expenses.forEach(function(e) {
-        const route = [e.origin || '', e.destination || ''].filter(Boolean).join(' → ') || '-';
-        const transportMap = {train:'電車',bus:'バス',taxi:'タクシー',car:'自家用車',private_car:'自家用車',parking:'駐車場',highway:'高速料金',goods:'物品購入'};
-        const transport = transportMap[String(e.type || e.category || '').toLowerCase()] || e.type || '電車';
-        const tripType = e.trip_type === 'round_trip' ? '往復' : '片道';
-        const amount = Number(e.amount || 0);
-        grandTotal += amount;
-        const statusMap = {applied:'承認待ち',soumu_checked:'総務確認済',approved:'承認済み',rejected:'差戻し',draft:'下書き',pending:'未申請',denied:'却下',paid:'支給済み'};
-        const statusLabel = statusMap[String(e.status||'').toLowerCase()] || String(e.status||'-');
-        const createdAt = e.created_at ? String(e.created_at).replace('T',' ').slice(0,16) : '-';
-      %>
-      <tr>
-        <td class="center"><%= String(e.date||'').slice(0,10) %></td>
-        <td><%= e.purpose || '' %></td>
-        <td><%= route %></td>
-        <td class="center"><%= transport %></td>
-        <td class="center"><%= tripType %></td>
-        <td><%= e.memo || '' %></td>
-        <td class="right">¥<%= amount.toLocaleString('ja-JP') %></td>
-        <td class="center"><%= statusLabel %></td>
-        <td class="center"><%= createdAt %></td>
-      </tr>
-      <% }); %>
-      <% if (expenses.length === 0) { %>
-      <tr><td colspan="9" style="text-align:center;color:#888;padding:16px;">データがありません</td></tr>
-      <% } %>
-      <tr class="total-row">
-        <td colspan="6" class="right">合計</td>
-        <td class="right">¥<%= grandTotal.toLocaleString('ja-JP') %></td>
-        <td colspan="2"></td>
-      </tr>
-    </tbody>
-  </table>
-
-  <div class="no-print">
-    <button class="primary" id="btnDownload">⬇ PDFダウンロード</button>
-    <button id="btnPrint">🖨 印刷</button>
+  <div class="no-print sans">
+    <button class="primary" id="btnDownload">PDFダウンロード</button>
+    <button id="btnPrint">印刷</button>
     <button onclick="window.close()">閉じる</button>
-    <span class="hint">※ ボタンが効かない場合は Ctrl+P で印刷できます</span>
+    <span class="hint">※ ボタンが効かない場合は Ctrl+P（スマホは共有→印刷）で印刷できます</span>
   </div>
-
   <script src="/static/vendor/pdfgen/html2canvas.min.js?v=1.4.1"></script>
   <script src="/static/vendor/pdfgen/jspdf.umd.min.js?v=2.5.1"></script>
-  <script src="/static/js/expenses-monthly-print.js?v=20260916-1"></script>
+  <script src="/static/js/expenses-monthly-print.js?v=20261019-sheet1"></script>
 </body>
 </html>
