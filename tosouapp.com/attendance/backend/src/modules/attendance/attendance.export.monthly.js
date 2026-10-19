@@ -27,13 +27,14 @@ const { timesheetMaxDays } = require('../../config/env');
 // 遅刻/早退 の表示 (分単位の出勤・退勤・ca). Khớp đúng rule bảng tháng (attendance-monthly.render.js):
 // muộn nếu vào > giờ ca bắt đầu, sớm nếu ra < giờ ca kết thúc. Ca qua đêm (vd 22:00-06:00): giờ kết thúc
 // và giờ ra sau 0:00 cộng 24h trước khi so sánh, nếu không ra 06:00 bị tính là 早退.
+// 退勤が未打刻 (outMin = null) でも 遅刻 は出勤時刻だけで判定する (画面と同じ)。
 function lateEarlyLabel(inMin, outMin, startMin, endMin, isHolidayWork) {
   if (isHolidayWork) return '';
-  const late = inMin > startMin;
+  const late = inMin != null && inMin > startMin;
   const overnight = endMin < startMin;
   const endAbs = overnight ? endMin + 24 * 60 : endMin;
-  const outAbs = overnight && outMin < startMin ? outMin + 24 * 60 : outMin;
-  const early = outAbs < endAbs;
+  const outAbs = outMin == null ? null : (overnight && outMin < startMin ? outMin + 24 * 60 : outMin);
+  const early = outAbs != null && outAbs < endAbs;
   if (late && early) return '遅刻/早退';
   if (late) return '遅刻';
   if (early) return '早退';
@@ -395,10 +396,8 @@ exports.exportMonthXlsx = async (req, res) => {
         const autoBr = (isHolidayWork && spanMin != null && spanMin > 0 && spanMin <= 6 * 60) ? 0 : defaultBr;
         exportBrMin = (holidayLock || isHankyuu) ? 0 : (daily?.breakMinutes == null ? autoBr : Number(daily.breakMinutes));
         exportNbMin = (holidayLock || isHankyuu) ? 0 : (daily?.nightBreakMinutes == null ? 0 : Number(daily.nightBreakMinutes));
-        // 画面と同じ: 始業前の出勤は始業時刻から計算する
-        const inMinRaw = hmToMinutes(inHm);
-        const inMinEff = (shiftDef && inMinRaw < shiftDef.startMin) ? shiftDef.startMin : inMinRaw;
-        exportWorkedMin = holidayLock ? 0 : Math.max(0, hmToMinutes(outHm) - inMinEff - exportBrMin - exportNbMin);
+        // 画面 (実績) ・サーバー (給与) と同じ: 始業前の出勤 (早出) も実働に含める
+        exportWorkedMin = holidayLock ? 0 : Math.max(0, hmToMinutes(outHm) - hmToMinutes(inHm) - exportBrMin - exportNbMin);
         // 超過時間 = checkout - shift_end (giờ sau khi kết thúc ca)
         const shiftEndMin = shiftDef ? shiftDef.endMin : (17 * 60);
         const outMin = hmToMinutes(outHm);
@@ -451,7 +450,7 @@ exports.exportMonthXlsx = async (req, res) => {
         };
         const a = parse(exportInHm);
         const b = parse(exportOutHm);
-        if (a == null || b == null) return '';
+        if (a == null && b == null) return '';
         const se = shiftForDate(ds);
         const startBase = se?.startMin ?? (8 * 60);
         const endBase = se?.endMin ?? (17 * 60);
