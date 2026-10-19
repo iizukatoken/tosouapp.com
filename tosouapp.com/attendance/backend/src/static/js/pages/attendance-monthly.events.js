@@ -1666,6 +1666,7 @@
           enmSiteWorkRows.push({
             day: dayDisplay,
             rest: isRestRow,
+            reason: escHtmlEnm(kubun),
             site: placeCol,               // đã là HTML an toàn (escHtmlEnm ở trên)
             work: formatWorkContent(workContent),
           });
@@ -1728,7 +1729,58 @@
       exportPdf();
     });
 
-    // ── Nút 現場・作業内容出力: PDF riêng chỉ gồm 日 / 現場 / 作業内容 ──
+    // ── Vừa 1 trang in, dùng chung cho 出勤簿 và 作業報告書 ──
+    // (1) Chữ dài (tên ngày lễ, 備考, 現場, 作業内容…) trong các ô `cells`: thu nhỏ cỡ chữ
+    //     (tối thiểu 5px) cho vừa ô có chiều cao hàng cố định, thay vì làm hàng phình
+    //     to hoặc tràn ra ngoài.
+    // (2) Nếu cả trang vẫn tràn (tháng 31 ngày…), hạ chiều cao hàng từng 1px (tối
+    //     thiểu 20px) cho đến khi dòng cuối (tên công ty) nằm gọn trong trang.
+    // (3) maxRowH > rowH: khoảng trống giữa đáy bảng (tableEl) và dòng chân trang
+    //     (footEl) được chia cho các hàng (tối đa maxRowH) để bảng phủ kín trang như Excel.
+    const fitPrintPage = ({ win, pageEl, lastEl, rows, cells, rowH = 28, maxRowH = rowH, tableEl = null, footEl = null, pageHmm, padMm }) => {
+      const doc = win.document;
+      const fitCells = (h) => cells.forEach((td) => {
+        if (!td.textContent.trim()) return;
+        let box = td.firstElementChild && td.firstElementChild.classList.contains('enm-fit') ? td.firstElementChild : null;
+        if (!box) {
+          box = doc.createElement('div');
+          box.className = 'enm-fit';
+          while (td.firstChild) box.appendChild(td.firstChild);
+          td.appendChild(box);
+          td.dataset.fs = String(parseFloat(win.getComputedStyle(td).fontSize) || 12);
+        }
+        const maxH = h - 3;
+        td.style.setProperty('vertical-align', 'middle', 'important');
+        let fs = Number(td.dataset.fs);
+        box.style.cssText = `overflow:hidden;white-space:normal;word-break:break-all;line-height:1.1;font-size:${fs}px;max-height:none;`;
+        while (fs > 5 && (box.scrollHeight > maxH || box.scrollWidth > box.clientWidth + 1)) {
+          fs -= 0.5;
+          box.style.fontSize = `${fs}px`;
+        }
+        box.style.maxHeight = `${maxH}px`;
+      });
+      if (!pageEl || !rows.length) return;
+      fitCells(rowH);
+      if (!lastEl) return;
+      const mmPx = pageEl.getBoundingClientRect().height / (pageHmm - 0.6);
+      // Đáy vùng in (trong lề). Dòng cuối có thể được đẩy sát đáy này (margin-top:auto),
+      // nên chỉ coi là tràn khi nó vượt qua đáy.
+      const limit = () => pageEl.getBoundingClientRect().bottom - padMm * mmPx + 1;
+      const setRowH = (h) => rows.forEach((r) => {
+        r.style.setProperty('height', `${h}px`, 'important');
+        r.querySelectorAll('td').forEach((c) => c.style.setProperty('height', `${h}px`, 'important'));
+      });
+      for (let h = rowH; h >= 20 && lastEl.getBoundingClientRect().bottom > limit(); h--) { setRowH(h); fitCells(h); }
+      if (maxRowH > rowH && tableEl && footEl && lastEl.getBoundingClientRect().bottom <= limit()) {
+        const spare = footEl.getBoundingClientRect().top - tableEl.getBoundingClientRect().bottom - 10;
+        const h = Math.min(maxRowH, rowH + Math.floor(spare / rows.length));
+        if (h > rowH) { setRowH(h); fitCells(h); }
+      }
+    };
+    // Tên công ty: lấy từ trang (server render theo công ty đang đăng nhập).
+    const companyNameForPrint = () => (document.querySelector('.enm-company-bottom')?.textContent || '').trim();
+
+    // ── Nút 現場・作業内容出力: PDF riêng chỉ gồm 日 / 事由 / 現場 / 作業内容 ──
     const btnSites = document.querySelector('#btnExportSites');
     if (btnSites) {
       btnSites.removeAttribute('disabled');
@@ -1756,6 +1808,7 @@
         for (const r of enmSiteWorkRows) {
           const cls = r.rest ? ' class="sw-rest"' : '';
           rowsHtml += `<tr${cls}><td class="sw-day">${r.day}</td>`
+            + `<td class="sw-reason">${r.reason || ''}</td>`
             + `<td class="sw-site">${r.site || ''}</td>`
             + `<td class="sw-work">${r.work || ''}</td></tr>`;
         }
@@ -1781,36 +1834,33 @@
               -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .sw-page { width: ${pageWmm}mm; height: ${pageHmm - 0.6}mm; padding: ${PAD_MM}mm;
               box-sizing: border-box; overflow: hidden; display:flex; flex-direction:column; }
-            table.sw-tbl { flex:0 0 auto; }
+            .sw-title { text-align:center; font-size:22px; letter-spacing:10px; text-indent:10px; font-weight:bold; margin:0 0 3px; }
+            .sw-head { display:flex; align-items:flex-end; font-size:14px; margin:2px 0 4px; }
+            .sw-head .sw-ym { border-bottom:1px solid #000; padding:0 0 3px; min-width:150px; }
+            .sw-head .sw-lbl { border-bottom:1px solid #000; padding:0 0 3px 4px; margin-left:8px; }
+            .sw-head .sw-nm { border-bottom:1px solid #000; padding:0 8px 3px; flex:1; font-weight:700; font-size:20px; min-height:24px; }
+            table.sw-tbl { flex:0 0 auto; width:100%; border-collapse:collapse; table-layout:fixed; }
+            table.sw-tbl th, table.sw-tbl td { border:0.5px solid #888; padding:1px 4px; vertical-align:middle; overflow:hidden; }
+            table.sw-tbl th { background:#cbd5e1; text-align:center; font-weight:normal; font-size:12px; height:26px; }
             table.sw-tbl tbody tr, table.sw-tbl tbody td { height:28px; }
-            .sw-title { text-align:center; font-size:24px; letter-spacing:10px; text-indent:10px;
-              font-weight:bold; margin:0 0 4px; }
-            .sw-head { display:flex; align-items:flex-end; gap:12px; font-size:15px; margin:0 0 5px; }
-            .sw-head .sw-ym { border-bottom:1px solid #000; padding:0 8px 2px; min-width:150px; }
-            .sw-head .sw-nm { border-bottom:1px solid #000; padding:0 12px 2px; flex:1; font-weight:700; font-size:18px; }
-            table.sw-tbl { width:100%; border-collapse:collapse; table-layout:fixed; }
-            table.sw-tbl th, table.sw-tbl td { border:0.5px solid #888; padding:1px 6px;
-              vertical-align:middle; word-break:break-word; overflow:hidden; }
-            table.sw-tbl th { background:#cbd5e1; text-align:center; font-weight:normal; font-size:12px; height:24px; }
-            /* GHIM chiều cao hàng cố định → 31 ngày + header LUÔN vừa 1 trang.
-               Nội dung 作業内容 dài sẽ bị cắt bớt (overflow:hidden) chứ KHÔNG đẩy
-               hàng cao ra làm tràn trang. */
-            .sw-company { flex:0 0 auto; margin-top:auto; }
-            table.sw-tbl td.sw-day { text-align:center; width:12%; white-space:nowrap; font-size:12px; }
-            table.sw-tbl td.sw-site { width:20%; font-size:11px; line-height:1.15; text-align:center; }
-            table.sw-tbl td.sw-work { width:68%; font-size:11px; line-height:1.15; }
+            table.sw-tbl td.sw-day { text-align:center; white-space:nowrap; font-size:15px; }
+            table.sw-tbl td.sw-reason { text-align:center; font-size:12px; line-height:1.15; }
+            table.sw-tbl td.sw-site { text-align:left; font-size:14px; line-height:1.15; }
+            table.sw-tbl td.sw-work { text-align:left; font-size:14px; line-height:1.15; }
             table.sw-tbl tr.sw-rest td { background:#d9d9d9; }
-            .sw-company { text-align:right; font-size:16px; font-weight:700; }
+            .sw-foot { flex:0 0 auto; margin-top:auto; font-size:13px; text-align:right; padding-right:10px; }
+            .sw-company { flex:0 0 auto; text-align:right; font-size:17px; font-weight:700; margin-top:4px; padding-right:6px; }
           </style></head><body>
             <div class="sw-page">
               <div class="sw-title">作業報告書</div>
               <div class="sw-head"><span class="sw-ym">${ymText}</span>
-                <span>名前：</span><span class="sw-nm">${nameText}</span></div>
+                <span class="sw-lbl">名前：</span><span class="sw-nm">${nameText}</span></div>
               <table class="sw-tbl">
-                <thead><tr><th style="width:12%;">日</th><th style="width:20%;">現場</th><th style="width:68%;">作業内容</th></tr></thead>
+                <thead><tr><th style="width:8%;">日</th><th style="width:11%;">事由</th><th style="width:25%;">現場</th><th style="width:56%;">作業内容</th></tr></thead>
                 <tbody>${rowsHtml}</tbody>
               </table>
-              <div class="sw-company">飯塚塗研株式会社</div>
+              <div class="sw-foot">上記の通り、作業内容を報告いたします。</div>
+              <div class="sw-company">${companyNameForPrint() || '飯塚塗研株式会社'}</div>
             </div>
           </body></html>`;
         iframe.contentWindow.document.open();
@@ -1819,12 +1869,23 @@
         iframe._printHtml = sitesHtml; // để in bằng cửa sổ mới trên điện thoại
 
         const win = iframe.contentWindow;
-        // Chiều cao lấp đầy + chia đều các hàng do FLEXBOX lo (không cần JS đo).
         const fontsReady = (win.document.fonts && win.document.fonts.ready) ? win.document.fonts.ready : Promise.resolve();
         Promise.race([
           fontsReady.then(() => new Promise(r => setTimeout(r, 250))),
           new Promise(r => setTimeout(r, 1200)),
-        ]).then(() => win.requestAnimationFrame(() => win.requestAnimationFrame(() => resolve(iframe))))
+        ]).then(() => win.requestAnimationFrame(() => win.requestAnimationFrame(() => {
+          try {
+            const d = win.document;
+            const pageEl = d.querySelector('.sw-page');
+            fitPrintPage({
+              win, pageEl, lastEl: d.querySelector('.sw-company'),
+              rows: [...d.querySelectorAll('table.sw-tbl tbody tr')],
+              cells: [...d.querySelectorAll('table.sw-tbl tbody td.sw-reason, table.sw-tbl tbody td.sw-site, table.sw-tbl tbody td.sw-work')],
+              maxRowH: 40, tableEl: d.querySelector('table.sw-tbl'), footEl: d.querySelector('.sw-foot'), pageHmm, padMm: PAD_MM,
+            });
+          } catch (e) { /* bỏ qua nếu không đo được */ }
+          resolve(iframe);
+        })))
           .catch(() => resolve(iframe));
       });
 
@@ -2197,44 +2258,11 @@
             const scaleEl = doc.getElementById('printScale');
             const lastEl = scaleEl && scaleEl.querySelector('.enm-company-bottom');
             const rowsEls = scaleEl ? scaleEl.querySelectorAll('.enm-daily-table tbody tr') : [];
-            // Chữ dài trong 事由 (tên ngày lễ…) / 備考 / 作業内容: thu nhỏ cỡ chữ cho
-            // vừa ô (chiều cao hàng cố định) thay vì làm hàng phình to hoặc tràn ra ngoài.
-            const FIT_SEL = 'td.enm-reason, td.enm-note, td.enm-work';
-            const fitCells = (rowH) => {
-              scaleEl.querySelectorAll(`.enm-daily-table tbody ${FIT_SEL.split(', ').join(', .enm-daily-table tbody ')}`).forEach((td) => {
-                if (!td.textContent.trim()) return;
-                let box = td.firstElementChild && td.firstElementChild.classList.contains('enm-fit') ? td.firstElementChild : null;
-                if (!box) {
-                  box = doc.createElement('div');
-                  box.className = 'enm-fit';
-                  while (td.firstChild) box.appendChild(td.firstChild);
-                  td.appendChild(box);
-                  td.dataset.fs = String(parseFloat(iframe.contentWindow.getComputedStyle(td).fontSize) || 12);
-                }
-                const maxH = rowH - 3;
-                td.style.setProperty('vertical-align', 'middle', 'important');
-                let fs = Number(td.dataset.fs);
-                box.style.cssText = `overflow:hidden;white-space:normal;word-break:break-all;line-height:1.1;font-size:${fs}px;max-height:none;`;
-                while (fs > 5 && (box.scrollHeight > maxH || box.scrollWidth > box.clientWidth + 1)) {
-                  fs -= 0.5;
-                  box.style.fontSize = `${fs}px`;
-                }
-                box.style.maxHeight = `${maxH}px`;
-              });
-            };
-            if (scaleEl && rowsEls.length) {
-              fitCells(28);
-            }
-            if (scaleEl && lastEl && rowsEls.length) {
-              const mmPx = scaleEl.getBoundingClientRect().height / (pageHmm - 0.6);
-              const limit = () => scaleEl.getBoundingClientRect().bottom - (PAD_MM + 2) * mmPx;
-              const setRowH = (h) => rowsEls.forEach((r) => {
-                r.style.setProperty('height', `${h}px`, 'important');
-                r.querySelectorAll('td').forEach((c) => c.style.setProperty('height', `${h}px`, 'important'));
-              });
-              let h = 28;
-              for (; h >= 20 && lastEl.getBoundingClientRect().bottom > limit(); h--) { setRowH(h); fitCells(h); }
-            }
+            fitPrintPage({
+              win: iframe.contentWindow, pageEl: scaleEl, lastEl, rows: [...rowsEls],
+              cells: scaleEl ? [...scaleEl.querySelectorAll('.enm-daily-table tbody td.enm-reason, .enm-daily-table tbody td.enm-note, .enm-daily-table tbody td.enm-work')] : [],
+              pageHmm, padMm: PAD_MM,
+            });
           } catch (e) { /* bỏ qua nếu không đo được */ }
           // Chờ thêm 1 nhịp để layout sau zoom/giãn áp dụng xong (đặc biệt trên
           // điện thoại chậm) rồi mới trả iframe → print/chụp đúng trạng thái đã fit.
