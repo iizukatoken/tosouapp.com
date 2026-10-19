@@ -1,6 +1,13 @@
 'use strict';
 
 const db = require('../../core/database/mysql');
+// Đánh dấu tổng hợp tháng (36協定) cần tính lại thất bại → báo quản trị, rồi ném lại như cũ.
+const _reportAndRethrow = (context) => (e) => {
+  if (!(Number(e?.status) >= 400 && Number(e?.status) < 500)) {
+    try { require('../../core/errorReporter').reportSwallowed(context, e); } catch (e2) { /* ignore */ }
+  }
+  throw e;
+};
 
 function _tid(tenantId) {
   return tenantId != null ? parseInt(String(tenantId), 10) : null;
@@ -143,6 +150,9 @@ module.exports = {
   },
 
   async markDirty(userId, year, month, tenantId = null) {
+    return module.exports._markDirty(userId, year, month, tenantId).catch(_reportAndRethrow('summary.markDirty'));
+  },
+  async _markDirty(userId, year, month, tenantId = null) {
     const tid = _tid(tenantId);
     const existing = await module.exports.getSummary(userId, year, month, tenantId);
     if (existing) {

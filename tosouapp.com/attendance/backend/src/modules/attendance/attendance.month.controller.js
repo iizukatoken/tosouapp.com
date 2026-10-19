@@ -1,6 +1,7 @@
 'use strict';
 
 const repo = require('./attendance.repository');
+const { reportSwallowed } = require('../../core/errorReporter');
 const userRepo = require('../users/user.repository');
 const noticesRepo = require('../notices/notices.repository');
 const log = require('../../core/logger');
@@ -249,7 +250,7 @@ exports.submitMonth = async (req, res) => {
     try {
       const missing = await computeMonthMissing(userId, y, m, req.tenantId || null);
       if (missing.length) return res.status(400).json({ message: `入力が未完了です`, missing });
-    } catch (e) { /* bỏ qua lỗi kiểm tra */ }
+    } catch (e) { reportSwallowed('month.submit.computeMonthMissing', e); }
 
     await repo.setMonthStatus(userId, y, m, 'submitted', req.user?.id, { tenantId: req.tenantId || null });
 
@@ -400,10 +401,18 @@ exports.approveReadyMonth = async (req, res) => {
         continue;
       }
       if (status !== 'submitted') {
-        await repo.setMonthStatus(uid, y, m, 'submitted', req.user?.id, { tenantId: req.tenantId || null }).catch(() => {});
+        await repo.setMonthStatus(uid, y, m, 'submitted', req.user?.id, { tenantId: req.tenantId || null }).catch((e) => reportSwallowed('month.approveReady.setSubmitted', e, { userId: uid }));
         submitted++;
       }
-      await repo.setMonthStatus(uid, y, m, 'approved', req.user?.id, { tenantId: req.tenantId || null }).catch(() => {});
+      // Trước đây lỗi bị nuốt (.catch(() => {})) mà vẫn đếm là 承認済み → màn hình báo đã chốt dù chưa chốt.
+      try {
+        await repo.setMonthStatus(uid, y, m, 'approved', req.user?.id, { tenantId: req.tenantId || null });
+      } catch (e) {
+        reportSwallowed('month.approveReady.setApproved', e, { userId: uid });
+        results.push({ userId: uid, employeeCode, username, status, ok: false, reason: 'save_failed' });
+        skipped++;
+        continue;
+      }
       approved++;
       results.push({ userId: uid, employeeCode, username, status: 'approved', ok: true });
     }
@@ -430,7 +439,7 @@ exports.approveMonth = async (req, res) => {
     try {
       const missing = await computeMonthMissing(userId, y, m, req.tenantId || null);
       if (missing.length) return res.status(400).json({ message: `未承認: 勤務未入力の日があります`, missing });
-    } catch (e) { /* bỏ qua lỗi kiểm tra */ }
+    } catch (e) { reportSwallowed('month.approve.computeMonthMissing', e); }
     await repo.setMonthStatus(userId, y, m, 'approved', req.user?.id, { tenantId: req.tenantId || null });
     res.status(200).json({ ok: true, userId, year: y, month: m, status: 'approved' });
   } catch (err) {

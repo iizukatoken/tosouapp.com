@@ -1,4 +1,11 @@
 const db = require('../../core/database/mysql');
+// Ghi audit log thất bại → báo quản trị (nơi gọi thường nuốt lỗi), rồi ném lại như cũ.
+const _reportAndRethrow = (context) => (e) => {
+  if (!(Number(e?.status) >= 400 && Number(e?.status) < 500)) {
+    try { require('../../core/errorReporter').reportSwallowed(context, e); } catch (e2) { /* ignore */ }
+  }
+  throw e;
+};
 
 function _tid(tenantId) {
   return tenantId != null ? parseInt(String(tenantId), 10) : null;
@@ -40,6 +47,9 @@ module.exports = {
     } catch (e) { /* silently ignored */ }
   },
   async writeLog(data) {
+    return module.exports._writeLog(data).catch(_reportAndRethrow('audit.writeLog'));
+  },
+  async _writeLog(data) {
     const tid = _tid(data.tenantId);
     const sql = `
       INSERT INTO audit_logs (userId, tenant_id, action, path, method, ip, userAgent, beforeData, afterData)

@@ -1,6 +1,7 @@
 'use strict';
 
 const repo = require('./attendance.repository');
+const { reportSwallowed } = require('../../core/errorReporter');
 const auditRepo = require('../audit/audit.repository');
 const userRepo = require('../users/user.repository');
 const salaryInputRepo = require('../salary/salaryInput.repository');
@@ -171,7 +172,7 @@ exports.putMonthBulk = async (req, res) => {
           }
         }
       }
-    } catch (e) { /* bỏ qua lỗi */ }
+    } catch (e) { reportSwallowed('attendance.bulk.findExistingCheckIns', e); }
 
     const cleanedUpdates = normalizedUpdates.filter(Boolean);
 
@@ -200,7 +201,7 @@ exports.putMonthBulk = async (req, res) => {
               }
             }
           }
-        } catch (e) { /* bỏ qua lỗi */ }
+        } catch (e) { reportSwallowed('attendance.bulk.findExistingCheckIns.retry', e); }
         result = await repo.bulkUpsertAttendance(userId, { updates: cleanedUpdates, dailyUpdates: normalizedDailyUpdates }, { tenantId: req.tenantId || null });
       } else {
         throw err;
@@ -223,7 +224,7 @@ exports.putMonthBulk = async (req, res) => {
       for (const [ds, kubun] of latestByDate.entries()) {
         await syncPaidLeaveByKubun(userId, ds, kubun, 'from_attendance', req.tenantId || null);
       }
-    } catch (e) { /* bỏ qua lỗi */ }
+    } catch (e) { reportSwallowed('attendance.bulk.syncPaidLeaveByKubun', e); }
 
     // 勤怠データが変わったので、この月の36協定サマリーは再計算が必要 (次のバッチが拾う)
     try { await summaryRepo.markDirty(userId, y, m, req.tenantId || null); } catch (e) { /* bỏ qua lỗi */ }

@@ -1,4 +1,11 @@
 const db = require('../../core/database/mysql');
+// Tạo thông báo thất bại → báo quản trị (nơi gọi thường nuốt lỗi), rồi ném lại như cũ.
+const _reportAndRethrow = (context) => (e) => {
+  if (!(Number(e?.status) >= 400 && Number(e?.status) < 500)) {
+    try { require('../../core/errorReporter').reportSwallowed(context, e); } catch (e2) { /* ignore */ }
+  }
+  throw e;
+};
 
 function _tid(tenantId) {
   return tenantId != null ? parseInt(String(tenantId), 10) : null;
@@ -153,7 +160,10 @@ module.exports = {
   ensureNoticesSchema,
   ensureNoticeReadsSchema,
   ensureNoticeHidesSchema,
-  async createNotice({ targetUserId, targetDate, targetMonth, message, createdBy, kind = null, title = null, audience = 'all', tenantId = null }) {
+  async createNotice(args) {
+    return module.exports._createNotice(args).catch(_reportAndRethrow('notices.createNotice'));
+  },
+  async _createNotice({ targetUserId, targetDate, targetMonth, message, createdBy, kind = null, title = null, audience = 'all', tenantId = null }) {
     await ensureNoticesSchema();
     const tu = Number.isFinite(parseInt(String(targetUserId || ''), 10)) ? parseInt(String(targetUserId), 10) : null;
     const date = isISODate(targetDate) ? String(targetDate) : null;
@@ -172,7 +182,10 @@ module.exports = {
     const [rows] = await db.query(`SELECT * FROM notices WHERE id = ? LIMIT 1`, [id]);
     return rows && rows[0] ? rows[0] : { id };
   },
-  async createAdminNotification({ kind, title, message, linkUrl, payload, createdBy, audience = 'admin_manager', tenantId = null }) {
+  async createAdminNotification(args) {
+    return module.exports._createAdminNotification(args).catch(_reportAndRethrow('notices.createAdminNotification'));
+  },
+  async _createAdminNotification({ kind, title, message, linkUrl, payload, createdBy, audience = 'admin_manager', tenantId = null }) {
     await ensureNoticesSchema();
     const k = String(kind || '').slice(0, 64) || 'general';
     const t = String(title || '').trim().slice(0, 255) || '通知';

@@ -1,4 +1,5 @@
 const repo = require('./leave.repository');
+const { reportSwallowed } = require('../../core/errorReporter');
 const userRepo = require('../users/user.repository');
 const auditRepo = require('../audit/audit.repository');
 const noticesRepo = require('../notices/notices.repository');
@@ -73,7 +74,7 @@ async function tryReconcileAttendance(tenantId = null) {
   try {
     const affected = await repo.reconcileApprovedPaidWithAttendance(tenantId);
     await notifyAutoReconciled(affected);
-  } catch (e) { /* silently ignored */ }
+  } catch (e) { reportSwallowed('leave.reconcileApprovedPaidWithAttendance', e); }
 }
 const { resolveManagerBranchScope } = require('./leave.access');
 // Kiểm tra manager có quyền thao tác (duyệt/từ chối) trên đơn nghỉ của user khác chi nhánh hay không.
@@ -137,7 +138,7 @@ async function getGrantAttendanceEligibility(userId, hireDate, grantDate, tenant
   let stats = { workDays: 0, presentDays: 0 };
   try {
     stats = await repo.getAttendanceStats(userId, periodStart, periodEnd, tenantId);
-  } catch (e) { /* silently ignored */ }
+  } catch (e) { reportSwallowed('leave.getAttendanceStats', e); }
   const workDays = Number(stats.workDays || 0);
   const presentDays = Number(stats.presentDays || 0);
   const attendanceRate = workDays > 0 ? (presentDays / workDays) : 0;
@@ -1146,7 +1147,7 @@ exports.autoGrantNow = async (req, res) => {
       try {
         await ensureUserGrants(u.id, tenantId);
         ok++;
-      } catch (e) { /* silently ignored */ }
+      } catch (e) { reportSwallowed('leave.ensureUserGrants', e); }
     }
     res.status(200).json({ processed: list.length, ok, mode });
   } catch (err) {
