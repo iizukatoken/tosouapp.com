@@ -44,8 +44,32 @@ function isDuplicate(fingerprint) {
   return false;
 }
 
+// Giới hạn tổng số tin gửi webhook (khi có sự cố lớn, nhiều lỗi khác nhau cùng lúc → không spam)
+const SEND_WINDOW_MS = 10 * 60 * 1000;
+const MAX_SENDS_PER_WINDOW = 30;
+let sendWindowStart = 0;
+let sendsInWindow = 0;
+let droppedInWindow = 0;
+
+function allowSend() {
+  const now = Date.now();
+  if (now - sendWindowStart > SEND_WINDOW_MS) {
+    if (droppedInWindow > 0) log.warn('Error webhook: alerts dropped by rate limit', { dropped: droppedInWindow });
+    sendWindowStart = now;
+    sendsInWindow = 0;
+    droppedInWindow = 0;
+  }
+  if (sendsInWindow >= MAX_SENDS_PER_WINDOW) {
+    droppedInWindow++;
+    return false;
+  }
+  sendsInWindow++;
+  return true;
+}
+
 async function sendWebhook(payload) {
   if (!WEBHOOK_URL) return;
+  if (!allowSend()) return;
   try {
     await fetch(WEBHOOK_URL, {
       method: 'POST',
@@ -114,4 +138,18 @@ function init() {
   log.info('Error reporter initialized', { webhook: WEBHOOK_URL ? 'configured' : 'disabled', env: ENV });
 }
 
-module.exports = { init, report };
+/**
+ * Dùng thay cho `catch (e) { /* silently ignored *\/ }` ở các chỗ quan trọng (ghi chấm công, duyệt đơn,
+ * lương, gửi mail/thông báo): xử lý chính vẫn chạy tiếp như cũ, nhưng lỗi được ghi log + báo cho quản trị.
+ * @param {string} context  vị trí / việc đang làm, vd 'adjust.approve.markDirty'
+ * @param {unknown} err
+ * @param {object} [meta]
+ */
+function reportSwallowed(context, err, meta = {}) {
+  try {
+    const e = err instanceof Error ? err : new Error(String(err));
+    report(e, { type: 'swallowed', context, ...meta });
+  } catch (e2) { /* báo lỗi không được làm hỏng xử lý chính */ }
+}
+
+module.exports = { init, report, reportSwallowed };

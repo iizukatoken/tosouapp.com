@@ -120,6 +120,8 @@ app.use((req, res, next) => {
 const log = require('./core/logger');
 const { trackRequest, trackError } = require('./core/alerting');
 app.use(log.middleware());
+// Mọi response 5xx (kể cả route tự bắt lỗi rồi trả 500) → báo cho quản trị qua errorReporter
+app.use(require('./core/middleware/reportServerErrors'));
 
 app.use((req, res, next) => {
   const start = Date.now();
