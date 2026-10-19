@@ -7,6 +7,7 @@
  *      サーバー tính toàn bộ là 残業
  *   3. Có 打刻 vào ngày đã lưu 区分 là nghỉ (有給休暇/休日/欠勤/代替休日…) → 画面 không hiện giờ, Excel có
  *   4. Có 出勤 mà chưa có 退勤 (trước hôm nay) → 画面 vẫn báo 遅刻, Excel thì không
+ *   5. Dữ liệu chấm công gắn khác công ty của nhân viên → 給与/台帳 (lọc theo công ty) không thấy
  *
  * Chạy: node attendance/backend/scripts/check-data-quality.js
  * Không thay đổi dữ liệu.
@@ -63,6 +64,17 @@ async function show(label, sql, params = []) {
     WHERE checkIn IS NOT NULL AND checkOut IS NULL
       AND DATE(checkIn) < DATE(CONVERT_TZ(UTC_TIMESTAMP(), '+00:00', '+09:00'))
     GROUP BY tenant_id, ym ORDER BY ym DESC, tenant_id LIMIT 24`);
+
+  await show('5. Dữ liệu chấm công gắn KHÁC công ty của nhân viên (TENANT_STRICT sẽ ẩn các dòng này)', `
+    SELECT 'attendance' AS tbl, a.tenant_id AS row_tenant, u.tenant_id AS user_tenant, COUNT(*) AS rows_cnt, COUNT(DISTINCT a.userId) AS users
+    FROM attendance a JOIN users u ON u.id = a.userId
+    WHERE a.tenant_id IS NOT NULL AND u.tenant_id IS NOT NULL AND a.tenant_id <> u.tenant_id
+    GROUP BY a.tenant_id, u.tenant_id
+    UNION ALL
+    SELECT 'attendance_daily', d.tenant_id, u.tenant_id, COUNT(*), COUNT(DISTINCT d.userId)
+    FROM attendance_daily d JOIN users u ON u.id = d.userId
+    WHERE d.tenant_id IS NOT NULL AND u.tenant_id IS NOT NULL AND d.tenant_id <> u.tenant_id
+    GROUP BY d.tenant_id, u.tenant_id`);
 
   console.log('\nKhông có thay đổi nào được ghi vào DB.\n');
   process.exit(0);

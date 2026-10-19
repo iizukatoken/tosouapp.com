@@ -121,6 +121,17 @@ async function excelSide(h, q, year) {
   };
 }
 
+async function payrollSide(userId, ym, tenantId) {
+  try {
+    const { computePayslipForUser } = require('../../src/modules/salary/salary.service');
+    const p = await computePayslipForUser(userId, ym, null, tenantId);
+    const k = p?.['勤怠'] || {};
+    return { attendDays: k['出勤日数'], holidayWorkDays: k['休日出勤日数'] };
+  } catch (e) {
+    return { error: e.message };
+  }
+}
+
 async function screenSide(browser, token, admin, userId, ym) {
   const ctx = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
   await ctx.addCookies([{ name: 'session_token', value: token, domain: new URL(BASE).hostname, path: '/' }]);
@@ -177,7 +188,7 @@ async function screenSide(browser, token, admin, userId, ym) {
   }
 }
 
-function diffMonth(t, s, x, v) {
+function diffMonth(t, s, x, v, pay = {}) {
   const R = s.rounded || { days: {}, total: {} };
   const out = [];
   const dates = new Set([...Object.keys(s.days || {}), ...Object.keys(x.days || {})]);
@@ -207,8 +218,10 @@ function diffMonth(t, s, x, v) {
     }
   }
   if ((s.total?.legal || 0) !== (x.total?.legal || 0)) totals.push(`法定外時間 画面=${fmt(s.total?.legal || 0)} Excel=${fmt(x.total?.legal || 0)}`);
-  if (String(s.total?.attendDays) !== String(x.total?.attendDays)) totals.push(`出勤日数 画面=${s.total?.attendDays} Excel=${x.total?.attendDays}`);
-  if (String(s.total?.holidayWorkDays) !== String(x.total?.holidayWorkDays)) totals.push(`休日出勤日数 画面=${s.total?.holidayWorkDays} Excel=${x.total?.holidayWorkDays}`);
+  { const a = parseFloat(String(s.total?.attendDays ?? '').replace(/[^0-9.]/g, '') || '0'), b = parseFloat(String(x.total?.attendDays ?? '').replace(/[^0-9.]/g, '') || '0'), c = Number(pay.attendDays ?? NaN);
+    if (a !== b || (Number.isFinite(c) && a !== c)) totals.push(`出勤日数 画面=${a} Excel=${b} 給与=${pay.error ? 'ERR ' + pay.error : pay.attendDays}`); }
+  { const a = parseFloat(String(s.total?.holidayWorkDays ?? '').replace(/[^0-9.]/g, '') || '0'), b = parseFloat(String(x.total?.holidayWorkDays ?? '').replace(/[^0-9.]/g, '') || '0'), c = Number(pay.holidayWorkDays ?? NaN);
+    if (a !== b || (Number.isFinite(c) && a !== c)) totals.push(`休日出勤日数 画面=${a} Excel=${b} 給与=${pay.holidayWorkDays}`); }
   return { days: out, totals };
 }
 
@@ -229,14 +242,14 @@ function diffMonth(t, s, x, v) {
     const q = `year=${y}&month=${Number(m)}&userId=${t.userId}`;
     const { token, admin } = await tokenFor(t.tenant_id);
     const h = { Authorization: `Bearer ${token}`, Cookie: `session_token=${token}` };
-    const [v, x, s] = await Promise.all([serverSide(h, q), excelSide(h, q, y), screenSide(browser, token, admin, t.userId, t.ym)]);
+    const [v, x, s, pay] = await Promise.all([serverSide(h, q), excelSide(h, q, y), screenSide(browser, token, admin, t.userId, t.ym), payrollSide(t.userId, t.ym, t.tenant_id)]);
     if (s.error || x.error) {
       report.push({ ...t, error: s.error || x.error });
       console.log(`✗ user ${t.userId} ${t.ym}: ${s.error || x.error}`);
       continue;
     }
     if (v.error) console.log(`  ⚠ user ${t.userId} ${t.ym}: ${v.error}`);
-    const d = diffMonth(t, s, x, v);
+    const d = diffMonth(t, s, x, v, pay);
     report.push({ ...t, serverError: v.error || null, dayDiffs: d.days, totalDiffs: d.totals, pageErrors: s.errors });
     console.log(`${d.days.length || d.totals.length ? '≠' : '='} user ${t.userId} (${t.employment_type}) ${t.ym}: ${d.days.length} ngày lệch, ${d.totals.length} chỉ số tổng lệch`);
   }
