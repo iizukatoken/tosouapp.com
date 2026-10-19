@@ -9,7 +9,16 @@
   <link rel="stylesheet" href="/static/css/portal.css?v=navy-20260626-18">
   <link rel="icon" href="data:,">
   <script type="module" src="/static/js/pages/expenses.page.js?v=navy-20260831-goods2"></script>
-  <script type="module" src="/static/js/pages/expenses.quick.js?v=20261019-full1"></script>
+  <script type="module" src="/static/js/pages/expenses.quick.js?v=20261019-mobile1"></script>
+  <style id="qxCritical">
+    /* かんたん画面: 従来の画面は最初の描画から隠す (読み込み直後に古いフォームがちらつかないように) */
+    body.qx-simple #homeSection, body.qx-simple #historySection, body.qx-simple #helpSection,
+    body.qx-simple #monthSelectModal, body.qx-simple #exItemModal,
+    body.qx-simple .expense-side-tabs, body.qx-simple #expToggleSidebarBtn,
+    body.qx-simple .expense-standalone-header-center { display: none !important; }
+    body.qx-simple .expense-layout { padding-left: 0 !important; transform: none !important; }
+    body.qx-simple .expense-main { background: #fff !important; }
+  </style>
   <style>
     *,
     *::before,
@@ -2878,7 +2887,7 @@
   </style>
 </head>
 
-<body>
+<body class="qx-simple">
   <div id="pageSpinner" class="page-spinner" hidden>
     <div class="lds-spinner" aria-hidden="true">
       <div></div>

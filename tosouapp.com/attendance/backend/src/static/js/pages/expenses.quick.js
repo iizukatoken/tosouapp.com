@@ -67,11 +67,31 @@ function ensureStyle() {
     .qx-month-acts a { font-size: 13px; color: ${NAVY}; }
     .qx-sub-table { border: none; border-left: 2px solid #d1d5db; background: #fff; }
     .qx-sub-table th { background: #fafafa; font-weight: 500; color: #4b5563; }
+    .m-type { display: none; }
     @media (max-width: 600px) {
-      .qx { padding: 0 12px; }
+      .qx { padding: 0 12px 76px; }
       .qx-table .col-type { display: none; }
-      .qx-table th, .qx-table td { padding: 7px 6px; font-size: 13px; }
-      .qx-detail > td { padding-left: 8px; }
+      .qx-table th, .qx-table td { padding: 9px 8px; font-size: 14px; }
+      .qx-detail > td { padding: 0 0 8px; }
+      .qx-month-acts { padding: 8px; justify-content: space-between; }
+      /* 明細はカード状に: 1 行目 日付・種別 / 金額、2 行目 内容、3 行目 状態 / 操作 */
+      .qx-table .col-cnt { display: none; }
+      .qx-table .m-st { white-space: normal !important; font-size: 13px; }
+      .qx-sub-table, .qx-sub-table tbody { display: block; width: 100%; }
+      .qx-sub-table tr.qx-item td.col-type { display: none; }
+      .qx-sub-table { border-left: none; }
+      .qx-sub-table thead { display: none; }
+      .qx-sub-table tr.qx-item { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "date amt" "what what" "st acts"; gap: 2px 8px; padding: 10px 8px; border-top: 1px solid #e5e7eb; }
+      .qx-sub-table tr.qx-item td { display: block; border: none; padding: 0; background: transparent !important; }
+      .qx-sub-table .c-date { grid-area: date; color: #4b5563; font-size: 13px; }
+      .qx-sub-table .m-type { display: inline; }
+      .qx-sub-table .c-amt { grid-area: amt; font-weight: 700; }
+      .qx-sub-table .c-what { grid-area: what; font-size: 15px; }
+      .qx-sub-table .c-st { grid-area: st; font-size: 13px; align-self: center; }
+      .qx-sub-table .c-acts { grid-area: acts; }
+      .qx-btn.small { height: 32px; padding: 0 12px; font-size: 13px; }
+      /* 新規申請は画面下に固定 (親指で押しやすい) */
+      .qx-bar .qx-btn.primary { position: fixed; left: 12px; right: 12px; bottom: 12px; height: 48px; font-size: 16px; z-index: 40; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
     }
 
     .qx-overlay { display: none; position: fixed; inset: 0; z-index: 10050; background: rgba(0,0,0,.4); overflow: auto; }
@@ -99,12 +119,21 @@ function ensureStyle() {
     .qx-err { flex: 1; color: #b91c1c; font-size: 13px; }
     .qx-hide { display: none !important; }
     @media (max-width: 600px) {
-      .qx-form { grid-template-columns: 1fr; gap: 4px; }
-      .qx-form .l { margin-top: 8px; }
-      .qx-dialog { margin-top: 2vh; }
-      .qx-foot { flex-wrap: wrap; position: sticky; bottom: 0; }
-      .qx-err { flex-basis: 100%; }
+      .qx-overlay { background: #fff; }
+      .qx-dialog { width: 100%; min-height: 100%; margin: 0; border: none; border-radius: 0; box-shadow: none; display: flex; flex-direction: column; }
+      .qx-dialog-head { position: sticky; top: 0; z-index: 1; padding: 12px 14px; }
+      .qx-form { grid-template-columns: 1fr; gap: 4px; flex: 1; }
+      .qx-form .l { margin-top: 10px; font-size: 14px; }
+      .qx-in { height: 44px; font-size: 16px; }
+      .qx-amount { max-width: none; }
+      .qx-radio { gap: 28px; font-size: 16px; padding: 6px 0; }
+      .qx-radio input { width: 20px; height: 20px; }
+      .qx-foot { position: sticky; bottom: 0; flex-wrap: wrap; padding: 10px 14px calc(10px + env(safe-area-inset-bottom)); }
+      .qx-foot .qx-btn { flex: 1; height: 44px; font-size: 15px; }
+      .qx-foot #qxSubmit { flex-basis: 100%; order: -1; }
+      .qx-err { flex-basis: 100%; order: -2; }
     }
+    @media (max-width: 600px) { .qx-toast { bottom: 76px !important; left: 12px; right: 12px !important; text-align: center; } }
     .qx-toast { position: fixed; right: 16px; bottom: 16px; background: #374151; color: #fff; padding: 10px 14px; border-radius: 3px; font-size: 13px; z-index: 10060; }`;
   document.head.appendChild(st);
 }
@@ -188,13 +217,13 @@ function itemRows(items) {
     const acts = EDITABLE.has(String(r.status))
       ? `<button type="button" class="qx-btn small" data-edit="${r.id}">修正</button><button type="button" class="qx-btn small" data-del="${r.id}">削除</button>`
       : '';
-    return `<tr>
-      <td style="white-space:nowrap;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}</td>
-      <td>${what}${files}${note}</td>
+    return `<tr class="qx-item">
+      <td class="c-date" style="white-space:nowrap;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}<span class="m-type"> ${esc(TYPE_NAME[r.type] || '')}</span></td>
+      <td class="c-what">${what}${files}${note}</td>
       <td class="col-type">${esc(TYPE_NAME[r.type] || '')}</td>
-      <td class="num">${yen(r.amount)}</td>
-      <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
-      <td class="acts">${acts}</td>
+      <td class="num c-amt">${yen(r.amount)}</td>
+      <td class="c-st" style="white-space:nowrap;color:${color};">${esc(label)}</td>
+      <td class="acts c-acts">${acts}</td>
     </tr>`;
   }).join('');
 }
@@ -221,7 +250,7 @@ function renderList() {
   if (!openMonthsInit) { openMonths.add(months[0]); openMonthsInit = true; }
   list.innerHTML = `
     <table class="qx-table">
-      <thead><tr><th>対象月</th><th class="num">件数</th><th class="num">合計金額</th><th>状態</th></tr></thead>
+      <thead><tr><th>対象月</th><th class="num col-cnt">件数</th><th class="num">合計金額</th><th>状態</th></tr></thead>
       <tbody>
         ${months.map((ym) => {
           const items = byMonth.get(ym);
@@ -231,13 +260,13 @@ function renderList() {
           const canApply = items.some((r) => EDITABLE.has(String(r.status)));
           return `<tr class="qx-month-row" data-month="${ym}" tabindex="0" role="button" aria-expanded="${open}">
               <td style="white-space:nowrap;"><span class="qx-caret">${open ? '▾' : '▸'}</span> ${ym.slice(0, 4)}年${ym.slice(5, 7)}月</td>
-              <td class="num">${items.length}件</td>
+              <td class="num col-cnt">${items.length}件</td>
               <td class="num">${yen(total)}</td>
-              <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
+              <td class="m-st" style="white-space:nowrap;color:${color};">${esc(label)}</td>
             </tr>
             ${open ? `<tr class="qx-detail"><td colspan="4">
               <div class="qx-month-acts">
-                <a href="/api/expenses/my/monthly-detail/print?month=${ym}" target="_blank" rel="noopener">印刷</a>
+                <a href="/api/expenses/my/monthly-detail/print?month=${ym}" target="_blank" rel="noopener">精算書（PDF・印刷）</a>
                 ${canApply ? `<button type="button" class="qx-btn primary small" data-apply-month="${ym}">この月を申請する</button>` : ''}
               </div>
               <table class="qx-table qx-sub-table">
