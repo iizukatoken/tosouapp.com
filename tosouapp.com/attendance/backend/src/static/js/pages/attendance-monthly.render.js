@@ -209,6 +209,13 @@
         plannedKubun = '休日';
       }
 
+      // Nếu là ngày nghỉ nhưng đã có check-in/out thực tế mà kubun chưa đặt thì suy ra 休日出勤 để hiển thị
+      // Part-time: đi làm ngày nghỉ vẫn tính cùng mức lương nên coi là 出勤 (không phải 休日出勤)
+      // Phải suy ra TRƯỚC khi tính effectiveKubun: trước đây làm sau, nên effectiveKubun = 休日 và
+      // giờ chấm công thật của ngày nghỉ bị ẩn (Excel/給与 thì vẫn tính) — 区分 suy ra được đánh dấu 区分未確認.
+      const kubunInferred = !!offDay && !kubunInit && hasActual;
+      if (kubunInferred) kubunInit = isPartTime ? '出勤' : '休日出勤';
+
       const workKubunSet = new Set(['出勤', '半休', '半休(有給)', '振替出勤', '休日出勤', '代替出勤']);
       const effectiveKubun = kubunInit || plannedKubun;
       const isWorkDay = workKubunSet.has(effectiveKubun);
@@ -218,11 +225,6 @@
       // 6時間以下の勤務なら休憩の既定値は 0 (労基法: 6時間以下は休憩不要)。
       const isHolidayWork = !isPartTime && isWorkDay && (!!offDay || effectiveKubun === '休日出勤');
 
-      // Nếu là ngày nghỉ nhưng đã có check-in/out thực tế mà kubun chưa đặt thì suy ra 休日出勤 để hiển thị
-      // Part-time: đi làm ngày nghỉ vẫn tính cùng mức lương nên coi là 出勤 (không phải 休日出勤)
-      if (offDay && !kubunInit) {
-        if (hasActual) kubunInit = isPartTime ? '出勤' : '休日出勤';
-      }
       // Chỉ coi dòng là "thực tế" khi có giờ chấm công hiển thị (không phải placeholder).
       // Với các phân loại ngày làm việc, chỉ chấm công thật mới làm dòng thành "thực tế".
       // Điều này tránh việc giá trị auto/theo kế hoạch bị hiển thị như 出勤 đã xác nhận.
@@ -246,21 +248,25 @@
       // CHỐT: Chỉ hiển thị giờ dự kiến nếu là ngày đi làm (isWorkDay) HOẶC là ngày nghỉ nhưng có dữ liệu làm việc (hasActual). Ngày nghỉ không có lịch làm việc thì để trống.
       // Cho phép part-time chưa nộp lịch (ngày thường) cũng hiện giờ làm mặc định nhạt.
       const isPartTimeNoPlanOnWorkDay = isPartTime && !offDay && !plannedKubun && !kubunInit;
-      // CHỐT: Nếu kubun là ngày nghỉ (代替休日, 休日, 休み), hoặc nghỉ phép (有給, 無給, 欠勤), LUÔN ẩn giờ dù có actual data
+      // Kubun là ngày nghỉ (代替休日, 休日, 休み) hoặc nghỉ phép (有給, 無給, 欠勤): ẩn giờ — TRỪ KHI có chấm công thật.
+      // Có chấm công thật thì hiện đúng giờ thật (không tự điền giờ ca) kèm cảnh báo, để admin xử lý mâu thuẫn
+      // (trước đây bị ẩn: 画面 = 0 giờ trong khi Excel/給与 vẫn tính giờ đó).
       // 半休: chỉ hiện giờ nếu có actual data (không auto-fill giờ mặc định)
       const isLeaveKubun = effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '欠勤';
-      const shouldShowDefaultShift = (isHolidayKubun || isLeaveKubun) ? false : (isHankyuu ? hasActual : (isWorkDay || hasActual || isPartTimeNoPlanOnWorkDay));
+      const kubunConflict = (isHolidayKubun || isLeaveKubun) && hasActual;
+      const kubunWarning = kubunConflict ? `${effectiveKubun}なのに打刻あり` : ((kubunInferred && !kubunConfirmed) ? '区分未確認' : '');
+      const shouldShowDefaultShift = (isHolidayKubun || isLeaveKubun) ? kubunConflict : (isHankyuu ? hasActual : (isWorkDay || hasActual || isPartTimeNoPlanOnWorkDay));
 
       // ĐỐI VỚI CA PHỤ (!primary): Không tự động điền giờ dự kiến, để trống cho người dùng tự nhập.
-      const finalIn = shouldShowDefaultShift ? (inHm || (primary ? shiftStart : '')) : '';
-      const finalOut = shouldShowDefaultShift ? (outHm || (primary ? shiftEnd : '')) : '';
+      const finalIn = shouldShowDefaultShift ? (inHm || (primary && !kubunConflict ? shiftStart : '')) : '';
+      const finalOut = shouldShowDefaultShift ? (outHm || (primary && !kubunConflict ? shiftEnd : '')) : '';
 
       // QUAN TRỌNG: Gán cờ manual cho ô nếu đã có dữ liệu thực tế (checkIn/checkOut không phải tự động)
       const isManualIn = !!inHm;
       const isManualOut = !!outHm;
 
-      const autoIn = primary && shouldShowDefaultShift && !inHm && shiftStartOk;
-      const autoOut = primary && shouldShowDefaultShift && !outHm && shiftEndOk;
+      const autoIn = primary && shouldShowDefaultShift && !kubunConflict && !inHm && shiftStartOk;
+      const autoOut = primary && shouldShowDefaultShift && !kubunConflict && !outHm && shiftEndOk;
       
       // Logic hiển thị ở cấp từng ô:
       const inAutoCls = autoIn ? 'is-auto' : '';
@@ -424,10 +430,10 @@
       const finalMemo = primary ? (segMemo || dMemo) : segMemo;
       const finalNotes = primary ? (segNotes || dNotes) : segNotes;
       
-      const isHolidayHide = isHolidayKubun || isLeaveKubun || isHankyuu;
+      const isHolidayHide = ((isHolidayKubun || isLeaveKubun) && !kubunConflict) || isHankyuu;
       const hideStyle = isHolidayHide ? 'visibility: hidden;' : '';
       // 半休: chỉ ẩn break, không ẩn checkboxes (出社/在宅/現場)
-      const hideCheckboxStyle = (isHolidayKubun || isLeaveKubun) ? 'visibility: hidden;' : '';
+      const hideCheckboxStyle = ((isHolidayKubun || isLeaveKubun) && !kubunConflict) ? 'visibility: hidden;' : '';
       const brVal = (() => {
         if (!shouldShowDefaultShift) return '0:00';
         if (brMin === 180) return '3:00';
@@ -501,6 +507,7 @@
           <select id="classification_${dateStr}_${rowId}" name="classification_${dateStr}_${rowId}" class="se-select se-kubun-select ${kubunClass}" data-field="classification" ${state.editableMonth ? '' : 'disabled'}>
             ${kubunOptionsHtml}
           </select>
+          ${kubunWarning ? `<div class="se-kubun-warning" data-kubun-warning="1" style="font-size:10px;font-weight:700;color:#b45309;line-height:1.2;margin-top:2px;white-space:nowrap;">⚠ ${esc(kubunWarning)}</div>` : ''}
           <input id="furikaeDate_${dateStr}_${rowId}" name="furikaeDate_${dateStr}_${rowId}" class="se-input se-furikae-date" data-field="furikaeHolidayDate" type="date" value="${esc(daily?.furikae_holiday_date ? String(daily.furikae_holiday_date).slice(0, 10) : '')}" title="振替休日の日付" placeholder="振替休日" style="width:110px;font-size:11px;margin-top:2px;${kubunInit === '振替出勤' ? '' : 'display:none;'}" ${state.editableMonth ? '' : 'disabled'}>
         </div>
       </td>
