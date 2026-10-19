@@ -1,27 +1,91 @@
-// 交通費申請 (社員画面) をできるだけシンプルにする。expenses.page.js の処理は変えずに上に重ねる。
+// 交通費申請 (社員画面) — シンプルでクラシックな画面。expenses.page.js の処理は変えずに上に重ねる。
 //
-//   一覧: 大きな「＋ 交通費を申請する」ボタン + 1 行の件数 + 最近の申請リスト (5 枚のカードは隠す)
-//   入力: 5 項目だけの簡単フォーム (日付・種別・出発地→到着地・片道/往復・金額・用途)
-//         「前回と同じ」でワンタップ入力、任意項目 (経由・現場名・メモ) は「詳細（任意）」
+//   一覧: 「新規申請」ボタン + 件数 1 行 + 最近の申請の表 (従来のカード・サイドメニュー・年選択は隠す)
+//   入力: 1 枚のフォーム (前回と同じ・日付・種別・区間・片道/往復・金額・用途、任意項目は「詳細」)
 //   送信: 「申請する」1 回で送信 (= 明細を作成 → その月を申請。従来の 内容確認→申請 と同じ API)
 //
-// 添付ファイル・物品購入・別の月の申請などは、メニュー (☰) の「新規作成」から従来の画面で行える。
+// 添付ファイル・物品購入・別の月の申請・月別の詳細は「従来の画面」リンクから今までどおり使える。
 import { fetchJSONAuth } from '/static/js/api/http.api.js?v=20260416-1';
 
 const $ = (id) => document.getElementById(id);
 const todayJST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const yen = (n) => '¥' + Math.round(Number(n) || 0).toLocaleString('ja-JP');
-const TYPES = [
-  ['train', '🚃', '電車'], ['bus', '🚌', 'バス'], ['taxi', '🚕', 'タクシー'],
-  ['car', '🚗', '車'], ['parking', '🅿️', '駐車場'], ['highway', '🛣️', '高速'],
-];
-const TYPE_ICON = Object.fromEntries(TYPES.map(([v, i]) => [v, i]));
+const yen = (n) => Math.round(Number(n) || 0).toLocaleString('ja-JP') + '円';
+const TYPES = [['train', '電車'], ['bus', 'バス'], ['taxi', 'タクシー'], ['car', '自家用車'], ['parking', '駐車場代'], ['highway', '高速料金']];
+const TYPE_NAME = Object.fromEntries([...TYPES, ['goods', '物品購入']]);
 const STATUS = {
-  draft: ['下書き', '#64748b', '#f1f5f9'], pending: ['下書き', '#64748b', '#f1f5f9'],
-  applied: ['申請中', '#c2410c', '#fff7ed'], soumu_checked: ['総務確認済み', '#0369a1', '#f0f9ff'], approved: ['承認済み', '#15803d', '#f0fdf4'],
-  paid: ['支給済み', '#7e22ce', '#faf5ff'], rejected: ['差戻し', '#b91c1c', '#fef2f2'],
+  draft: ['下書き', '#6b7280'], pending: ['下書き', '#6b7280'],
+  applied: ['申請中', '#b45309'], soumu_checked: ['総務確認済み', '#1d4ed8'],
+  approved: ['承認済み', '#15803d'], paid: ['支給済み', '#374151'], rejected: ['差戻し', '#b91c1c'],
 };
+
+// ---------------- スタイル ----------------
+const NAVY = '#0b2c66';
+function ensureStyle() {
+  if ($('qxStyle')) return;
+  const st = document.createElement('style');
+  st.id = 'qxStyle';
+  st.textContent = `
+    /* かんたん画面のときは従来の部品を隠す */
+    body.qx-simple #exSummaryCards, body.qx-simple #exMonthlyBoardHost,
+    body.qx-simple #exListWrapper, body.qx-simple #exListHost,
+    body.qx-simple .expense-side-tabs, body.qx-simple #expToggleSidebarBtn,
+    body.qx-simple .expense-standalone-header-center { display: none !important; }
+    body.qx-simple .expense-layout { padding-left: 0 !important; transform: none !important; }
+    body.qx-simple .expense-main { background: #fff !important; }
+    #historySection:not(.applied-month-mode) #qxHome, body:not(.qx-simple) #qxHome,
+    body:not(.qx-simple) #qxHeaderTitle { display: none !important; }
+
+    .qx { font-size: 14px; color: #1f2937; max-width: 880px; margin: 0 auto; }
+    .qx-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 6px; }
+    .qx-h { font-size: 16px; font-weight: 700; margin: 0; }
+    .qx-btn { height: 34px; padding: 0 14px; font-size: 14px; border: 1px solid #9ca3af; background: #fff; color: #1f2937; border-radius: 3px; cursor: pointer; }
+    .qx-btn:hover { background: #f3f4f6; }
+    .qx-btn.primary { background: ${NAVY}; border-color: ${NAVY}; color: #fff; font-weight: 600; }
+    .qx-btn.primary:hover { background: #092352; }
+    .qx-btn:disabled { opacity: .6; cursor: default; }
+    .qx-sub { font-size: 13px; color: #6b7280; margin: 0 0 10px; }
+    .qx-table { width: 100%; border-collapse: collapse; border: 1px solid #d1d5db; background: #fff; }
+    .qx-table th { background: #f3f4f6; font-weight: 600; font-size: 13px; text-align: left; padding: 8px 10px; border-bottom: 1px solid #d1d5db; white-space: nowrap; }
+    .qx-table td { padding: 8px 10px; border-top: 1px solid #e5e7eb; vertical-align: top; }
+    .qx-table .num { text-align: right; white-space: nowrap; }
+    .qx-table .note { font-size: 12px; color: #b91c1c; margin-top: 2px; }
+    .qx-links { font-size: 13px; margin: 10px 0 20px; color: #6b7280; }
+    .qx-links a { color: ${NAVY}; }
+    @media (max-width: 600px) {
+      .qx { padding: 0 12px; }
+      .qx-table .col-type { display: none; }
+      .qx-table th, .qx-table td { padding: 7px 6px; font-size: 13px; }
+    }
+
+    .qx-overlay { display: none; position: fixed; inset: 0; z-index: 10050; background: rgba(0,0,0,.4); overflow: auto; }
+    .qx-dialog { background: #fff; width: min(560px, 94vw); margin: 6vh auto 24px; border: 1px solid #9ca3af; border-radius: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 14px; color: #1f2937; }
+    .qx-dialog-head { display: flex; justify-content: space-between; align-items: center; background: #f3f4f6; border-bottom: 1px solid #d1d5db; padding: 10px 14px; font-weight: 700; font-size: 15px; }
+    .qx-close { border: none; background: none; font-size: 20px; line-height: 1; cursor: pointer; color: #4b5563; }
+    .qx-form { display: grid; grid-template-columns: 96px 1fr; gap: 10px 12px; align-items: center; padding: 16px 14px; }
+    .qx-form .l { font-size: 13px; color: #374151; }
+    .qx-form .req::after { content: ' *'; color: #b91c1c; }
+    .qx-in { height: 34px; width: 100%; box-sizing: border-box; border: 1px solid #9ca3af; border-radius: 3px; padding: 0 8px; font-size: 14px; background: #fff; color: #1f2937; }
+    .qx-in:focus { outline: 2px solid ${NAVY}33; border-color: ${NAVY}; }
+    .qx-route { display: flex; align-items: center; gap: 6px; }
+    .qx-radio { display: flex; gap: 18px; }
+    .qx-radio label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+    .qx-amount { display: flex; align-items: center; gap: 6px; max-width: 200px; }
+    .qx-more { grid-column: 1 / -1; border-top: 1px dashed #d1d5db; padding-top: 8px; }
+    .qx-more summary { cursor: pointer; font-size: 13px; color: #374151; }
+    .qx-more .qx-form { padding: 10px 0 0; }
+    .qx-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid #d1d5db; padding: 10px 14px; background: #fafafa; }
+    .qx-err { flex: 1; color: #b91c1c; font-size: 13px; }
+    @media (max-width: 600px) {
+      .qx-form { grid-template-columns: 1fr; gap: 4px; }
+      .qx-form .l { margin-top: 8px; }
+      .qx-dialog { margin-top: 2vh; }
+      .qx-foot { flex-wrap: wrap; position: sticky; bottom: 0; }
+      .qx-err { flex-basis: 100%; }
+    }
+    .qx-toast { position: fixed; right: 16px; bottom: 16px; background: #374151; color: #fff; padding: 10px 14px; border-radius: 3px; font-size: 13px; z-index: 10060; }`;
+  document.head.appendChild(st);
+}
 
 // ---------------- データ ----------------
 let myRows = null;
@@ -47,62 +111,59 @@ function recentRoutes(rows) {
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(r);
-    if (out.length >= 3) break;
+    if (out.length >= 5) break;
   }
   return out;
 }
+const tripName = (t) => (t === 'round_trip' ? '往復' : t === 'multi' ? '複数' : '片道');
 
-// ---------------- 一覧 (ホーム) ----------------
+// ---------------- 一覧 ----------------
 function renderHome() {
   const host = $('historySection');
   if (!host) return;
+  ensureStyle();
+  // ヘッダーにページ名 (サイドメニューを隠すため)
+  const left = document.querySelector('.expense-standalone-header-left');
+  if (left && !$('qxHeaderTitle')) {
+    const t = document.createElement('span');
+    t.id = 'qxHeaderTitle';
+    t.textContent = '交通費申請';
+    t.style.cssText = 'font-size:16px;font-weight:700;color:#1f2937;';
+    left.appendChild(t);
+  }
   let home = $('qxHome');
   if (!home) {
     home = document.createElement('div');
     home.id = 'qxHome';
+    home.className = 'qx';
     host.insertBefore(home, host.firstChild);
   }
   home.innerHTML = `
-    <button type="button" id="qxNewBtn"
-      style="width:100%;min-height:60px;border:none;border-radius:14px;background:#2563eb;color:#fff;font-size:19px;
-             font-weight:800;cursor:pointer;box-shadow:0 4px 12px rgba(37,99,235,.25);margin-bottom:12px;">＋ 交通費を申請する</button>
-    <div id="qxCounts" style="font-size:14px;color:#475569;margin:0 2px 10px;"></div>
-    <div id="qxList" style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;">
-      <div style="padding:16px;color:#94a3b8;font-size:14px;">読み込み中…</div>
+    <div class="qx-bar">
+      <h2 class="qx-h">申請一覧</h2>
+      <button type="button" class="qx-btn primary" id="qxNewBtn">新規申請</button>
     </div>
-    <div style="text-align:right;margin:8px 2px 16px;">
-      <a href="#" id="qxShowOld" style="font-size:13px;color:#64748b;">月別の詳しい画面を見る</a>
+    <p class="qx-sub" id="qxCounts"></p>
+    <div id="qxList"><p class="qx-sub">読み込み中…</p></div>
+    <div class="qx-links">
+      添付ファイル・物品購入・他の月の申請・月別の詳細は <a href="#" id="qxShowOld">従来の画面</a> から行えます。
     </div>`;
   $('qxNewBtn').addEventListener('click', () => openForm());
-  $("qxShowOld").addEventListener("click", (e) => { e.preventDefault(); toggleOldHome(true); });
+  $('qxShowOld').addEventListener('click', (e) => { e.preventDefault(); toggleOldHome(true); });
   toggleOldHome(false);
   refreshList();
 }
 
-// 従来の 5 枚のカードや月別ボードは普段は隠す (リンクで表示できる)。
-// expenses.page.js が後から style.display を書き換えるので、body のクラス + CSS で隠す。
-function ensureStyle() {
-  if ($('qxStyle')) return;
-  const st = document.createElement('style');
-  st.id = 'qxStyle';
-  st.textContent = `
-    body.qx-simple #exSummaryCards, body.qx-simple #exMonthlyBoardHost,
-    body.qx-simple #exListWrapper, body.qx-simple #exListHost { display: none !important; }
-    #historySection:not(.applied-month-mode) #qxHome { display: none !important; }
-    body:not(.qx-simple) #qxHome { display: none !important; }`;
-  document.head.appendChild(st);
-}
 function toggleOldHome(show) {
   ensureStyle();
   document.body.classList.toggle('qx-simple', !show);
   if (show) {
-    // 従来画面から戻るリンク
     if (!$('qxBackSimple')) {
       const a = document.createElement('a');
       a.href = '#';
       a.id = 'qxBackSimple';
       a.textContent = '← かんたん画面に戻る';
-      a.style.cssText = 'display:inline-block;margin:0 0 12px;font-size:14px;font-weight:700;color:#2563eb;';
+      a.style.cssText = `display:inline-block;margin:0 0 12px;font-size:14px;color:${NAVY};`;
       a.addEventListener('click', (e) => { e.preventDefault(); toggleOldHome(false); });
       $('historySection')?.insertBefore(a, $('historySection').firstChild);
     }
@@ -118,133 +179,129 @@ async function refreshList(force = false) {
   const rows = (await loadMine(force)).slice().sort(byNewest);
   const count = (st) => rows.filter((r) => st.includes(String(r.status))).length;
   const rejected = count(['rejected']);
-  $('qxCounts').innerHTML = `申請中 <b>${count(['applied', 'soumu_checked'])}</b>件 ・ 承認済み <b>${count(['approved'])}</b>件`
-    + (rejected ? ` ・ <span style="color:#b91c1c;font-weight:800;">差戻し ${rejected}件</span>` : '');
+  $('qxCounts').innerHTML = `申請中 ${count(['applied', 'soumu_checked'])}件 ／ 承認済み ${count(['approved'])}件`
+    + (rejected ? ` ／ <span style="color:#b91c1c;font-weight:600;">差戻し ${rejected}件</span>` : '');
   if (!rows.length) {
-    list.innerHTML = '<div style="padding:20px;color:#64748b;font-size:14px;text-align:center;">まだ申請はありません。</div>';
+    list.innerHTML = '<p class="qx-sub">まだ申請はありません。「新規申請」から申請してください。</p>';
     return;
   }
-  list.innerHTML = rows.slice(0, 10).map((r) => {
-    const [label, fg, bg] = STATUS[String(r.status)] || [String(r.status || ''), '#334155', '#f1f5f9'];
-    const route = r.type === 'goods' ? esc(r.item_name || '物品購入') : `${esc(r.origin)} → ${esc(r.destination)}`;
-    const note = r.status === 'rejected' && r.manager_note
-      ? `<div style="font-size:12px;color:#b91c1c;margin-top:2px;">理由：${esc(r.manager_note)}</div>` : '';
-    return `
-      <div style="display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid #f1f5f9;">
-        <div style="font-size:13px;color:#64748b;width:44px;flex:none;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}</div>
-        <div style="flex:1;min-width:0;">
-          <div style="font-size:15px;font-weight:700;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${TYPE_ICON[r.type] || ''} ${route}</div>
-          ${note}
-        </div>
-        <div style="font-size:15px;font-weight:800;color:#0f172a;flex:none;">${yen(r.amount)}</div>
-        <div style="font-size:12px;font-weight:800;color:${fg};background:${bg};border-radius:999px;padding:3px 10px;flex:none;">${esc(label)}</div>
-      </div>`;
-  }).join('');
+  list.innerHTML = `
+    <table class="qx-table">
+      <thead><tr><th>日付</th><th>区間</th><th class="col-type">種別</th><th class="num">金額</th><th>状態</th></tr></thead>
+      <tbody>
+        ${rows.slice(0, 10).map((r) => {
+          const [label, color] = STATUS[String(r.status)] || [String(r.status || ''), '#374151'];
+          const route = r.type === 'goods' ? esc(r.item_name || '物品購入') : `${esc(r.origin)} → ${esc(r.destination)}`;
+          const note = r.status === 'rejected' && r.manager_note ? `<div class="note">理由：${esc(r.manager_note)}</div>` : '';
+          return `<tr>
+            <td style="white-space:nowrap;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}</td>
+            <td>${route}${note}</td>
+            <td class="col-type">${esc(TYPE_NAME[r.type] || '')}</td>
+            <td class="num">${yen(r.amount)}</td>
+            <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
 }
 
-// ---------------- 簡単フォーム ----------------
-const inputCss = 'width:100%;box-sizing:border-box;height:48px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;font-size:16px;background:#fff;';
-const labelCss = 'display:block;font-size:13px;font-weight:700;color:#334155;margin:12px 0 4px;';
-
+// ---------------- 入力フォーム ----------------
 function ensureForm() {
   if ($('qxModal')) return;
+  ensureStyle();
   const m = document.createElement('div');
   m.id = 'qxModal';
-  m.style.cssText = 'display:none;position:fixed;inset:0;z-index:10050;background:rgba(15,23,42,.55);align-items:flex-end;justify-content:center;';
+  m.className = 'qx-overlay';
   m.innerHTML = `
-    <div style="background:#fff;width:100%;max-width:520px;max-height:94vh;overflow:auto;border-radius:18px 18px 0 0;padding:16px 18px 20px;box-sizing:border-box;">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="font-size:18px;font-weight:800;color:#0f172a;">交通費を申請</div>
-        <button type="button" id="qxClose" aria-label="閉じる" style="border:none;background:none;font-size:26px;line-height:1;color:#64748b;cursor:pointer;">×</button>
+    <div class="qx-dialog" role="dialog" aria-labelledby="qxTitle">
+      <div class="qx-dialog-head"><span id="qxTitle">交通費の申請</span><button type="button" class="qx-close" id="qxClose" aria-label="閉じる">×</button></div>
+      <div class="qx-form">
+        <label class="l" for="qxRecent" id="qxRecentLabel">前回と同じ</label>
+        <select class="qx-in" id="qxRecent"><option value="">選択すると下の項目に入力されます</option></select>
+        <label class="l req" for="qxDate">日付</label>
+        <input class="qx-in" id="qxDate" type="date" style="max-width:200px;">
+        <label class="l req" for="qxType">種別</label>
+        <select class="qx-in" id="qxType" style="max-width:200px;">${TYPES.map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select>
+        <label class="l req" for="qxOrigin">区間</label>
+        <div class="qx-route">
+          <input class="qx-in" id="qxOrigin" type="text" placeholder="出発地">
+          <span>→</span>
+          <input class="qx-in" id="qxDest" type="text" placeholder="到着地">
+        </div>
+        <span class="l req">片道/往復</span>
+        <div class="qx-radio">
+          <label><input type="radio" name="qxTrip" value="one_way" checked> 片道</label>
+          <label><input type="radio" name="qxTrip" value="round_trip"> 往復</label>
+        </div>
+        <label class="l req" for="qxAmount">金額</label>
+        <div class="qx-amount"><input class="qx-in" id="qxAmount" type="text" inputmode="numeric" placeholder="0" style="text-align:right;"><span>円</span></div>
+        <label class="l req" for="qxPurpose">用途</label>
+        <input class="qx-in" id="qxPurpose" type="text" placeholder="例）〇〇現場、A社訪問">
+        <details class="qx-more" id="qxMore">
+          <summary>詳細（任意）</summary>
+          <div class="qx-form">
+            <label class="l" for="qxVia">経由</label><input class="qx-in" id="qxVia" type="text">
+            <label class="l" for="qxSite">現場名</label><input class="qx-in" id="qxSite" type="text">
+            <label class="l" for="qxMemo">メモ</label><input class="qx-in" id="qxMemo" type="text">
+          </div>
+        </details>
       </div>
-      <div id="qxRecent"></div>
-      <label style="${labelCss}">日付</label>
-      <input id="qxDate" type="date" style="${inputCss}">
-      <div id="qxTypes" style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">
-        ${TYPES.map(([v, icon, name]) => `<button type="button" data-type="${v}" style="flex:1;min-width:52px;height:52px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;cursor:pointer;font-size:20px;line-height:1.1;">${icon}<div style="font-size:10px;font-weight:700;color:#334155;white-space:nowrap;letter-spacing:-.02em;">${name}</div></button>`).join('')}
+      <div class="qx-foot">
+        <div class="qx-err" id="qxErr"></div>
+        <button type="button" class="qx-btn" id="qxCancel">キャンセル</button>
+        <button type="button" class="qx-btn" id="qxDraft">下書き保存</button>
+        <button type="button" class="qx-btn primary" id="qxSubmit">申請する</button>
       </div>
-      <label style="${labelCss}">出発地 → 到着地</label>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input id="qxOrigin" type="text" placeholder="出発地" style="${inputCss}">
-        <span style="color:#94a3b8;font-weight:800;">→</span>
-        <input id="qxDest" type="text" placeholder="到着地" style="${inputCss}">
-      </div>
-      <div id="qxTrip" style="display:flex;gap:8px;margin-top:10px;">
-        <button type="button" data-trip="one_way" style="flex:1;height:44px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:15px;font-weight:700;cursor:pointer;">片道</button>
-        <button type="button" data-trip="round_trip" style="flex:1;height:44px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;font-size:15px;font-weight:700;cursor:pointer;">往復</button>
-      </div>
-      <label style="${labelCss}">金額（円）</label>
-      <input id="qxAmount" type="text" inputmode="numeric" placeholder="例）560" style="${inputCss}font-size:20px;font-weight:800;">
-      <label style="${labelCss}">用途</label>
-      <input id="qxPurpose" type="text" placeholder="例）〇〇現場・A社訪問" style="${inputCss}">
-      <details id="qxMore" style="margin-top:12px;">
-        <summary style="cursor:pointer;font-size:14px;color:#475569;font-weight:700;">詳細（任意）</summary>
-        <label style="${labelCss}">経由</label><input id="qxVia" type="text" style="${inputCss}">
-        <label style="${labelCss}">現場名</label><input id="qxSite" type="text" style="${inputCss}">
-        <label style="${labelCss}">メモ</label><input id="qxMemo" type="text" style="${inputCss}">
-      </details>
-      <div id="qxErr" style="color:#b91c1c;font-size:14px;font-weight:700;margin-top:12px;min-height:18px;"></div>
-      <button type="button" id="qxSubmit" style="width:100%;height:56px;margin-top:6px;border:none;border-radius:12px;background:#2563eb;color:#fff;font-size:18px;font-weight:800;cursor:pointer;">申請する</button>
-      <button type="button" id="qxDraft" style="width:100%;height:40px;margin-top:6px;border:none;background:none;color:#64748b;font-size:14px;cursor:pointer;">下書きに保存（あとでまとめて申請）</button>
     </div>`;
   document.body.appendChild(m);
   $('qxClose').addEventListener('click', closeForm);
+  $('qxCancel').addEventListener('click', closeForm);
   m.addEventListener('click', (e) => { if (e.target === m) closeForm(); });
-  $('qxTypes').addEventListener('click', (e) => { const b = e.target.closest('[data-type]'); if (b) setType(b.dataset.type); });
-  $('qxTrip').addEventListener('click', (e) => { const b = e.target.closest('[data-trip]'); if (b) setTrip(b.dataset.trip); });
   $('qxAmount').addEventListener('input', () => {
     const digits = String($('qxAmount').value).replace(/[^\d]/g, '');
     $('qxAmount').value = digits ? Number(digits).toLocaleString('ja-JP') : '';
+  });
+  $('qxRecent').addEventListener('change', () => {
+    const r = recentList[Number($('qxRecent').value)];
+    if ($('qxRecent').value !== '' && r) fillFrom(r);
   });
   $('qxSubmit').addEventListener('click', () => submit(true));
   $('qxDraft').addEventListener('click', () => submit(false));
 }
 
-let curType = 'train';
-let curTrip = 'one_way';
-function paintSelected(container, attr, value) {
-  container.querySelectorAll(`[${attr}]`).forEach((b) => {
-    const on = b.getAttribute(attr) === value;
-    b.style.background = on ? '#2563eb' : '#fff';
-    b.style.color = on ? '#fff' : '';
-    b.style.borderColor = on ? '#2563eb' : '#cbd5e1';
-    b.querySelectorAll('div').forEach((d) => { d.style.color = on ? '#fff' : '#334155'; });
-  });
-}
-function setType(v) { curType = v; paintSelected($('qxTypes'), 'data-type', v); }
-function setTrip(v) { curTrip = v; paintSelected($('qxTrip'), 'data-trip', v); }
+const tripValue = () => document.querySelector('input[name="qxTrip"]:checked')?.value || 'one_way';
+function setTrip(v) { const el = document.querySelector(`input[name="qxTrip"][value="${v === 'round_trip' ? 'round_trip' : 'one_way'}"]`); if (el) el.checked = true; }
 
+let recentList = [];
 function fillFrom(r) {
-  setType(r.type || 'train');
-  setTrip(r.trip_type === 'round_trip' ? 'round_trip' : 'one_way');
+  $('qxType').value = TYPES.some(([v]) => v === r.type) ? r.type : 'train';
+  setTrip(r.trip_type);
   $('qxOrigin').value = r.origin || '';
   $('qxDest').value = r.destination || '';
   $('qxAmount').value = Math.round(Number(r.amount) || 0).toLocaleString('ja-JP');
   $('qxPurpose').value = r.purpose || '';
   $('qxVia').value = r.via || '';
   $('qxSite').value = r.site_name || '';
-  $('qxMemo').value = '';
   $('qxMore').open = !!(r.via || r.site_name);
   $('qxErr').textContent = '';
 }
 
 async function openForm() {
   ensureForm();
-  // 初期値: 今日・電車・片道・空欄
   $('qxDate').value = todayJST();
-  setType('train');
+  $('qxType').value = 'train';
   setTrip('one_way');
   for (const id of ['qxOrigin', 'qxDest', 'qxAmount', 'qxPurpose', 'qxVia', 'qxSite', 'qxMemo']) $(id).value = '';
   $('qxMore').open = false;
   $('qxErr').textContent = '';
-  $('qxModal').style.display = 'flex';
-  const recent = recentRoutes(await loadMine());
-  $('qxRecent').innerHTML = recent.length ? `
-    <div style="font-size:13px;font-weight:700;color:#334155;margin:10px 0 6px;">前回と同じ</div>
-    <div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;">
-      ${recent.map((r, i) => `<button type="button" data-recent="${i}" style="flex:none;border:1px solid #93c5fd;background:#eff6ff;color:#1e3a8a;border-radius:999px;padding:8px 12px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;">${TYPE_ICON[r.type] || ''} ${esc(r.origin)}→${esc(r.destination)} ${r.trip_type === 'round_trip' ? '往復' : '片道'} ${yen(r.amount)}</button>`).join('')}
-    </div>` : '';
-  $('qxRecent').querySelectorAll('[data-recent]').forEach((b) => b.addEventListener('click', () => fillFrom(recent[Number(b.dataset.recent)])));
+  $('qxModal').style.display = 'block';
+  recentList = recentRoutes(await loadMine());
+  const sel = $('qxRecent');
+  sel.innerHTML = '<option value="">選択すると下の項目に入力されます</option>'
+    + recentList.map((r, i) => `<option value="${i}">${esc(r.origin)} → ${esc(r.destination)}（${tripName(r.trip_type)}・${yen(r.amount)}）</option>`).join('');
+  const hasRecent = recentList.length > 0;
+  sel.style.display = hasRecent ? '' : 'none';
+  $('qxRecentLabel').style.display = hasRecent ? '' : 'none';
 }
 
 function closeForm() { const m = $('qxModal'); if (m) m.style.display = 'none'; }
@@ -269,14 +326,16 @@ async function submit(apply) {
     if (otherDrafts.length && !window.confirm(`${month.replace('-', '年')}月の下書き ${otherDrafts.length} 件も一緒に申請されます。よろしいですか？`)) return;
   }
 
-  const btns = [$('qxSubmit'), $('qxDraft')];
+  const btns = [$('qxSubmit'), $('qxDraft'), $('qxCancel')];
   btns.forEach((b) => { b.disabled = true; });
-  $('qxSubmit').textContent = apply ? '申請中…' : '保存中…';
+  const label = (apply ? $('qxSubmit') : $('qxDraft'));
+  const original = label.textContent;
+  label.textContent = apply ? '申請中…' : '保存中…';
   try {
     await fetchJSONAuth('/api/expenses', {
       method: 'POST',
       body: JSON.stringify({
-        date, type: curType, origin, destination, tripType: curTrip, tripCount: 1, purpose, amount,
+        date, type: $('qxType').value, origin, destination, tripType: tripValue(), tripCount: 1, purpose, amount,
         via: $('qxVia').value.trim(), siteName: $('qxSite').value.trim(), memo: $('qxMemo').value.trim(),
         teiki: false, clientToken: `qx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       }),
@@ -284,19 +343,19 @@ async function submit(apply) {
     if (apply) await fetchJSONAuth('/api/expenses/months/apply', { method: 'POST', body: JSON.stringify({ month }) });
     closeForm();
     await refreshList(true);
-    toast(apply ? '申請しました' : '下書きに保存しました');
+    toast(apply ? '申請しました。' : '下書きに保存しました。');
   } catch (e) {
     err.textContent = (e && e.message) || '送信に失敗しました。もう一度お試しください。';
   } finally {
     btns.forEach((b) => { b.disabled = false; });
-    $('qxSubmit').textContent = '申請する';
+    label.textContent = original;
   }
 }
 
 function toast(msg) {
   const t = document.createElement('div');
-  t.textContent = '✓ ' + msg;
-  t.style.cssText = 'position:fixed;left:50%;bottom:28px;transform:translateX(-50%);background:#16a34a;color:#fff;padding:12px 20px;border-radius:999px;font-weight:800;font-size:15px;z-index:10060;box-shadow:0 6px 16px rgba(0,0,0,.2);';
+  t.className = 'qx-toast';
+  t.textContent = msg;
   document.body.appendChild(t);
   setTimeout(() => t.remove(), 2500);
 }
