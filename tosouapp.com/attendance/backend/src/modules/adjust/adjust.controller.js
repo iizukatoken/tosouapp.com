@@ -4,6 +4,7 @@ const noticesRepo = require('../notices/notices.repository');
 const summaryRepo = require('../attendance/attendance.summary.repository');
 const db = require('../../core/database/mysql');
 const { isHolidayWorkDay, getUserOffDaySet } = require('../attendance/attendance.utils');
+const { nowJSTMySQL } = require('../../utils/dateTime');
 
 // Sau khi duyệt 調整申請: tính lại 遅刻/早退 của ngày đó theo giờ chấm công mới
 // (cùng quy tắc với màn hình: 遅刻 = 出勤 đầu tiên - giờ bắt đầu ca, 早退 = giờ kết thúc ca - 退勤 cuối cùng,
@@ -125,6 +126,20 @@ async function applyApprovedTimes(reqRow, tid) {
   );
   return { ok: true, mode: 'created', checkIn: reqIn, checkOut: reqOut };
 }
+// Đơn không có 退勤 cho một ngày đã qua mà bản ghi chấm công ngày đó cũng chưa có 退勤 → đơn vô nghĩa
+// (form tự điền sẵn giờ 出勤 đã có, nhân viên bấm gửi mà quên điền 退勤; duyệt xong vẫn thiếu 退勤).
+async function lacksNeededCheckOut({ userId, attendanceId, requestedCheckIn, requestedCheckOut }) {
+  if (requestedCheckOut || !requestedCheckIn) return false;
+  const ds = String(requestedCheckIn).replace('T', ' ').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ds) || ds >= nowJSTMySQL().slice(0, 10)) return false;
+  const [rows] = attendanceId
+    ? await db.query('SELECT checkOut FROM attendance WHERE id = ? AND userId = ? LIMIT 1', [attendanceId, userId])
+    : await db.query('SELECT checkOut FROM attendance WHERE userId = ? AND DATE(checkIn) = ? ORDER BY checkIn ASC LIMIT 1', [userId, ds]);
+  const row = rows && rows[0];
+  return !row || !row.checkOut;
+}
+const MISSING_CHECKOUT_MESSAGE = '退勤時刻を入力してください（この日は退勤が打刻されていません）';
+
 // Controller yêu cầu sửa giờ
 exports.create = async (req, res) => {
   try {
@@ -138,6 +153,9 @@ exports.create = async (req, res) => {
     const { attendanceId, requestedCheckIn, requestedCheckOut, reason } = req.body || {};
     if (!userId || (!requestedCheckIn && !requestedCheckOut)) {
       return res.status(400).json({ message: 'Missing fields' });
+    }
+    if (await lacksNeededCheckOut({ userId, attendanceId, requestedCheckIn, requestedCheckOut })) {
+      return res.status(400).json({ message: MISSING_CHECKOUT_MESSAGE });
     }
     const id = await repo.create({ userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenantId: req.tenantId || null });
     try {
@@ -364,6 +382,9 @@ exports.updateByActor = async (req, res) => {
     const currentStatus = String(row.status || 'pending');
     if (role === 'admin' || (own && (currentStatus === 'pending' || currentStatus === 'rejected'))) {
       const { requestedCheckIn, requestedCheckOut, reason } = req.body || {};
+      if (own && role !== 'admin' && await lacksNeededCheckOut({ userId: row.userId, attendanceId: row.attendanceId, requestedCheckIn, requestedCheckOut })) {
+        return res.status(400).json({ message: MISSING_CHECKOUT_MESSAGE });
+      }
       await repo.updateFields(id, { requestedCheckIn, requestedCheckOut, reason, tenantId: tid });
       if (own && role !== 'admin' && currentStatus === 'rejected') {
         await repo.updateStatus(id, 'pending', null, tid);
