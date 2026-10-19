@@ -229,7 +229,9 @@
                   // Skip rows without actual data
                   const hasActualIn = !!(row.dataset.actualIn || (inEl && !inEl.classList.contains('is-auto') && inEl.value && inEl.value !== '--:--'));
                   const hasActualOut = !!(row.dataset.actualOut || (outEl && !outEl.classList.contains('is-auto') && outEl.value && outEl.value !== '--:--'));
-                  if (!hasActualIn && !hasActualOut) { _clearBlockRecalc(row); continue; }
+                  // Thiếu 出勤 hoặc 退勤 thật (giờ kia chỉ là giờ ca tự điền) → không làm tròn, không tính 実働/残業
+                  // từ giờ tự điền (trước đây hiện 残業 giả cho ngày quên 退勤; 給与 tính ngày đó là 0).
+                  if (!hasActualIn || !hasActualOut) { _clearBlockRecalc(row); continue; }
                   const shiftStart = row.dataset.shiftStart || '08:00';
                   const shiftEnd = row.dataset.shiftEnd || '17:00';
                   const shiftStartMin = toMin(shiftStart);
@@ -243,12 +245,13 @@
                     const rInMin = Math.ceil(rawInMin / rStep) * rStep;
                     rIn = fromMin(rInMin);
                   }
-                  // Clock-out: round DOWN OT portion after shift end
+                  // Clock-out: always round DOWN to 30 minutes — same as 給与 (attendance.rules.js, 会社の丸めルール).
+                  // Before shift end: floor (not below shift start); after shift end: floor the OT portion.
                   let rOut = '';
                   const rawOutMin = toMin(rawOut);
                   if (rawOutMin >= 0) {
                     if (rawOutMin <= shiftEndMin) {
-                      rOut = rawOut;
+                      rOut = fromMin(Math.max(shiftStartMin, Math.floor(rawOutMin / rStep) * rStep));
                     } else {
                       const otRaw = rawOutMin - shiftEndMin;
                       const otRounded = Math.floor(otRaw / rStep) * rStep;
@@ -1434,12 +1437,14 @@
             const rawInMin = hmToMin(inHm);
             const rInMin2 = Math.ceil(rawInMin / rStep) * rStep;
             inHm = minToHm(rInMin2);
-            // Clock-out: round DOWN OT after shift end
+            // Clock-out: always round DOWN to 30 minutes — same as 給与 (attendance.rules.js, 会社の丸めルール).
             const rawOutMin = hmToMin(outHm);
             if (rawOutMin > shiftEndMin) {
               const otRaw = rawOutMin - shiftEndMin;
               const otRounded = Math.floor(otRaw / rStep) * rStep;
               outHm = minToHm(shiftEndMin + otRounded);
+            } else {
+              outHm = minToHm(Math.max(shiftStartMin, Math.floor(rawOutMin / rStep) * rStep));
             }
           }
 
