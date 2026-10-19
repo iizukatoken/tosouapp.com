@@ -8,6 +8,8 @@ const expensesTax = require('../expenses/expenses.tax');
 const withholding = require('./withholding');
 const { calculatePaidLeaveEntitlement } = require('../../utils/leaveRules');
 const { resolveEmploymentStartDate } = require('../../utils/employmentDate');
+const { countDays } = require('../attendance/attendance.dayCount');
+const { getUserOffDaySet } = require('../attendance/attendance.utils');
 
 function roundToStep(value, step, mode) {
   if (!step || step <= 0) return value;
@@ -134,8 +136,6 @@ async function computePayslipForUser(userId, month, options = null, tenantId = n
   }
   const isFlexDept = !!flexConfig;
 
-  const workKubunSet = new Set(['出勤', '半休', '半休(有給)', '振替出勤', '休日出勤', '代替出勤']);
-  const workDaysSet = new Set();
   let paidLeaveDaysFromDaily = 0;
   let absentDaysFromDaily = 0;
   let unpaidLeaveDaysFromDaily = 0;
@@ -147,12 +147,7 @@ async function computePayslipForUser(userId, month, options = null, tenantId = n
   let unpaidHalfDaysFromDaily = 0; // 半休（無給）の回数
 
   for (const r of dailyRows) {
-    const date = String(r.date || '').slice(0, 10);
     const kubun = String(r.kubun || '').trim();
-    if (workKubunSet.has(kubun)) {
-      workDaysSet.add(date);
-    }
-    if (kubun === '休日出勤' || kubun === '法定休日出勤') holidayWorkDaysFromDaily++;
     if (kubun === '半休' || kubun === '半休(有給)') halfDayWorkDaysFromDaily++;
     if (kubun === '半休(有給)') paidHalfDaysFromDaily++;
     if (kubun === '半休') unpaidHalfDaysFromDaily++;
@@ -174,13 +169,26 @@ async function computePayslipForUser(userId, month, options = null, tenantId = n
       unpaidLeaveDaysFromDaily++;
     }
   }
+  // 出勤日数 / 休日出勤日数: 月次勤怠画面の当月サマリ・入力用Excel と同じルール (attendance.dayCount.js)。
+  // 以前は「打刻 or 出勤系区分のある日」を全部1日と数えていたため、半休=1日・休日出勤も出勤日数に入り、
+  // 画面/Excel (担当者が給与計算に使う数字) と食い違っていた。
+  const actualDates = new Set();
   for (const r of attendanceRows) {
     const date = String(r.checkIn || r.checkOut || '').slice(0, 10);
-    if (date) workDaysSet.add(date);
+    if (date) actualDates.add(date);
   }
+  const kubunByDate = new Map(dailyRows.map(r => [String(r.date || '').slice(0, 10), String(r.kubun || '').trim()]));
+  const offDaySet = await getUserOffDaySet(y, userId, tenantId || 0).catch(() => new Set());
+  const dayList = [];
+  for (let d = 1; d <= lastDay; d++) {
+    const ds = `${y}-${pad(m)}-${pad(d)}`;
+    dayList.push({ kubun: kubunByDate.get(ds) || '', hasActual: actualDates.has(ds), isOffDay: offDaySet.has(ds) });
+  }
+  const dayCounts = countDays(dayList, { isPartTime: String(user?.employment_type || '').toLowerCase() === 'part_time' });
+  holidayWorkDaysFromDaily = dayCounts.holidayWorkDays;
 
   const ts = await attendanceRules.computeRange(attendanceRows, tenantId || 0);
-  const workDays = workDaysSet.size;
+  const workDays = dayCounts.attendDays;
 
   // Calculate holiday work premium minutes (休日出勤 days get ×1.25)
   // Part-time: off-day work is same rate as weekday — no holiday premium

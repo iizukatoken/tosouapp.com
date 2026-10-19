@@ -23,6 +23,7 @@ const {
   getUserOffDaySet
 } = require('./attendance.utils');
 const { timesheetMaxDays } = require('../../config/env');
+const { classifyDay } = require('./attendance.dayCount');
 
 // 遅刻/早退 の表示 (分単位の出勤・退勤・ca). Khớp đúng rule bảng tháng (attendance-monthly.render.js):
 // muộn nếu vào > giờ ca bắt đầu, sớm nếu ra < giờ ca kết thúc. Ca qua đêm (vd 22:00-06:00): giờ kết thúc
@@ -793,13 +794,10 @@ exports.exportMonthXlsx = async (req, res) => {
       const hasActual = segs0.some(s => !!s?.checkIn || !!s?.checkOut);
       const kubun = String(daily?.kubun || '').trim();
 
-      // Đếm ngày giống 当月サマリ trên màn hình: theo 勤務区分; 半休 = 0.5; 代替出勤/振替出勤 tính vào 出勤日数.
-      // Không có 区分 nhưng có chấm công: ngày nghỉ → 休日出勤, ngày thường → 出勤.
-      const isHalf = kubun === '半休' || kubun === '半休(有給)';
-      const isFullWork = kubun === '出勤' || kubun === '代替出勤' || kubun === '振替出勤';
-      if (kubun === '休日出勤' || (!kubun && hasActual && isOffDay)) sumHolidayWorkDays++;
-      else if (isHalf) sumAttendDays += 0.5;
-      else if (isFullWork || (!kubun && hasActual)) sumAttendDays++;
+      // 出勤日数 / 休日出勤日数: 画面・給与と共通のルール (attendance.dayCount.js)
+      const dayCount = classifyDay({ kubun, hasActual, isOffDay, isPartTime: String(user?.employment_type || '').toLowerCase() === 'part_time' });
+      sumAttendDays += dayCount.attend;
+      sumHolidayWorkDays += dayCount.holidayWork;
       if (kubun === '半休') sumHalfUnpaidDays += 0.5;
       if (kubun === '代替出勤') sumDaigaeWorkDays++;
       if (kubun === '振替出勤') sumFurikaeWorkDays++;
