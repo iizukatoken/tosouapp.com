@@ -50,6 +50,15 @@ function ensureStyle() {
     .qx-table td { padding: 8px 10px; border-top: 1px solid #e5e7eb; vertical-align: top; }
     .qx-table .num { text-align: right; white-space: nowrap; }
     .qx-table .note { font-size: 12px; color: #b91c1c; margin-top: 2px; }
+    .qx-month-row { cursor: pointer; }
+    .qx-month-row:focus { outline: none; }
+    .qx-month-row:focus-visible { outline: 2px solid #0b2c6655; outline-offset: -2px; }
+    .qx-month-row:hover td { background: #f9fafb; }
+    .qx-month-row td { font-weight: 600; }
+    .qx-caret { display: inline-block; width: 12px; color: #6b7280; }
+    .qx-detail > td { padding: 0 0 10px 22px; background: #fafafa; }
+    .qx-sub-table { border: none; border-left: 2px solid #d1d5db; background: #fff; }
+    .qx-sub-table th { background: #fafafa; font-weight: 500; color: #4b5563; }
     .qx-links { font-size: 13px; margin: 10px 0 20px; color: #6b7280; }
     .qx-links a { color: ${NAVY}; }
     @media (max-width: 600px) {
@@ -168,37 +177,94 @@ function toggleOldHome(show) {
   }
 }
 
+// 申請は月単位 (月ごとに申請・承認) なので、一覧も月ごとにまとめる。月の行を押すと明細が開く。
+const openMonths = new Set();
+let openMonthsInit = false;
+
+function monthStatus(items) {
+  const st = items.map((r) => String(r.status));
+  const has = (...k) => st.some((x) => k.includes(x));
+  const all = (...k) => st.every((x) => k.includes(x));
+  if (has('rejected')) return ['差戻しあり', '#b91c1c'];
+  if (all('draft', 'pending')) return ['下書き', '#6b7280'];
+  if (has('applied')) return [has('draft', 'pending') ? '申請中（下書きあり）' : '申請中', '#b45309'];
+  if (has('draft', 'pending')) return ['一部下書き', '#6b7280'];
+  if (has('soumu_checked')) return ['総務確認済み', '#1d4ed8'];
+  if (all('paid')) return ['支給済み', '#374151'];
+  if (all('approved', 'paid')) return ['承認済み', '#15803d'];
+  return ['—', '#374151'];
+}
+
+function itemRows(items) {
+  return items.map((r) => {
+    const [label, color] = STATUS[String(r.status)] || [String(r.status || ''), '#374151'];
+    const route = r.type === 'goods' ? esc(r.item_name || '物品購入') : `${esc(r.origin)} → ${esc(r.destination)}`;
+    const note = r.status === 'rejected' && r.manager_note ? `<div class="note">理由：${esc(r.manager_note)}</div>` : '';
+    const files = Number(r.file_count || 0) > 0 ? ` <span style="font-size:12px;color:#6b7280;">（添付${Number(r.file_count)}件）</span>` : '';
+    return `<tr>
+      <td style="white-space:nowrap;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}</td>
+      <td>${route}${files}${note}</td>
+      <td class="col-type">${esc(TYPE_NAME[r.type] || '')}</td>
+      <td class="num">${yen(r.amount)}</td>
+      <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
+    </tr>`;
+  }).join('');
+}
+
 async function refreshList(force = false) {
   const list = $('qxList');
   if (!list) return;
   const rows = (await loadMine(force)).slice().sort(byNewest);
-  const count = (st) => rows.filter((r) => st.includes(String(r.status))).length;
-  const rejected = count(['rejected']);
-  $('qxCounts').innerHTML = `申請中 ${count(['applied', 'soumu_checked'])}件 ／ 承認済み ${count(['approved'])}件`
-    + (rejected ? ` ／ <span style="color:#b91c1c;font-weight:600;">差戻し ${rejected}件</span>` : '');
+  const rejected = rows.filter((r) => String(r.status) === 'rejected').length;
+  $('qxCounts').innerHTML = rejected
+    ? `<span style="color:#b91c1c;">差戻しが ${rejected} 件あります。該当する月を開いて理由を確認してください。</span>`
+    : '';
+  $('qxCounts').style.display = rejected ? '' : 'none';
   if (!rows.length) {
     list.innerHTML = '<p class="qx-sub">まだ申請はありません。「新規申請」から申請してください。</p>';
     return;
   }
+  const byMonth = new Map();
+  for (const r of rows) {
+    const ym = String(r.date || '').slice(0, 7);
+    if (!byMonth.has(ym)) byMonth.set(ym, []);
+    byMonth.get(ym).push(r);
+  }
+  const months = [...byMonth.keys()].sort().reverse();
+  if (!openMonthsInit) { openMonths.add(months[0]); openMonthsInit = true; }
   list.innerHTML = `
-    <table class="qx-table">
-      <thead><tr><th>日付</th><th>区間</th><th class="col-type">種別</th><th class="num">金額</th><th>状態</th></tr></thead>
+    <table class="qx-table qx-months">
+      <thead><tr><th>対象月</th><th class="num">件数</th><th class="num">合計金額</th><th>状態</th></tr></thead>
       <tbody>
-        ${rows.slice(0, 10).map((r) => {
-          const [label, color] = STATUS[String(r.status)] || [String(r.status || ''), '#374151'];
-          const route = r.type === 'goods' ? esc(r.item_name || '物品購入') : `${esc(r.origin)} → ${esc(r.destination)}`;
-          const note = r.status === 'rejected' && r.manager_note ? `<div class="note">理由：${esc(r.manager_note)}</div>` : '';
-          const files = Number(r.file_count || 0) > 0 ? ` <span style="font-size:12px;color:#6b7280;">（添付${Number(r.file_count)}件）</span>` : '';
-          return `<tr>
-            <td style="white-space:nowrap;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}</td>
-            <td>${route}${files}${note}</td>
-            <td class="col-type">${esc(TYPE_NAME[r.type] || '')}</td>
-            <td class="num">${yen(r.amount)}</td>
-            <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
-          </tr>`;
+        ${months.map((ym) => {
+          const items = byMonth.get(ym);
+          const total = items.reduce((a, r) => a + (Number(r.amount) || 0), 0);
+          const [label, color] = monthStatus(items);
+          const open = openMonths.has(ym);
+          return `<tr class="qx-month-row" data-month="${ym}" tabindex="0" role="button" aria-expanded="${open}">
+              <td style="white-space:nowrap;"><span class="qx-caret">${open ? '▾' : '▸'}</span> ${ym.slice(0, 4)}年${ym.slice(5, 7)}月</td>
+              <td class="num">${items.length}件</td>
+              <td class="num">${yen(total)}</td>
+              <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
+            </tr>
+            ${open ? `<tr class="qx-detail"><td colspan="4">
+              <table class="qx-table qx-sub-table">
+                <thead><tr><th>日付</th><th>区間</th><th class="col-type">種別</th><th class="num">金額</th><th>状態</th></tr></thead>
+                <tbody>${itemRows(items)}</tbody>
+              </table>
+            </td></tr>` : ''}`;
         }).join('')}
       </tbody>
     </table>`;
+  list.querySelectorAll('.qx-month-row').forEach((tr) => {
+    const toggle = () => {
+      const ym = tr.dataset.month;
+      if (openMonths.has(ym)) openMonths.delete(ym); else openMonths.add(ym);
+      refreshList();
+    };
+    tr.addEventListener('click', toggle);
+    tr.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+  });
 }
 
 // ---------------- 入力フォーム ----------------
