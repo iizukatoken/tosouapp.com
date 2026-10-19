@@ -1,10 +1,10 @@
 // 交通費申請 (社員画面) — シンプルでクラシックな画面。expenses.page.js の処理は変えずに上に重ねる。
 //
 //   一覧: 「新規申請」ボタン + 件数 1 行 + 最近の申請の表 (従来のカード・サイドメニュー・年選択は隠す)
-//   入力: 1 枚のフォーム (前回と同じ・日付・種別・区間・片道/往復・金額・用途、任意項目は「詳細」)
+//   入力: 1 枚のフォーム (日付・種別・区間・片道/往復・金額・用途・領収書、任意項目は「詳細」)
 //   送信: 「申請する」1 回で送信 (= 明細を作成 → その月を申請。従来の 内容確認→申請 と同じ API)
 //
-// 添付ファイル・物品購入・別の月の申請・月別の詳細は「従来の画面」リンクから今までどおり使える。
+// 物品購入・別の月の申請・月別の詳細は「従来の画面」リンクから今までどおり使える。
 import { fetchJSONAuth } from '/static/js/api/http.api.js?v=20260416-1';
 
 const $ = (id) => document.getElementById(id);
@@ -74,6 +74,11 @@ function ensureStyle() {
     .qx-more { grid-column: 1 / -1; border-top: 1px dashed #d1d5db; padding-top: 8px; }
     .qx-more summary { cursor: pointer; font-size: 13px; color: #374151; }
     .qx-more .qx-form { padding: 10px 0 0; }
+    .qx-hint { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .qx-files { list-style: none; margin: 6px 0 0; padding: 0; font-size: 13px; }
+    .qx-files li { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px dotted #e5e7eb; }
+    .qx-files li span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .qx-files button { border: 1px solid #9ca3af; background: #fff; border-radius: 3px; font-size: 12px; padding: 1px 8px; cursor: pointer; }
     .qx-foot { display: flex; align-items: center; gap: 8px; border-top: 1px solid #d1d5db; padding: 10px 14px; background: #fafafa; }
     .qx-err { flex: 1; color: #b91c1c; font-size: 13px; }
     @media (max-width: 600px) {
@@ -103,19 +108,9 @@ async function loadMine(force = false) {
 }
 const byNewest = (a, b) => String(b.date || '').localeCompare(String(a.date || '')) || Number(b.id) - Number(a.id);
 
-function recentRoutes(rows) {
-  const seen = new Set();
-  const out = [];
-  for (const r of [...rows].filter((x) => x.type !== 'goods' && (x.origin || x.destination)).sort(byNewest)) {
-    const key = [r.type, r.origin, r.destination, r.trip_type, Number(r.amount)].join('|');
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(r);
-    if (out.length >= 5) break;
-  }
-  return out;
-}
-const tripName = (t) => (t === 'round_trip' ? '往復' : t === 'multi' ? '複数' : '片道');
+// 添付ファイルの制限 (サーバー側 uploadR2.js と同じ): 画像または PDF、1 件 10MB まで、1 申請 8 件まで
+const MAX_FILES = 8;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 
 // ---------------- 一覧 ----------------
 function renderHome() {
@@ -146,7 +141,7 @@ function renderHome() {
     <p class="qx-sub" id="qxCounts"></p>
     <div id="qxList"><p class="qx-sub">読み込み中…</p></div>
     <div class="qx-links">
-      添付ファイル・物品購入・他の月の申請・月別の詳細は <a href="#" id="qxShowOld">従来の画面</a> から行えます。
+      物品購入・他の月の申請・月別の詳細は <a href="#" id="qxShowOld">従来の画面</a> から行えます。
     </div>`;
   $('qxNewBtn').addEventListener('click', () => openForm());
   $('qxShowOld').addEventListener('click', (e) => { e.preventDefault(); toggleOldHome(true); });
@@ -193,9 +188,10 @@ async function refreshList(force = false) {
           const [label, color] = STATUS[String(r.status)] || [String(r.status || ''), '#374151'];
           const route = r.type === 'goods' ? esc(r.item_name || '物品購入') : `${esc(r.origin)} → ${esc(r.destination)}`;
           const note = r.status === 'rejected' && r.manager_note ? `<div class="note">理由：${esc(r.manager_note)}</div>` : '';
+          const files = Number(r.file_count || 0) > 0 ? ` <span style="font-size:12px;color:#6b7280;">（添付${Number(r.file_count)}件）</span>` : '';
           return `<tr>
             <td style="white-space:nowrap;">${esc(String(r.date || '').slice(5, 10).replace('-', '/'))}</td>
-            <td>${route}${note}</td>
+            <td>${route}${files}${note}</td>
             <td class="col-type">${esc(TYPE_NAME[r.type] || '')}</td>
             <td class="num">${yen(r.amount)}</td>
             <td style="white-space:nowrap;color:${color};">${esc(label)}</td>
@@ -216,8 +212,6 @@ function ensureForm() {
     <div class="qx-dialog" role="dialog" aria-labelledby="qxTitle">
       <div class="qx-dialog-head"><span id="qxTitle">交通費の申請</span><button type="button" class="qx-close" id="qxClose" aria-label="閉じる">×</button></div>
       <div class="qx-form">
-        <label class="l" for="qxRecent" id="qxRecentLabel">前回と同じ</label>
-        <select class="qx-in" id="qxRecent"><option value="">選択すると下の項目に入力されます</option></select>
         <label class="l req" for="qxDate">日付</label>
         <input class="qx-in" id="qxDate" type="date" style="max-width:200px;">
         <label class="l req" for="qxType">種別</label>
@@ -237,6 +231,12 @@ function ensureForm() {
         <div class="qx-amount"><input class="qx-in" id="qxAmount" type="text" inputmode="numeric" placeholder="0" style="text-align:right;"><span>円</span></div>
         <label class="l req" for="qxPurpose">用途</label>
         <input class="qx-in" id="qxPurpose" type="text" placeholder="例）〇〇現場、A社訪問">
+        <label class="l" for="qxFiles">領収書・証憑</label>
+        <div>
+          <input id="qxFiles" type="file" accept="image/*,application/pdf" multiple style="font-size:13px;max-width:100%;">
+          <div class="qx-hint">画像またはPDF（1件10MBまで・8件まで）。スマホではカメラで撮影できます。</div>
+          <ul id="qxFileList" class="qx-files"></ul>
+        </div>
         <details class="qx-more" id="qxMore">
           <summary>詳細（任意）</summary>
           <div class="qx-form">
@@ -261,9 +261,15 @@ function ensureForm() {
     const digits = String($('qxAmount').value).replace(/[^\d]/g, '');
     $('qxAmount').value = digits ? Number(digits).toLocaleString('ja-JP') : '';
   });
-  $('qxRecent').addEventListener('change', () => {
-    const r = recentList[Number($('qxRecent').value)];
-    if ($('qxRecent').value !== '' && r) fillFrom(r);
+  $('qxFiles').addEventListener('change', () => {
+    addFiles(Array.from($('qxFiles').files || []));
+    $('qxFiles').value = ''; // 同じファイルを選び直せるように
+  });
+  $('qxFileList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-remove]');
+    if (!b) return;
+    pickedFiles.splice(Number(b.dataset.remove), 1);
+    renderFiles();
   });
   $('qxSubmit').addEventListener('click', () => submit(true));
   $('qxDraft').addEventListener('click', () => submit(false));
@@ -272,18 +278,41 @@ function ensureForm() {
 const tripValue = () => document.querySelector('input[name="qxTrip"]:checked')?.value || 'one_way';
 function setTrip(v) { const el = document.querySelector(`input[name="qxTrip"][value="${v === 'round_trip' ? 'round_trip' : 'one_way'}"]`); if (el) el.checked = true; }
 
-let recentList = [];
-function fillFrom(r) {
-  $('qxType').value = TYPES.some(([v]) => v === r.type) ? r.type : 'train';
-  setTrip(r.trip_type);
-  $('qxOrigin').value = r.origin || '';
-  $('qxDest').value = r.destination || '';
-  $('qxAmount').value = Math.round(Number(r.amount) || 0).toLocaleString('ja-JP');
-  $('qxPurpose').value = r.purpose || '';
-  $('qxVia').value = r.via || '';
-  $('qxSite').value = r.site_name || '';
-  $('qxMore').open = !!(r.via || r.site_name);
-  $('qxErr').textContent = '';
+// ---------------- 添付ファイル ----------------
+let pickedFiles = [];
+function addFiles(files) {
+  const err = $('qxErr');
+  err.textContent = '';
+  for (const f of files) {
+    const okType = String(f.type || '').startsWith('image/') || f.type === 'application/pdf';
+    if (!okType) { err.textContent = `「${f.name}」は添付できません（画像またはPDFのみ）。`; continue; }
+    if (f.size > MAX_FILE_BYTES) { err.textContent = `「${f.name}」は10MBを超えています。`; continue; }
+    if (pickedFiles.length >= MAX_FILES) { err.textContent = `添付は${MAX_FILES}件までです。`; break; }
+    pickedFiles.push(f);
+  }
+  renderFiles();
+}
+function renderFiles() {
+  const kb = (n) => (n >= 1024 * 1024 ? `${(n / 1024 / 1024).toFixed(1)}MB` : `${Math.max(1, Math.round(n / 1024))}KB`);
+  $('qxFileList').innerHTML = pickedFiles.map((f, i) =>
+    `<li><span>${esc(f.name)}（${kb(f.size)}）</span><button type="button" data-remove="${i}">削除</button></li>`).join('');
+}
+async function uploadFiles(expenseId) {
+  if (!pickedFiles.length) return;
+  const fd = new FormData();
+  for (const f of pickedFiles) fd.append('files', f, f.name);
+  const token = (() => { try { return sessionStorage.getItem('accessToken') || localStorage.getItem('accessToken') || ''; } catch (e) { return ''; } })();
+  const res = await fetch(`/api/expenses/${encodeURIComponent(expenseId)}/files`, {
+    method: 'POST',
+    body: fd,
+    credentials: 'include',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  if (!res.ok) {
+    let msg = '';
+    try { msg = (await res.json())?.message || ''; } catch (e) { /* ignore */ }
+    throw new Error(msg || `HTTP ${res.status}`);
+  }
 }
 
 async function openForm() {
@@ -292,16 +321,11 @@ async function openForm() {
   $('qxType').value = 'train';
   setTrip('one_way');
   for (const id of ['qxOrigin', 'qxDest', 'qxAmount', 'qxPurpose', 'qxVia', 'qxSite', 'qxMemo']) $(id).value = '';
+  pickedFiles = [];
+  renderFiles();
   $('qxMore').open = false;
   $('qxErr').textContent = '';
   $('qxModal').style.display = 'block';
-  recentList = recentRoutes(await loadMine());
-  const sel = $('qxRecent');
-  sel.innerHTML = '<option value="">選択すると下の項目に入力されます</option>'
-    + recentList.map((r, i) => `<option value="${i}">${esc(r.origin)} → ${esc(r.destination)}（${tripName(r.trip_type)}・${yen(r.amount)}）</option>`).join('');
-  const hasRecent = recentList.length > 0;
-  sel.style.display = hasRecent ? '' : 'none';
-  $('qxRecentLabel').style.display = hasRecent ? '' : 'none';
 }
 
 function closeForm() { const m = $('qxModal'); if (m) m.style.display = 'none'; }
@@ -332,7 +356,7 @@ async function submit(apply) {
   const original = label.textContent;
   label.textContent = apply ? '申請中…' : '保存中…';
   try {
-    await fetchJSONAuth('/api/expenses', {
+    const created = await fetchJSONAuth('/api/expenses', {
       method: 'POST',
       body: JSON.stringify({
         date, type: $('qxType').value, origin, destination, tripType: tripValue(), tripCount: 1, purpose, amount,
@@ -340,6 +364,17 @@ async function submit(apply) {
         teiki: false, clientToken: `qx_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       }),
     });
+    // 領収書: 送れなかったら申請はせず下書きのまま (領収書なしで申請されるのを防ぐ)
+    if (pickedFiles.length) {
+      try {
+        await uploadFiles(created?.id);
+      } catch (upErr) {
+        closeForm();
+        await refreshList(true);
+        alert(`領収書の送信に失敗したため、申請はせず下書きとして保存しました。\n（${upErr?.message || 'エラー'}）\n\n「従来の画面」から領収書を添付して申請してください。`);
+        return;
+      }
+    }
     if (apply) await fetchJSONAuth('/api/expenses/months/apply', { method: 'POST', body: JSON.stringify({ month }) });
     closeForm();
     await refreshList(true);
