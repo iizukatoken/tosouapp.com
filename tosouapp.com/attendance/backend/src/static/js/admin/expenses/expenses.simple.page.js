@@ -1,8 +1,8 @@
 // 交通費管理 (管理者・マネージャー) — シンプルでクラシックな 1 画面。
 //
-//   対象月を選ぶ → 段階ごとの人数 (総務確認待ち・承認待ち・支給待ち・差戻し中・支給済み・未申請、押すと絞り込み)
+//   対象月を選ぶ → 段階ごとの人数 (承認待ち・支給待ち・差戻し中・支給済み・未申請、押すと絞り込み)
 //   → 全社員の表 (未申請も含む)。各行に「次の操作」ボタン:
-//     総務確認 (manager/admin) → 承認 (admin) → 支給済み (admin)
+//     承認 (manager/admin、1 回で済む・確認ダイアログなし) → 支給済み (admin)
 //   社員を押すと明細: 領収書の表示、差戻し (理由つき)、精算書(PDF)
 //   ほか: Excel出力・月次締め
 //
@@ -18,7 +18,7 @@ const shiftMonth = (ym, d) => { const [y, m] = ym.split('-').map(Number); const 
 const TYPE_NAME = { train: '電車', bus: 'バス', taxi: 'タクシー', car: '自家用車', private_car: '自家用車', parking: '駐車場代', highway: '高速料金', goods: '物品購入' };
 const STATUS = {
   draft: ['下書き', '#6b7280'], pending: ['下書き', '#6b7280'], applied: ['申請中', '#b45309'],
-  soumu_checked: ['総務確認済み', '#1d4ed8'], approved: ['承認済み', '#15803d'], paid: ['支給済み', '#374151'], rejected: ['差戻し', '#b91c1c'],
+  soumu_checked: ['承認待ち', '#b45309'], approved: ['承認済み', '#15803d'], paid: ['支給済み', '#374151'], rejected: ['差戻し', '#b91c1c'],
 };
 const REJECTABLE = new Set(['applied', 'soumu_checked', 'approved']);
 
@@ -53,7 +53,7 @@ function css() {
     .qa-btn:disabled { opacity: .6; cursor: default; }
     .qa-flow { font-size: 13px; color: #4b5563; margin: 0 0 12px; }
     .qa-flow b { font-weight: 600; color: #1f2937; }
-    .qa-stages { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid #d1d5db; margin-bottom: 14px; }
+    .qa-stages { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid #d1d5db; margin-bottom: 14px; }
     .qa-stage { background: #fff; border: none; border-left: 1px solid #e5e7eb; border-bottom: 3px solid transparent; padding: 10px 12px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; font-family: inherit; color: #1f2937; }
     .qa-stage:first-child { border-left: none; }
     .qa-stage:hover { background: #f9fafb; }
@@ -146,8 +146,7 @@ function toast(msg) {
 
 // 社員ごとの「今どの段階か」。明細のうち一番手前の段階で決める (未処理を見落とさないため)
 const STAGES = [
-  { key: 'applied', label: '総務確認待ち', color: '#b45309' },
-  { key: 'soumu_checked', label: '承認待ち', color: '#1d4ed8' },
+  { key: 'applied', label: '承認待ち', color: '#b45309' },
   { key: 'approved', label: '支給待ち', color: '#15803d' },
   { key: 'rejected', label: '差戻し中', color: '#b91c1c' },
   { key: 'paid', label: '支給済み', color: '#374151' },
@@ -156,11 +155,12 @@ const STAGES = [
 const STAGE = Object.fromEntries(STAGES.map((x) => [x.key, x]));
 function stageOf(items) {
   const st = new Set(items.map((r) => String(r.status)));
-  for (const k of ['applied', 'soumu_checked', 'approved', 'rejected', 'paid']) if (st.has(k)) return k;
+  if (st.has('applied') || st.has('soumu_checked')) return 'applied'; // 旧フローの総務確認済みも承認待ち
+  for (const k of ['approved', 'rejected', 'paid']) if (st.has(k)) return k;
   return 'none';
 }
 // この利用者が今押せる操作がある段階か
-const canAct = (k) => k === 'applied' || (isAdmin() && (k === 'soumu_checked' || k === 'approved'));
+const canAct = (k) => k === 'applied' || (isAdmin() && k === 'approved');
 
 async function load() {
   const list = root.querySelector('#qaList');
@@ -232,12 +232,11 @@ function render() {
 }
 
 function nextAction(u) {
-  const ids = (st) => u.items.filter((r) => r.status === st).map((r) => r.id);
-  const btn = (status, st, text) => `<button type="button" class="qa-btn primary small" data-bulk="${status}" data-ids="${ids(st).join(',')}">${text}（${ids(st).length}件）</button>`;
+  const ids = (...st) => u.items.filter((r) => st.includes(r.status)).map((r) => r.id);
+  const btn = (status, list, text) => `<button type="button" class="qa-btn primary small" data-bulk="${status}" data-ids="${list.join(',')}">${text}（${list.length}件）</button>`;
   switch (u.stage) {
-    case 'applied': return btn('soumu_checked', 'applied', '総務確認する');
-    case 'soumu_checked': return isAdmin() ? btn('approved', 'soumu_checked', '承認する') : '<span class="qa-wait">管理者の承認待ち</span>';
-    case 'approved': return isAdmin() ? btn('paid', 'approved', '支給済みにする') : '<span class="qa-wait">支給待ち</span>';
+    case 'applied': return btn('approved', ids('applied', 'soumu_checked'), '承認する');
+    case 'approved': return isAdmin() ? btn('paid', ids('approved'), '支給済みにする') : '<span class="qa-wait">支給待ち</span>';
     case 'rejected': return '<span class="qa-wait">社員の再申請待ち</span>';
     case 'paid': return '<span class="qa-wait">完了</span>';
     default: return '<span class="qa-wait">—</span>';
@@ -249,10 +248,8 @@ function userRows(u) {
   const has = u.items.length > 0;
   const open = has && openUsers.has(String(u.userId));
   const ids = (st) => u.items.filter((r) => r.status === st).map((r) => r.id);
-  // 明細の中: 段階が混在しているときのための一括ボタン
+  // 明細の中: 段階が混在しているとき (承認待ちと支給待ちが両方ある等) のための一括ボタン
   const acts = [];
-  if (u.stage !== 'applied' && ids('applied').length) acts.push(`<button type="button" class="qa-btn primary small" data-bulk="soumu_checked" data-ids="${ids('applied').join(',')}">総務確認（${ids('applied').length}件）</button>`);
-  if (isAdmin() && u.stage !== 'soumu_checked' && ids('soumu_checked').length) acts.push(`<button type="button" class="qa-btn primary small" data-bulk="approved" data-ids="${ids('soumu_checked').join(',')}">承認（${ids('soumu_checked').length}件）</button>`);
   if (isAdmin() && u.stage !== 'approved' && ids('approved').length) acts.push(`<button type="button" class="qa-btn primary small" data-bulk="paid" data-ids="${ids('approved').join(',')}">支給済みにする（${ids('approved').length}件）</button>`);
   return `
     <tr class="qa-user${has ? '' : ' none'}" data-user="${has ? u.userId : ''}">
@@ -326,9 +323,8 @@ async function showFiles(id) {
   }
 }
 
-const ACTION_NAME = { soumu_checked: '総務確認', approved: '承認', paid: '支給済み' };
+const ACTION_NAME = { approved: '承認', paid: '支給済み' };
 async function bulkStatus(status, ids, btn) {
-  if (!window.confirm(`${ids.length}件を「${ACTION_NAME[status]}」にします。よろしいですか？`)) return;
   btn.disabled = true;
   try {
     const r = await fetchJSONAuth('/api/expenses/admin/bulk-status', { method: 'POST', body: JSON.stringify({ ids: ids.map(Number), status }) });
@@ -381,7 +377,7 @@ function frame() {
         <a class="qa-btn" id="qaExcel" href="#">Excel出力</a>
         <button type="button" class="qa-btn" id="qaClose">月次締め</button>
       </div>
-      <p class="qa-flow">流れ：<b>① 社員が申請</b> → <b>② 総務確認</b> → <b>③ 承認</b> → <b>④ 支給</b>${isAdmin() ? '' : '　（あなたの権限では ② 総務確認 まで操作できます）'}</p>
+      <p class="qa-flow">流れ：<b>① 社員が申請</b> → <b>② 承認</b> → <b>③ 支給</b>${isAdmin() ? '' : '　（支給済みにする操作は管理者が行います）'}</p>
       <div class="qa-stages" id="qaStages"></div>
       <div id="qaList"></div>
     </div>`;
