@@ -80,8 +80,9 @@ exports.exportMonthXlsx = async (req, res) => {
       ''
     ).trim();
 
-    // 承認者 (Excel): tháng đã 承認 → người duyệt; chưa → manager phụ trách (users.manager_id);
-    // không có → người đang xuất nếu là manager/admin.
+    // 承認者 (Excel): tháng đã 承認 → người duyệt; chưa → マネージャー của nhân viên (社員管理, users.manager_id);
+    // chưa gán → manager rồi admin cùng phòng ban (đang làm việc); không có → người đang xuất nếu là manager/admin.
+    // Nhân viên tự xuất file cũng thấy tên người quản lý.
     const displayName = (u) => String(u?.full_name || u?.fullName || u?.display_name || u?.username || '').trim();
     const approverDisplayName = await (async () => {
       if (monthApproverName) return monthApproverName;
@@ -89,6 +90,21 @@ exports.exportMonthXlsx = async (req, res) => {
       if (mid) {
         const mgr = await userRepo.getUserById(mid, req.tenantId || null).catch(() => null);
         if (displayName(mgr)) return displayName(mgr);
+      }
+      const deptId = user?.departmentId ?? user?.department_id ?? null;
+      const tid = user?.tenant_id ?? req.tenantId ?? null;
+      if (deptId != null && tid != null) {
+        for (const r of ['manager', 'admin']) {
+          const [found] = await db.query(
+            `SELECT full_name, username FROM users
+              WHERE tenant_id = ? AND departmentId = ? AND role = ? AND id <> ?
+                AND (employment_status IS NULL OR employment_status = 'active')
+              ORDER BY id LIMIT 1`,
+            [tid, deptId, r, userId]
+          ).catch(() => [[]]);
+          const nm = displayName(Array.isArray(found) ? found[0] : null);
+          if (nm) return nm;
+        }
       }
       if (role === 'manager' || role === 'admin') {
         const me = await userRepo.getUserById(req.user?.id, req.tenantId || null).catch(() => null);
