@@ -80,6 +80,23 @@ exports.exportMonthXlsx = async (req, res) => {
       ''
     ).trim();
 
+    // 承認者 (Excel): tháng đã 承認 → người duyệt; chưa → manager phụ trách (users.manager_id);
+    // không có → người đang xuất nếu là manager/admin.
+    const displayName = (u) => String(u?.full_name || u?.fullName || u?.display_name || u?.username || '').trim();
+    const approverDisplayName = await (async () => {
+      if (monthApproverName) return monthApproverName;
+      const mid = user?.manager_id || user?.managerId;
+      if (mid) {
+        const mgr = await userRepo.getUserById(mid, req.tenantId || null).catch(() => null);
+        if (displayName(mgr)) return displayName(mgr);
+      }
+      if (role === 'manager' || role === 'admin') {
+        const me = await userRepo.getUserById(req.user?.id, req.tenantId || null).catch(() => null);
+        return displayName(me);
+      }
+      return '';
+    })();
+
     const rows = await repo.listByUserBetween(userId, from, to);
     const dailyRows = await repo.listDailyBetween(userId, from, to).catch(() => []);
     const planRows = await repo.listPlanBetween(userId, from, to).catch(() => []);
@@ -490,11 +507,24 @@ exports.exportMonthXlsx = async (req, res) => {
         goOutDetail = parts.join(', ');
       }
       
-      const approveStatus = monthStatus === 'approved' ? '承認済' : (() => {
-        const labels = String(seg?.labels || '').split(',').map(s => s.trim()).filter(Boolean);
-        if (labels.includes('submitted')) return '承認待ち';
+      // 承認ステータス: cùng quy tắc với cột ステータス trên màn hình (attendance-monthly.render.js)
+      const todayJst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      const leaveKubunSet = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
+      const isRegularOffRow = isOff && !hasTime && (dailyKubun === '休日' || dailyKubun === '代替休日');
+      const isLeaveApplied = !!dailyKubun && leaveKubunSet.has(dailyKubun) && !hasTime && !isRegularOffRow;
+      const isConfirmedRow = !!inHm && !!outHm && !!workContent;
+      const isAutoConfirmedNoWork = !hasTime && ds <= todayJst && (dailyKubun === '' || dailyKubun === '休日') && isOff;
+      const approveStatus = (() => {
+        if (monthStatus === 'approved') return '承認済み';
+        if (isConfirmedRow || isAutoConfirmedNoWork) return '確認済み';
+        if (!dailyKubun && !hasTime) return '未申請';
+        if (isLeaveApplied || hasTime) return '承認待ち';
         return '';
       })();
+      // 承認者: chỉ ghi tên ở ngày đã 確認済み/承認済み VÀ có dữ liệu (có giờ, hoặc đã chọn 区分 như 有給).
+      // Ngày chưa đi làm / chưa có dữ liệu thì để trống.
+      const rowHasData = hasTime || (!!dailyKubun && !isRegularOffRow && dailyKubun !== '休日');
+      const approverForRow = (approveStatus === '確認済み' || approveStatus === '承認済み') && rowHasData ? approverDisplayName : '';
       sheetRows.push({
         isOff,
         cells: [
@@ -522,7 +552,8 @@ exports.exportMonthXlsx = async (req, res) => {
           notesText,
           approveStatus,
           inhouseWork,
-          goOutDetail
+          goOutDetail,
+          approverForRow // [25] 承認者
         ]
       });
 
@@ -654,7 +685,7 @@ exports.exportMonthXlsx = async (req, res) => {
     };
     // ── Style registry: cellXfs được sinh theo nhu cầu nên chỉ số style luôn tồn tại (trước đây
     //    ghi tay danh sách xf và từng tham chiếu s="26" không có → Excel báo lỗi khi mở file).
-    const F = { normal: 0, bold: 1, white: 2, red: 3, title: 4, note: 5, blue: 6, section: 7, muted: 8, tick: 9, redBold: 10, smallBold: 11 };
+    const F = { normal: 0, bold: 1, white: 2, red: 3, title: 4, note: 5, blue: 6, section: 7, muted: 8, tick: 9, redBold: 10, smallBold: 11, green: 12, amber: 13 };
     const xlsxFonts = [
       '<font><sz val="10"/><color rgb="FF1F2937"/><name val="Meiryo"/></font>',
       '<font><b/><sz val="10"/><color rgb="FF1F2937"/><name val="Meiryo"/></font>',
@@ -667,7 +698,9 @@ exports.exportMonthXlsx = async (req, res) => {
       '<font><sz val="10"/><color rgb="FF94A3B8"/><name val="Meiryo"/></font>',
       '<font><b/><sz val="11"/><color rgb="FF2563EB"/><name val="Meiryo"/></font>',
       '<font><b/><sz val="10"/><color rgb="FFDC2626"/><name val="Meiryo"/></font>',
-      '<font><b/><sz val="9"/><color rgb="FF1F2937"/><name val="Meiryo"/></font>'
+      '<font><b/><sz val="9"/><color rgb="FF1F2937"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="10"/><color rgb="FF15803D"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="10"/><color rgb="FFB45309"/><name val="Meiryo"/></font>'
     ];
     const xlsxFills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'];
     const fillIdx = new Map();
@@ -754,8 +787,8 @@ exports.exportMonthXlsx = async (req, res) => {
         src[18] || '', // 遅刻/早退
         src[19] || '', // 理由
         src[21] || '', // 備考: ghi chú (notes), KHÔNG phải nội dung công việc
-        '',            // 承認ステータス (giữ trống như logic cũ)
-        monthApproverName // 承認者
+        src[22] || '', // 承認ステータス (cùng quy tắc với màn hình)
+        src[25] || ''  // 承認者: chỉ ngày đã xác nhận và có dữ liệu
       ];
       const rowNum = 7 + i;
       // Index cột (0-based): 出社/在宅/現場 tick = 2,3,4; ô text 現場(任意)/作業内容 = 5,6;
@@ -779,6 +812,7 @@ exports.exportMonthXlsx = async (req, res) => {
         else if (ci === 1 && cellValue.includes('予定')) font = F.muted; // dự kiến → chữ xám
         else if (TICK_CI.includes(ci) && cellValue === '✓') font = F.tick;
         else if (ci === 13 && cellValue) font = F.redBold; // 遅刻/早退
+        else if (ci === 16 && cellValue) font = (cellValue === '確認済み' || cellValue === '承認済み') ? F.green : F.amber;
         const wrap = WRAP_CI.includes(ci);
         return cell(ref, cellValue, st({ font, fill: rowFill, border: 1, h: wrap ? 'left' : 'center', wrap }));
       });
