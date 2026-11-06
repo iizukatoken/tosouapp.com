@@ -43,9 +43,9 @@
       <tr class="tier2">
         <th class="sticky-col-1">日付</th>
         <th>勤務区分</th>
-        <th style="width: 56px !important; min-width: 56px !important; max-width: 56px !important; text-align: center; box-sizing: border-box;">出社</th>
-        <th style="width: 56px !important; min-width: 56px !important; max-width: 56px !important; text-align: center; box-sizing: border-box;">在宅</th>
-        <th style="width: 56px !important; min-width: 56px !important; max-width: 56px !important; text-align: center; box-sizing: border-box;">現場</th>
+        <th style="width: 40px !important; min-width: 40px !important; max-width: 40px !important; text-align: center; box-sizing: border-box;">出社</th>
+        <th style="width: 40px !important; min-width: 40px !important; max-width: 40px !important; text-align: center; box-sizing: border-box;">在宅</th>
+        <th style="width: 40px !important; min-width: 40px !important; max-width: 40px !important; text-align: center; box-sizing: border-box;">現場</th>
         <th>現場（任意）</th>
         <th>作業内容</th>
         <th style="width: 40px !important; min-width: 40px !important; max-width: 40px !important; text-align: center; box-sizing: border-box; padding: 0 !important; letter-spacing: -1px; font-size: 10px;">開始時間</th>
@@ -364,13 +364,13 @@
         cls = 'warn';
       } else if (isRegularOffRow) {
         text = '—';
-        cls = 'warn';
+        cls = 'none';
       } else if (hasActual) {
         text = isAdminView ? '承認待ち' : '未確認';
         cls = 'warn';
       } else {
         text = '—';
-        cls = 'warn';
+        cls = 'none';
       }
       const st = {
         text,
@@ -511,9 +511,9 @@
           <input id="furikaeDate_${dateStr}_${rowId}" name="furikaeDate_${dateStr}_${rowId}" class="se-input se-furikae-date" data-field="furikaeHolidayDate" type="date" value="${esc(daily?.furikae_holiday_date ? String(daily.furikae_holiday_date).slice(0, 10) : '')}" title="振替休日の日付" placeholder="振替休日" style="width:110px;font-size:11px;margin-top:2px;${kubunInit === '振替出勤' ? '' : 'display:none;'}" ${state.editableMonth ? '' : 'disabled'}>
         </div>
       </td>
-      <td style="width:56px;min-width:56px;max-width:56px;text-align:center;box-sizing:border-box;"><input id="ckOnsite_${dateStr}_${rowId}" name="ckOnsite_${dateStr}_${rowId}" class="se-check" data-field="ckOnsite" type="checkbox" ${wtVal === 'onsite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
-      <td style="width:56px;min-width:56px;max-width:56px;text-align:center;box-sizing:border-box;"><input id="ckRemote_${dateStr}_${rowId}" name="ckRemote_${dateStr}_${rowId}" class="se-check" data-field="ckRemote" type="checkbox" ${wtVal === 'remote' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
-      <td style="width:56px;min-width:56px;max-width:56px;text-align:center;box-sizing:border-box;"><input id="ckSatellite_${dateStr}_${rowId}" name="ckSatellite_${dateStr}_${rowId}" class="se-check" data-field="ckSatellite" type="checkbox" ${wtVal === 'satellite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
+      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckOnsite_${dateStr}_${rowId}" name="ckOnsite_${dateStr}_${rowId}" class="se-check" data-field="ckOnsite" type="checkbox" ${wtVal === 'onsite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
+      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckRemote_${dateStr}_${rowId}" name="ckRemote_${dateStr}_${rowId}" class="se-check" data-field="ckRemote" type="checkbox" ${wtVal === 'remote' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
+      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckSatellite_${dateStr}_${rowId}" name="ckSatellite_${dateStr}_${rowId}" class="se-check" data-field="ckSatellite" type="checkbox" ${wtVal === 'satellite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
       <td><input id="location_${dateStr}_${rowId}" name="location_${dateStr}_${rowId}" class="se-input" data-field="location" type="text" value="${esc(finalLoc)}" style="${hideCheckboxStyle}${wtVal !== 'satellite' ? 'visibility:hidden;' : ''}" ${!canEditWorkRow ? 'disabled' : ''}></td>
       <td><textarea id="memo_${dateStr}_${rowId}" name="memo_${dateStr}_${rowId}" class="se-input" data-field="memo" rows="1" style="resize:vertical; min-height:28px; ${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}>${esc(finalMemo)}</textarea></td>
       <td class="se-time-cell">
@@ -589,7 +589,7 @@
       })()}</td>
       <td>
         <div style="${!showDateDow ? 'visibility:hidden;' : ''}">
-          <select id="reason_${dateStr}_${rowId}" name="reason_${dateStr}_${rowId}" class="se-select" data-field="reason" ${state.editableMonth ? '' : 'disabled'} style="width:140px;${(effectiveKubun === '欠勤' || effectiveKubun === '遅刻' || effectiveKubun === '早退' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || Number(daily?.lateMinutes || daily?.late_minutes || 0) > 0 || Number(daily?.earlyMinutes || daily?.early_minutes || 0) > 0 || (isWorkDay && finalIn && shiftStartOk && parseHm(finalIn) != null && parseHm(shiftStart) != null && parseHm(finalIn) > parseHm(shiftStart))) ? '' : 'visibility:hidden;'}">
+          <select id="reason_${dateStr}_${rowId}" name="reason_${dateStr}_${rowId}" class="se-select" data-field="reason" ${state.editableMonth ? '' : 'disabled'} style="width:100%;box-sizing:border-box;${(effectiveKubun === '欠勤' || effectiveKubun === '遅刻' || effectiveKubun === '早退' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || Number(daily?.lateMinutes || daily?.late_minutes || 0) > 0 || Number(daily?.earlyMinutes || daily?.early_minutes || 0) > 0 || (isWorkDay && finalIn && shiftStartOk && parseHm(finalIn) != null && parseHm(shiftStart) != null && parseHm(finalIn) > parseHm(shiftStart))) ? '' : 'visibility:hidden;'}">
             <option value=""></option>
             <option value="私用" ${dReason === '私用' || dReason === 'private' || dReason === '私用のため' ? 'selected' : ''}>私用</option>
             <option value="私用（詳細）" ${dReason === '私用（詳細）' ? 'selected' : ''}>私用（詳細）</option>
@@ -685,8 +685,8 @@
         }
         
         const defaultWidths = [
-          75, 110, 45, 45, 45, 120, 150, 80, 80, 75, 75, 70, 70, 80, 100, 150, 90, 80, 50, 50
-        ]; // 20 columns
+          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 70, 80, 100, 150, 90, 80, 50, 50
+        ]; // 20 columns (出社/在宅/現場・休憩/深夜休憩/勤務時間 は狭く。表の min-width も同じ比率で縮めている — CSS #monthTable.se-table table)
         
         const cg = document.createElement('colgroup');
         for (const w of defaultWidths) {
@@ -912,10 +912,11 @@
         } else {
           stText = '未申請';
         }
+        if (stText === '—') stCls = 'none';
         const stSpan = statusWrap.querySelector('span.se-status');
         if (stSpan) {
           if (stSpan.textContent !== stText) stSpan.textContent = stText;
-          stSpan.classList.remove('ok','warn','danger');
+          stSpan.classList.remove('ok','warn','danger','none');
           stSpan.classList.add(stCls);
         }
       }

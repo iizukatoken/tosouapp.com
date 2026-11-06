@@ -1599,7 +1599,8 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
   white-space: nowrap !important;
 }
 #monthTable.se-table table {
-  min-width: 2300px;
+  /* 2300px から 出社/在宅/現場・休憩/深夜休憩/勤務時間 を狭めた分を引いた幅 (他の列の表示幅は従来どおり) */
+  min-width: 2126px;
   width: max-content;
   table-layout: auto;
   border-collapse: collapse;
@@ -1673,23 +1674,23 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
 }
 #monthTable thead th:nth-child(3),
 #monthTable tbody td:nth-child(3) {
-  min-width: 56px !important;
-  width: 56px !important;
-  max-width: 56px !important;
+  min-width: 40px !important;
+  width: 40px !important;
+  max-width: 40px !important;
   box-sizing: border-box !important;
 }
 #monthTable thead th:nth-child(4),
 #monthTable tbody td:nth-child(4) {
-  min-width: 56px !important;
-  width: 56px !important;
-  max-width: 56px !important;
+  min-width: 40px !important;
+  width: 40px !important;
+  max-width: 40px !important;
   box-sizing: border-box !important;
 }
 #monthTable thead th:nth-child(5),
 #monthTable tbody td:nth-child(5) {
-  min-width: 56px !important;
-  width: 56px !important;
-  max-width: 56px !important;
+  min-width: 40px !important;
+  width: 40px !important;
+  max-width: 40px !important;
   box-sizing: border-box !important;
 }
 #monthTable thead th:nth-child(8),
@@ -2001,33 +2002,13 @@ td:not(.is-auto) {
 .se-month-table-wrap.is-locked-ready .se-mini-btn {
   display: none !important;
 }
-.se-month-table-wrap.is-locked .se-status.ok,
-.se-month-table-wrap.is-locked-ready .se-status.ok {
-  background: #10b981 !important;
-  color: #fff !important;
-  font-weight: 900;
-}
-.se-status.warn {
-  background: #f59e0b !important;
-  color: #fff !important;
-  font-weight: 900;
-}
 tr[data-dirty="1"] {
   background-color: #fffbeb;
-}
-tr[data-dirty="1"] .se-status {
-  background-color: #fbbf24;
-  color: #fff;
-  border-color: #fbbf24;
 }
 tr[data-dirty="1"] .se-status:after {
   content: " (\672a\4fdd\5b58)";
   font-size: 10px;
-}
-tr[data-dirty="1"] .se-status.ok {
-  background: #10b981 !important;
-  border-color: #10b981 !important;
-  color: #fff !important;
+  font-weight: 600;
 }
 tr[data-dirty="1"] .se-status.ok:after {
   content: "" !important;
@@ -2187,17 +2168,36 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   font-size: 13px;
   line-height: 1;
 }
+/* ステータス: 角丸小さめのラベル (淡色で統一)。月次表ではセル幅いっぱいに広げる */
+#monthTable .se-status-wrap {
+  display: flex;
+  width: 100%;
+}
+#monthTable .se-status-wrap .se-status {
+  flex: 1 1 auto;
+  justify-content: center;
+  box-sizing: border-box;
+}
 .se-status {
   display: inline-flex;
   align-items: center;
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-weight: 900;
-  font-size: 12px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #0f172a;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.02em;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
   white-space: nowrap;
+}
+.se-status.none {
+  border-color: transparent;
+  background: transparent;
+  color: #94a3b8;
+  font-weight: 400;
+  padding: 0;
 }
 .se-status-wrap {
   display: inline-flex;
@@ -2221,9 +2221,9 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   color: #334155;
 }
 .se-status.warn {
-  background: #fff7ed;
-  border-color: #fdba74;
-  color: #9a3412;
+  background: #fffbeb;
+  border-color: #fde68a;
+  color: #b45309;
 }
 .se-status.plan {
   background: #eff6ff;
@@ -2231,9 +2231,9 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   color: #1d4ed8;
 }
 .se-status.ok {
-  background: #ecfdf5;
-  border-color: #86efac;
-  color: #166534;
+  background: #f0fdf4;
+  border-color: #bbf7d0;
+  color: #15803d;
 }
 .se-status.danger {
   background: #fee2e2;
@@ -3468,9 +3468,9 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 #monthTableReal td:nth-child(4),
 #monthTableReal th:nth-child(5),
 #monthTableReal td:nth-child(5) {
-  width: 56px !important;
-  min-width: 56px !important;
-  max-width: 56px !important;
+  width: 40px !important;
+  min-width: 40px !important;
+  max-width: 40px !important;
   text-align: center;
   box-sizing: border-box;
 }
