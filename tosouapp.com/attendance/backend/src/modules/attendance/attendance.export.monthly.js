@@ -98,6 +98,9 @@ exports.exportMonthXlsx = async (req, res) => {
         ).catch(() => [[]]);
         const nmM = displayName(Array.isArray(mrows) ? mrows[0] : null);
         if (nmM) return nmM;
+        // tenant_users がない環境: 同じ会社の users だけで照合
+        const mgr = await userRepo.getUserById(mid, tidM).catch(() => null);
+        if (displayName(mgr)) return displayName(mgr);
       }
       const deptId = user?.departmentId ?? user?.department_id ?? null;
       const tid = user?.tenant_id ?? req.tenantId ?? null;

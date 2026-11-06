@@ -120,21 +120,28 @@ router.get('/approver-candidates', authorize('admin','manager'), async (req, res
     }
     if (!tid) return res.status(200).json({ rows: [] });
     const ROLES = ['manager', 'admin', 'owner'];
-    const [rows] = await db.query(
-      `SELECT u.id, u.username, u.full_name, u.email,
-              LOWER(COALESCE(tu.role_in_tenant, u.role)) AS role
-         FROM users u
-         LEFT JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = ?
-        WHERE (u.tenant_id = ? OR tu.tenant_id = ?)
-          AND LOWER(COALESCE(tu.role_in_tenant, u.role)) IN (?, ?, ?)
-          AND (u.employment_status IS NULL OR LOWER(u.employment_status) = 'active')
-        ORDER BY FIELD(LOWER(COALESCE(tu.role_in_tenant, u.role)), 'manager', 'admin', 'owner'), u.id`,
-      [tid, tid, tid, ...ROLES]
-    );
+    // users はこの会社の全員を取得し、役割・在職の判定は JS 側で行う (環境ごとの列差異に強くする)。
+    const [baseRows] = await db.query('SELECT * FROM users WHERE tenant_id = ?', [tid]);
+    const byId = new Map((baseRows || []).map(u => [String(u.id), u]));
+    // tenant_users はない環境もある (本番で JOIN すると 500 になった) → 取れたときだけ反映
+    const tenantRole = new Map();
+    try {
+      const [tuRows] = await db.query('SELECT user_id, role_in_tenant FROM tenant_users WHERE tenant_id = ?', [tid]);
+      for (const r of (tuRows || [])) tenantRole.set(String(r.user_id), String(r.role_in_tenant || '').trim().toLowerCase());
+      const extraIds = [...tenantRole.keys()].filter(id => !byId.has(id));
+      if (extraIds.length) {
+        const [extra] = await db.query(`SELECT * FROM users WHERE id IN (${extraIds.map(() => '?').join(',')})`, extraIds);
+        for (const u of (extra || [])) byId.set(String(u.id), u);
+      }
+    } catch (e) { /* tenant_users なし → users.role のみ */ }
     const superEmail = String(process.env.SUPER_ADMIN_EMAIL || '').trim().toLowerCase();
-    const out = (rows || [])
-      .filter(r => !superEmail || String(r.email || '').trim().toLowerCase() !== superEmail)
-      .map(r => ({ id: r.id, role: r.role, username: String(r.full_name || r.username || r.email || '').trim() }));
+    const out = [...byId.values()]
+      .map(u => ({ u, role: tenantRole.get(String(u.id)) || String(u.role || '').trim().toLowerCase() }))
+      .filter(({ u, role }) => ROLES.includes(role)
+        && (!u.employment_status || String(u.employment_status).toLowerCase() === 'active')
+        && (!superEmail || String(u.email || '').trim().toLowerCase() !== superEmail))
+      .sort((a, b) => (ROLES.indexOf(a.role) - ROLES.indexOf(b.role)) || (Number(a.u.id) - Number(b.u.id)))
+      .map(({ u, role }) => ({ id: u.id, role, username: String(u.full_name || u.username || u.email || '').trim() }));
     res.status(200).json({ rows: out });
   } catch (err) {
     res.status(500).json({ message: err.message });
