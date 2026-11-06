@@ -102,6 +102,34 @@ async function userInTenant(req, userId) {
 }
 // Users
 router.get('/users', authorize('admin','manager'), userCtrl.list);
+// 社員管理「マネージャー」の選択肢: この会社で manager/admin/owner の人。
+// ログイン時の役割は tenant_users.role_in_tenant が優先されるため、users.role だけでなく両方から集める
+// (users.role が employee でも、その会社では admin という人がいる)。
+router.get('/approver-candidates', authorize('admin','manager'), async (req, res) => {
+  try {
+    const tid = req.tenantId ? parseInt(String(req.tenantId), 10) : null;
+    if (!tid) return res.status(200).json({ rows: [] });
+    const ROLES = ['manager', 'admin', 'owner'];
+    const [rows] = await db.query(
+      `SELECT u.id, u.username, u.full_name, u.email,
+              LOWER(COALESCE(tu.role_in_tenant, u.role)) AS role
+         FROM users u
+         LEFT JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = ?
+        WHERE (u.tenant_id = ? OR tu.tenant_id = ?)
+          AND LOWER(COALESCE(tu.role_in_tenant, u.role)) IN (?, ?, ?)
+          AND (u.employment_status IS NULL OR LOWER(u.employment_status) = 'active')
+        ORDER BY FIELD(LOWER(COALESCE(tu.role_in_tenant, u.role)), 'manager', 'admin', 'owner'), u.id`,
+      [tid, tid, tid, ...ROLES]
+    );
+    const superEmail = String(process.env.SUPER_ADMIN_EMAIL || '').trim().toLowerCase();
+    const out = (rows || [])
+      .filter(r => !superEmail || String(r.email || '').trim().toLowerCase() !== superEmail)
+      .map(r => ({ id: r.id, role: r.role, username: String(r.full_name || r.username || r.email || '').trim() }));
+    res.status(200).json({ rows: out });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 router.get('/users/:id', authorize('admin','manager'), async (req, res) => {
   try {
     const id = req.params.id;

@@ -88,8 +88,16 @@ exports.exportMonthXlsx = async (req, res) => {
       if (monthApproverName) return monthApproverName;
       const mid = user?.manager_id || user?.managerId;
       if (mid) {
-        const mgr = await userRepo.getUserById(mid, req.tenantId || null).catch(() => null);
-        if (displayName(mgr)) return displayName(mgr);
+        // マネージャーは users.tenant_id が別会社でも tenant_users でこの会社に所属していることがある
+        const tidM = user?.tenant_id ?? req.tenantId ?? null;
+        const [mrows] = await db.query(
+          `SELECT u.full_name, u.username FROM users u
+             LEFT JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = ?
+            WHERE u.id = ? AND (? IS NULL OR u.tenant_id = ? OR tu.tenant_id = ?) LIMIT 1`,
+          [tidM, mid, tidM, tidM, tidM]
+        ).catch(() => [[]]);
+        const nmM = displayName(Array.isArray(mrows) ? mrows[0] : null);
+        if (nmM) return nmM;
       }
       const deptId = user?.departmentId ?? user?.department_id ?? null;
       const tid = user?.tenant_id ?? req.tenantId ?? null;
