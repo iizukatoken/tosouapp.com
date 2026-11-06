@@ -107,7 +107,17 @@ router.get('/users', authorize('admin','manager'), userCtrl.list);
 // (users.role が employee でも、その会社では admin という人がいる)。
 router.get('/approver-candidates', authorize('admin','manager'), async (req, res) => {
   try {
-    const tid = req.tenantId ? parseInt(String(req.tenantId), 10) : null;
+    // owner/sysadmin は会社未選択だと req.tenantId = null になる → 編集中の社員 (?userId=) の会社、
+    // なければ本人の会社を使う。通常の admin は req.tenantId (JWT) のみ。
+    let tid = req.tenantId ? parseInt(String(req.tenantId), 10) : null;
+    if (!tid) {
+      const targetId = parseInt(String(req.query.userId || ''), 10) || null;
+      for (const uid of [targetId, req.user?.id]) {
+        if (!uid) continue;
+        const [[u]] = await db.query('SELECT tenant_id FROM users WHERE id = ? LIMIT 1', [uid]);
+        if (u && u.tenant_id) { tid = parseInt(String(u.tenant_id), 10); break; }
+      }
+    }
     if (!tid) return res.status(200).json({ rows: [] });
     const ROLES = ['manager', 'admin', 'owner'];
     const [rows] = await db.query(
