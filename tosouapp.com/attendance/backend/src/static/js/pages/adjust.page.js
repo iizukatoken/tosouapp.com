@@ -83,6 +83,21 @@ const hideSpinner = () => {
 const isISODate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 const todayISO = () => new Date().toLocaleDateString('sv-SE');
 
+const addDaysISO = (d, n) => {
+  const [y, m, dd] = String(d).split('-').map(x => parseInt(x, 10));
+  const dt = new Date(Date.UTC(y, (m || 1) - 1, (dd || 1) + n));
+  return dt.toISOString().slice(0, 10);
+};
+// 再申請フォーム用: 出勤・退勤が対象日(退勤は翌日まで可)で、退勤が出勤より後かを確認
+const validateAdjustPair = (inDT, outDT, baseDate) => {
+  const inD = String(inDT || '').slice(0, 10);
+  const outD = String(outDT || '').slice(0, 10);
+  if (baseDate && inD && inD !== baseDate) return `出勤の日付は対象日（${baseDate.replace(/-/g, '/')}）にしてください`;
+  if (baseDate && outD && outD !== baseDate && outD !== addDaysISO(baseDate, 1)) return `退勤の日付は対象日（${baseDate.replace(/-/g, '/')}）または翌日にしてください`;
+  if (inDT && outDT && String(outDT) <= String(inDT)) return '退勤時刻は出勤時刻より後にしてください';
+  return '';
+};
+
 const toMySQLDateTime = (dtLocal) => {
   const s = String(dtLocal || '').trim();
   if (!s) return null;
@@ -618,6 +633,13 @@ const renderForm = async () => {
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
           </span>
         </div>
+        <!-- D: ngày đã có đơn đang chờ duyệt -->
+        <div id="adjDupWarn" class="adj-dup-warn" style="display:none;"></div>
+        <!-- A: các ngày thiếu 出勤/退勤 (tháng này + tháng trước chưa 承認) — chạm để chọn -->
+        <div id="adjMissWrap" class="adj-miss-wrap" style="display:none;">
+          <div class="adj-miss-title">打刻漏れの日（タップで選択）</div>
+          <div id="adjMissChips" class="adj-miss-chips"></div>
+        </div>
       </div>
 
       <!-- Thẻ: Cài đặt chỉnh sửa -->
@@ -634,7 +656,7 @@ const renderForm = async () => {
               出勤時刻
             </span>
             <span id="adjInHint" class="adj-time-hint">現在の打刻 →</span>
-            <input id="adjIn" class="adj-time-input" type="datetime-local" placeholder="タップして出勤時刻を選択">
+            <input id="adjIn" class="adj-time-input" type="time" placeholder="タップして出勤時刻を選択">
           </div>
           <div class="adj-time-block">
             <span class="adj-time-label out">
@@ -642,7 +664,8 @@ const renderForm = async () => {
               退勤時刻
             </span>
             <span id="adjOutHint" class="adj-time-hint">現在の打刻 →</span>
-            <input id="adjOut" class="adj-time-input" type="datetime-local" placeholder="タップして退勤時刻を選択">
+            <input id="adjOut" class="adj-time-input" type="time" placeholder="タップして退勤時刻を選択">
+            <label class="adj-nextday"><input type="checkbox" id="adjOutNext"> 翌日（日をまたいで退勤した場合）</label>
           </div>
         </div>
 
@@ -674,6 +697,7 @@ const renderForm = async () => {
     current: $('#adjCurrent'),
     in: $('#adjIn'),
     out: $('#adjOut'),
+    outNext: $('#adjOutNext'),
     reason: $('#adjReason'),
     submit: $('#adjSubmit'),
     status: $('#adjStatus')
@@ -709,12 +733,14 @@ const renderForm = async () => {
           disableMobile: true
         });
       }
+      // 出勤/退勤 は時刻のみ選択 (日付は 修正対象日 から自動) — 別の日を選んでしまう誤りを防ぐ
       const timeOpts = {
         enableTime: true,
-        dateFormat: 'Y-m-d\\TH:i',
+        noCalendar: true,
+        dateFormat: 'H:i',
         altInput: true,
         altInputClass: 'adj-time-input',
-        altFormat: 'Y年n月j日 H:i',
+        altFormat: 'H:i',
         time_24hr: true,
         allowInput: false,
         disableMobile: true
@@ -744,10 +770,87 @@ const renderForm = async () => {
   let urlParams = new URLSearchParams(window.location.search);
   let initialAttendanceId = urlParams.get('attendanceId');
 
+  // ── A/D: 打刻漏れの日 (当月 + 前月[未承認]) と 申請中の日 ─────────────────────
+  const DOW_JA = ['日', '月', '火', '水', '木', '金', '土'];
+  const fmtMdDow = (d) => {
+    const [y, m, dd] = String(d).split('-').map(n => parseInt(n, 10));
+    const dow = DOW_JA[new Date(y, (m || 1) - 1, dd || 1).getDay()];
+    return `${m}/${dd}(${dow})`;
+  };
+  const fmtYmdDow = (d) => {
+    const [y, m, dd] = String(d).split('-').map(n => parseInt(n, 10));
+    const dow = DOW_JA[new Date(y, (m || 1) - 1, dd || 1).getDay()];
+    return `${y}年${m}月${dd}日(${dow})`;
+  };
+  let missingDays = [];          // [{ date, missIn, missOut }] — chưa 申請 (không pending)
+  let pendingDates = new Set();  // ngày đã có đơn 承認待ち
+
+  const requestTargetDate = (r) => String(r?.requestedCheckIn || r?.requestedCheckOut || r?.originalCheckIn || '').slice(0, 10);
+  const refreshPendingDates = async () => {
+    try {
+      const rows = await fetchJSONAuth('/api/adjust/my');
+      pendingDates = new Set((Array.isArray(rows) ? rows : [])
+        .filter(r => String(r?.status || 'pending') === 'pending')
+        .map(requestTargetDate)
+        .filter(isISODate));
+    } catch (e) { pendingDates = new Set(); }
+  };
+  const refreshMissingDays = async () => {
+    const t = todayISO();
+    const y = parseInt(t.slice(0, 4), 10);
+    const m = parseInt(t.slice(5, 7), 10);
+    const py = m === 1 ? y - 1 : y;
+    const pm = m === 1 ? 12 : m - 1;
+    const get = (yy, mm) => fetchJSONAuth(`/api/attendance/month/missing/me?year=${yy}&month=${mm}`).catch(() => null);
+    try {
+      const [cur, prev] = await Promise.all([get(y, m), get(py, pm)]);
+      const list = [
+        ...((prev && prev.monthStatus !== 'approved' && Array.isArray(prev.missing)) ? prev.missing : []),
+        ...(Array.isArray(cur?.missing) ? cur.missing : [])
+      ];
+      missingDays = list
+        .filter(it => isISODate(it?.date) && String(it?.adjust?.status || '') !== 'pending' && !pendingDates.has(it.date))
+        .sort((a, b) => (a.date < b.date ? -1 : 1)); // cũ nhất trước — cần xử lý trước
+    } catch (e) { missingDays = []; }
+  };
+  const missLabel = (it) => (it.missIn && it.missOut) ? '出勤・退勤なし' : (it.missOut ? '退勤なし' : (it.missIn ? '出勤なし' : '打刻漏れ'));
+  const renderMissChips = () => {
+    const wrap = $('#adjMissWrap');
+    const host = $('#adjMissChips');
+    if (!wrap || !host) return;
+    if (!missingDays.length) { wrap.style.display = 'none'; host.innerHTML = ''; return; }
+    const cur = els.date?.value;
+    host.innerHTML = missingDays.map(it => `
+      <button type="button" class="adj-miss-chip${it.date === cur ? ' is-active' : ''}" data-date="${it.date}">
+        <span class="adj-miss-chip-date">${fmtMdDow(it.date)}</span>
+        <span class="adj-miss-chip-kind">${missLabel(it)}</span>
+      </button>`).join('');
+    wrap.style.display = '';
+    host.querySelectorAll('.adj-miss-chip').forEach(btn => btn.addEventListener('click', () => {
+      setDateTimeValue(els.date, btn.dataset.date);
+      if (els.reason && !String(els.reason.value || '').trim()) els.reason.value = '打刻し忘れ';
+      loadDay();
+    }));
+  };
+  const renderDupWarn = () => {
+    const el = $('#adjDupWarn');
+    if (!el) return;
+    const d = els.date?.value;
+    if (isISODate(d) && pendingDates.has(d)) {
+      el.textContent = `${fmtYmdDow(d)} は調整申請中（承認待ち）です。内容を変える場合は「履歴」から編集してください。`;
+      el.style.display = '';
+    } else {
+      el.style.display = 'none';
+      el.textContent = '';
+    }
+  };
+
   const loadDay = async () => {
     showErr('');
     const d = els.date?.value;
     if (!isISODate(d)) return;
+    renderMissChips();
+    renderDupWarn();
     showSpinner();
     try {
       const r = await fetchJSONAuth(`/api/attendance/date/${encodeURIComponent(d)}`);
@@ -757,11 +860,13 @@ const renderForm = async () => {
         initialAttendanceId = null; // Only use it once
       }
       if (!seg) seg = pickLatestSegment(r?.segments);
-      
+
       attendanceId = seg?.id || null;
       setCurrent(seg);
-      try { setDateTimeValue(els.in, seg?.checkIn ? String(seg.checkIn).slice(0, 16) : ''); } catch (e) { /* silently ignored */ }
-      try { setDateTimeValue(els.out, seg?.checkOut ? String(seg.checkOut).slice(0, 16) : ''); } catch (e) { /* silently ignored */ }
+      // 時刻のみセット。退勤が 修正対象日 の翌日なら「翌日」にチェック
+      try { setDateTimeValue(els.in, seg?.checkIn ? String(seg.checkIn).slice(11, 16) : ''); } catch (e) { /* silently ignored */ }
+      try { setDateTimeValue(els.out, seg?.checkOut ? String(seg.checkOut).slice(11, 16) : ''); } catch (e) { /* silently ignored */ }
+      if (els.outNext) els.outNext.checked = !!seg?.checkOut && String(seg.checkOut).slice(0, 10) > d;
     } catch (e) {
       attendanceId = null;
       setCurrent(null);
@@ -824,17 +929,37 @@ const renderForm = async () => {
 
   els.date?.addEventListener('change', loadDay);
 
+  await refreshPendingDates();
+  await refreshMissingDays();
   await loadDay();
 
   const handleApply = async () => {
     if (!els.submit || els.submit.disabled) return;
 
-    // Yêu cầu xác nhận trước khi gửi
+    // C: 修正対象日 + 時刻 から日時を組み立てて検証し、日付・時刻を明記して確認する
+    showErr('');
     const isEdit = !!els.submit.dataset.editId;
-    const confirmMsg = isEdit ? 'この内容で申請を更新しますか？' : 'この内容で申請を送信しますか？';
+    const d = els.date?.value;
+    if (!isISODate(d)) { showErr('修正対象日を選択してください'); return; }
+    if (d > todayISO()) { showErr('未来の日付は申請できません'); return; }
+    const inHm = String(els.in?.value || '').trim();
+    const outHm = String(els.out?.value || '').trim();
+    const outDate = els.outNext?.checked ? addDaysISO(d, 1) : d;
+    const inDT = /^\d{2}:\d{2}$/.test(inHm) ? `${d}T${inHm}` : '';
+    const outDT = /^\d{2}:\d{2}$/.test(outHm) ? `${outDate}T${outHm}` : '';
+    if (!inDT && !outDT) { showErr('出勤時刻または退勤時刻を入力してください'); return; }
+    if (inDT && outDT && outDT <= inDT) {
+      showErr('退勤時刻は出勤時刻より後にしてください（日をまたぐ場合は「翌日」にチェック）');
+      return;
+    }
+    if (!String(els.reason?.value || '').trim()) { showErr('理由を入力してください'); return; }
+    const dupNote = (!isEdit && pendingDates.has(d)) ? '\n\n※この日は既に調整申請中（承認待ち）です。もう1件申請されます。' : '';
+    const confirmMsg = `${fmtYmdDow(d)} の打刻を\n`
+      + `　出勤：${inHm || '（変更なし）'}\n`
+      + `　退勤：${outHm ? `${els.outNext?.checked ? '翌日 ' : ''}${outHm}` : '（変更なし）'}\n`
+      + `で${isEdit ? '更新' : '申請'}しますか？${dupNote}`;
     if (!confirm(confirmMsg)) return;
 
-    showErr('');
     els.submit.disabled = true;
 
     // Thêm vòng quay xoay tròn trong lúc đang gửi
@@ -842,8 +967,8 @@ const renderForm = async () => {
       els.submit.innerHTML = `<svg class="spinner" viewBox="0 0 50 50" style="width:18px;height:18px;animation:spin 1s linear infinite;"><circle cx="25" cy="25" r="20" fill="none" stroke="#ffffff" stroke-width="5" stroke-linecap="round" stroke-dasharray="80 200"></circle></svg><style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>`;
 
     if (els.status) els.status.textContent = (isEdit ? '更新中…' : '申請中…');
-    const inV = toMySQLDateTime(els.in?.value);
-    const outV = toMySQLDateTime(els.out?.value);
+    const inV = toMySQLDateTime(inDT);
+    const outV = toMySQLDateTime(outDT);
     const reason = String(els.reason?.value || '').trim();
     const editId = parseInt(String(els.submit?.dataset?.editId || 0), 10) || null;
 
@@ -882,7 +1007,13 @@ const renderForm = async () => {
       try { delete els.submit.dataset.editId; } catch (e) { /* silently ignored */ }
       setDateTimeValue(els.in, '');
       setDateTimeValue(els.out, '');
+      if (els.outNext) els.outNext.checked = false;
       if (els.reason) els.reason.value = '';
+      // 申請済みの日を 打刻漏れ 一覧から外し、申請中 の警告を更新
+      await refreshPendingDates();
+      await refreshMissingDays();
+      renderMissChips();
+      renderDupWarn();
       await renderList();
     } catch (e) {
       if (els.status) els.status.textContent = '';
@@ -1082,6 +1213,12 @@ const renderList = async () => {
 
               if (!newReason) {
                 errEl.textContent = '理由を入力してください';
+                errEl.style.display = 'block';
+                return;
+              }
+              const pairErr = validateAdjustPair(newIn, newOut, (dataset.in || dataset.out || '').slice(0, 10));
+              if (pairErr) {
+                errEl.textContent = pairErr;
                 errEl.style.display = 'block';
                 return;
               }
@@ -1391,6 +1528,12 @@ const renderList = async () => {
 
         if (!newReason) {
           errEl.textContent = '理由を入力してください';
+          errEl.style.display = 'block';
+          return;
+        }
+        const pairErr = validateAdjustPair(newIn, newOut, String(cin || cout || '').slice(0, 10));
+        if (pairErr) {
+          errEl.textContent = pairErr;
           errEl.style.display = 'block';
           return;
         }
