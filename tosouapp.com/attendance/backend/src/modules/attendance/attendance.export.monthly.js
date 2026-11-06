@@ -652,55 +652,81 @@ exports.exportMonthXlsx = async (req, res) => {
       if (m) return [m[1], ':', m[2]];
       return ['', showColonOnly ? ':' : '', ''];
     };
+    // ── Style registry: cellXfs được sinh theo nhu cầu nên chỉ số style luôn tồn tại (trước đây
+    //    ghi tay danh sách xf và từng tham chiếu s="26" không có → Excel báo lỗi khi mở file).
+    const F = { normal: 0, bold: 1, white: 2, red: 3, title: 4, note: 5, blue: 6, section: 7, muted: 8, tick: 9, redBold: 10, smallBold: 11 };
+    const xlsxFonts = [
+      '<font><sz val="10"/><color rgb="FF1F2937"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="10"/><color rgb="FF1F2937"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Meiryo"/></font>',
+      '<font><sz val="10"/><color rgb="FFDC2626"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="16"/><color rgb="FF0B2C66"/><name val="Meiryo"/></font>',
+      '<font><sz val="9"/><color rgb="FF64748B"/><name val="Meiryo"/></font>',
+      '<font><sz val="10"/><color rgb="FF2563EB"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="11"/><color rgb="FF0B2C66"/><name val="Meiryo"/></font>',
+      '<font><sz val="10"/><color rgb="FF94A3B8"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="11"/><color rgb="FF2563EB"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="10"/><color rgb="FFDC2626"/><name val="Meiryo"/></font>',
+      '<font><b/><sz val="9"/><color rgb="FF1F2937"/><name val="Meiryo"/></font>'
+    ];
+    const xlsxFills = ['<fill><patternFill patternType="none"/></fill>', '<fill><patternFill patternType="gray125"/></fill>'];
+    const fillIdx = new Map();
+    const fillOf = (rgb) => {
+      if (!rgb) return 0;
+      if (!fillIdx.has(rgb)) {
+        fillIdx.set(rgb, xlsxFills.length);
+        xlsxFills.push(`<fill><patternFill patternType="solid"><fgColor rgb="${rgb}"/><bgColor indexed="64"/></patternFill></fill>`);
+      }
+      return fillIdx.get(rgb);
+    };
+    // border 0 = không viền, 1 = viền mảnh xám
+    const xlsxBorders = [
+      '<border><left/><right/><top/><bottom/><diagonal/></border>',
+      '<border><left style="thin"><color rgb="FFD1D5DB"/></left><right style="thin"><color rgb="FFD1D5DB"/></right><top style="thin"><color rgb="FFD1D5DB"/></top><bottom style="thin"><color rgb="FFD1D5DB"/></bottom><diagonal/></border>'
+    ];
+    const xfList = ['<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'];
+    const xfIdx = new Map();
+    const st = ({ font = F.normal, fill = '', border = 0, h = '', wrap = false } = {}) => {
+      const key = [font, fill, border, h, wrap].join('|');
+      if (xfIdx.has(key)) return xfIdx.get(key);
+      const align = `<alignment${h ? ` horizontal="${h}"` : ''} vertical="center"${wrap ? ' wrapText="1"' : ''}/>`;
+      xfList.push(`<xf numFmtId="0" fontId="${font}" fillId="${fillOf(fill)}" borderId="${border}" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1">${align}</xf>`);
+      xfIdx.set(key, xfList.length - 1);
+      return xfList.length - 1;
+    };
+    const NAVY = 'FF0B2C66';
+    const sHeader = st({ font: F.white, fill: NAVY, border: 1, h: 'center', wrap: true });
+
     const rowXml = (r, cells, ht = null) => `<row r="${r}"${ht ? ` ht="${ht}" customHeight="1"` : ''}>${cells.join('')}</row>`;
     const sheet1Rows = [];
     const push1 = (r, list, ht = null) => { sheet1Rows.push(rowXml(r, list, ht)); };
-    push1(1, [cell('A1', '月次勤怠インポートテンプレート', 1)], 22);
-    push1(2, [cell('A2', '編集可能セルのみ入力してください（行/列の追加・削除・移動は不可）。', 2)], 20);
-    push1(3, [cell('A3', '承認済み・承認依頼中の行は取り込み対象外です。', 2)], 18);
-    push1(4, [cell('A4', `社員番号: ${employeeCode || ''}　　氏名: ${employeeName || ''}`, 1)], 22);
-    push1(5, [cell('A5', '日次実績', 1)], 22);
+    const monthLabel = `${y}年${m}月`;
+    push1(1, [cell('A1', `月次勤怠表（入力用）　${monthLabel}`, st({ font: F.title }))], 30);
+    push1(2, [cell('A2', '編集可能セルのみ入力してください（行/列の追加・削除・移動は不可）。', st({ font: F.note }))], 16);
+    push1(3, [cell('A3', '承認済み・承認依頼中の行は取り込み対象外です。', st({ font: F.note }))], 16);
+    push1(4, [cell('A4', `社員番号：${employeeCode || '—'}　　氏名：${employeeName || '—'}　　対象月：${monthLabel}${monthStatus === 'approved' ? '　　承認済み' : ''}`, st({ font: F.bold }))], 24);
+    push1(5, [cell('A5', '日次実績', st({ font: F.section }))], 22);
     // Thứ tự cột khớp với màn hình web: ...現場 | 現場(任意) | 作業内容 | 開始時刻...
-    push1(6, [
-      cell('A6', '日付', 3),
-      cell('B6', '勤務区分', 3),
-      cell('C6', '出社', 3),
-      cell('D6', '在宅', 3),
-      cell('E6', '現場', 3),
-      cell('F6', '現場（任意）', 3),
-      cell('G6', '作業内容', 3),
-      cell('H6', '開始時刻', 3),
-      cell('I6', '終了時刻', 3),
-      cell('J6', '休憩時間', 3),
-      cell('K6', '深夜休憩', 3),
-      cell('L6', '勤務時間', 3),
-      cell('M6', '超過時間', 3),
-      cell('N6', '遅刻/早退', 3),
-      cell('O6', '理由', 3),
-      cell('P6', '備考', 3),
-      cell('Q6', '承認ステータス', 14),
-      cell('R6', '承認者', 14)
-    ], 22);
+    const sheet1Headers = ['日付', '勤務区分', '出社', '在宅', '現場', '現場（任意）', '作業内容', '開始時刻', '終了時刻',
+      '休憩時間', '深夜休憩', '勤務時間', '超過時間', '遅刻/早退', '理由', '備考', '承認ステータス', '承認者'];
+    push1(6, sheet1Headers.map((h, i) => cell(`${colRef(i + 1)}6`, h, sHeader)), 26);
     for (let i = 0; i < sheetRows.length; i++) {
       const r = sheetRows[i];
       const src = Array.isArray(r?.cells) ? r.cells : [];
       const rowDow = String(src[3] || '').trim();
-      const isSunday = rowDow === '日';
-      // Chọn màu dòng dựa theo kubun và trạng thái chấm công
+      // Màu nền cả dòng theo kubun (nhạt, đồng nhất mọi cột); ngày làm bình thường để trắng
       const rowKubun = String(src[4] || '').trim();
       const rowHasTime = !!(src[9] || src[10]); // có 開始 hoặc 終了
       const rowIsOff = r?.isOff;
-      // Mã style: 21=xanh dương(đã làm), 22=xám(chưa làm), 23=vàng(nghỉ có phép), 24=đỏ(vắng), 25=xanh lá(nửa ngày), 26=hồng(ngày nghỉ)
-      const rowStyle = (() => {
-        if (rowKubun === '有給休暇') return 23; // vàng
-        if (rowKubun === '欠勤') return 24; // đỏ
-        if (rowKubun === '半休' || rowKubun === '半休(有給)') return 25; // xanh lá nhạt
-        if (rowKubun === '休日' || rowKubun === '【予定休日】' || rowIsOff) return 26; // hồng (ngày nghỉ/off)
-        if (rowHasTime) return 21; // xanh dương (có chấm công thực)
-        if (rowKubun.includes('予定')) return 12; // trắng (mới là dự kiến, chưa có dữ liệu)
-        if (rowKubun === '出勤' || rowKubun === '休日出勤' || rowKubun === '代替出勤') return 22; // xám (ngày làm nhưng chưa có giờ)
-        return 12; // mặc định
+      const rowFill = (() => {
+        if (rowKubun === '有給休暇') return 'FFFEF9C3'; // vàng nhạt
+        if (rowKubun === '欠勤') return 'FFFEE2E2'; // đỏ nhạt
+        if (rowKubun === '半休' || rowKubun === '半休(有給)') return 'FFDCFCE7'; // xanh lá nhạt
+        if (rowKubun === '休日' || rowKubun === '【予定休日】' || rowIsOff) return 'FFF1F5F9'; // xám nhạt (ngày nghỉ)
+        return '';
       })();
+      // Ngày: CN / ngày nghỉ lễ = đỏ, Thứ 7 = xanh (giống màn hình)
+      const dateFont = (rowDow === '日' || (rowIsOff && rowDow !== '土')) ? F.red : (rowDow === '土' ? F.blue : F.normal);
       const dayText = (() => {
         const ds = String(src[2] || '');
         const dow = String(src[3] || '');
@@ -735,30 +761,26 @@ exports.exportMonthXlsx = async (req, res) => {
       // Index cột (0-based): 出社/在宅/現場 tick = 2,3,4; ô text 現場(任意)/作業内容 = 5,6;
       // các cột giờ (開始..超過) = 7..12; cột wrapText = 5,6,15.
       const TICK_CI = [2, 3, 4];
-      const WRAP_CI = [5, 6, 15];
-      const TIME_DEFAULT_CI = [9, 10, 11, 12]; // 休憩/深夜/勤務/超過 → mặc định '0:00'
+      const WRAP_CI = [5, 6, 15]; // 現場(任意)/作業内容/備考: căn trái, xuống dòng
+      const TIME_DEFAULT_CI = [9, 10, 11, 12]; // 休憩/深夜/勤務/超過 → '0:00' khi có giờ, để trống khi ngày không có giờ
       const xmlCells = vals.map((v, ci) => {
         const ref = `${colRef(ci + 1)}${rowNum}`;
-        let styleWithDay = (isSunday && ci === 0) ? 16 : rowStyle;
-
         let cellValue = String(v || '');
-        if (TICK_CI.includes(ci) && cellValue === '✓') {
-          styleWithDay = 20; // nền xanh cho ô tick
-        }
-        if (WRAP_CI.includes(ci)) {
-          styleWithDay = 13; // wrapText cho 現場(任意)/作業内容/備考
-        }
         // 勤務区分: nếu là 休日出勤 nhưng không có tick nào và không có giờ → hiển thị 休日 (giữ hành vi cũ)
         if (ci === 1 && cellValue === '休日出勤' && !vals[2] && !vals[3] && !vals[4] && !vals[7] && !vals[8]) {
           const ds = String(src[2] || '');
           const daily = ds ? dailyMap.get(ds) : null;
           if (daily?.kubun !== '休日出勤') cellValue = '休日';
         }
+        if (TIME_DEFAULT_CI.includes(ci)) cellValue = rowHasTime ? (cellValue || '0:00') : '';
 
-        if (TIME_DEFAULT_CI.includes(ci)) {
-          return cell(ref, cellValue || '0:00', styleWithDay);
-        }
-        return cell(ref, cellValue, styleWithDay);
+        let font = F.normal;
+        if (ci === 0) font = dateFont;
+        else if (ci === 1 && cellValue.includes('予定')) font = F.muted; // dự kiến → chữ xám
+        else if (TICK_CI.includes(ci) && cellValue === '✓') font = F.tick;
+        else if (ci === 13 && cellValue) font = F.redBold; // 遅刻/早退
+        const wrap = WRAP_CI.includes(ci);
+        return cell(ref, cellValue, st({ font, fill: rowFill, border: 1, h: wrap ? 'left' : 'center', wrap }));
       });
       // Cột ẩn số phút (dùng cho import sau này) đặt ở S (cột 19), sau 18 cột hiển thị.
       xmlCells.push(numberCell(`S${rowNum}`, hmToMinutes(src[13] || '0:00'), 0));
@@ -872,52 +894,30 @@ exports.exportMonthXlsx = async (req, res) => {
     } catch (e) { /* bỏ qua lỗi tính phép */ }
 
     // Ghi các dòng tổng hợp
-    push1(summaryStartRow, [cell('A' + summaryStartRow, '当月サマリ', 1)], 22);
-    const sRow1 = summaryStartRow + 1;
-    push1(sRow1, [
-      cell('A' + sRow1, '所定日数', 3), cell('B' + sRow1, '出勤日数', 3), cell('C' + sRow1, '休日出勤日数', 3),
-      cell('D' + sRow1, '待機日数', 3), cell('E' + sRow1, '総労働時間', 3), cell('F' + sRow1, '深夜時間', 3),
-      cell('G' + sRow1, '総残業時間', 3), cell('H' + sRow1, '法定外時間', 3), cell('I' + sRow1, '有休日数', 3),
-      cell('J' + sRow1, '有給付与', 3), cell('K' + sRow1, '代休日数', 3), cell('L' + sRow1, '無給休暇', 3),
-      cell('M' + sRow1, '欠勤日数', 3), cell('N' + sRow1, '控除時間', 3),
-      cell('O' + sRow1, '出社日数', 3), cell('P' + sRow1, '在宅日数', 3)
-    ], 20);
-    const sRow2 = summaryStartRow + 2;
-    push1(sRow2, [
-      cell('A' + sRow2, `${totalWorkingDays}日`),
-      cell('B' + sRow2, `${sumAttendDays}日`),
-      cell('C' + sRow2, `${sumHolidayWorkDays}日`),
-      cell('D' + sRow2, `${sumStandbyDays}日`),
-      cell('E' + sRow2, fmtHm(rowsWorkedMin)),
-      cell('F' + sRow2, '0:00'),
-      cell('G' + sRow2, fmtHm(rowsOtMin)),
-      cell('H' + sRow2, fmtHm(rowsOtMin)),
-      cell('I' + sRow2, `${totalPaidLeave}日`),
-      cell('J' + sRow2, `${entitlementDays}日`),
-      cell('K' + sRow2, `${sumSubstituteDays}日`),
-      cell('L' + sRow2, `${sumUnpaidDays}日`),
-      cell('M' + sRow2, `${sumAbsentDays}日`),
-      cell('N' + sRow2, '0:00'),
-      cell('O' + sRow2, `${sumOnsiteDays}日`),
-      cell('P' + sRow2, `${sumRemoteDays}日`)
-    ]);
-    // 画面の当月サマリと同じ追加項目（列Sは非表示列のため、下の行に並べる）
-    const sRow3 = summaryStartRow + 3;
-    push1(sRow3, [
-      cell('A' + sRow3, '半休(有給)', 3), cell('B' + sRow3, '半休', 3), cell('C' + sRow3, '代替出勤', 3),
-      cell('D' + sRow3, '振替出勤', 3), cell('E' + sRow3, '休日日数', 3)
-    ], 20);
-    const sRow4 = summaryStartRow + 4;
-    push1(sRow4, [
-      cell('A' + sRow4, `${sumHalfPaidDays.toFixed(1)}日`),
-      cell('B' + sRow4, `${sumHalfUnpaidDays.toFixed(1)}日`),
-      cell('C' + sRow4, `${sumDaigaeWorkDays}日`),
-      cell('D' + sRow4, `${sumFurikaeWorkDays}日`),
-      cell('E' + sRow4, `${sumOffDays}日`)
-    ]);
+    // 当月サマリ: lưới 8 cột đặt ở H〜O (các cột cùng độ rộng ~10) — trước đây đặt từ cột A nên
+    // nhãn rơi vào cột 出社/在宅/現場 (rộng 5) và bị chồng chữ.
+    const SUM_COL0 = 8; // H
+    const sSumLabel = st({ font: F.smallBold, fill: 'FFEEF2F7', border: 1, h: 'center', wrap: true });
+    const sSumValue = st({ font: F.normal, border: 1, h: 'center' });
+    push1(summaryStartRow, [cell(colRef(SUM_COL0) + summaryStartRow, '当月サマリ', st({ font: F.section }))], 22);
+    const summaryBlocks = [
+      [['所定日数', `${totalWorkingDays}日`], ['出勤日数', `${sumAttendDays}日`], ['休日出勤日数', `${sumHolidayWorkDays}日`],
+        ['待機日数', `${sumStandbyDays}日`], ['総労働時間', fmtHm(rowsWorkedMin)], ['深夜時間', '0:00'],
+        ['総残業時間', fmtHm(rowsOtMin)], ['法定外時間', fmtHm(rowsOtMin)]],
+      [['有休日数', `${totalPaidLeave}日`], ['有給付与', `${entitlementDays}日`], ['代休日数', `${sumSubstituteDays}日`],
+        ['無給休暇', `${sumUnpaidDays}日`], ['欠勤日数', `${sumAbsentDays}日`], ['控除時間', '0:00'],
+        ['出社日数', `${sumOnsiteDays}日`], ['在宅日数', `${sumRemoteDays}日`]],
+      [['半休(有給)', `${sumHalfPaidDays.toFixed(1)}日`], ['半休', `${sumHalfUnpaidDays.toFixed(1)}日`],
+        ['代替出勤', `${sumDaigaeWorkDays}日`], ['振替出勤', `${sumFurikaeWorkDays}日`], ['休日日数', `${sumOffDays}日`]]
+    ];
+    summaryBlocks.forEach((items, bi) => {
+      const rl = summaryStartRow + 1 + bi * 2;
+      push1(rl, items.map(([label], i) => cell(`${colRef(SUM_COL0 + i)}${rl}`, label, sSumLabel)), 30);
+      push1(rl + 1, items.map(([, val], i) => cell(`${colRef(SUM_COL0 + i)}${rl + 1}`, val, sSumValue)), 22);
+    });
 
     // Thứ tự khớp màn hình: 日付|勤務区分|出社|在宅|現場|現場(任意)|作業内容|開始|終了|休憩|深夜|勤務|超過|遅刻早退|理由|備考|承認ステータス|承認者
-    const sheet1VisibleCols = [12, 10, 5, 5, 5, 28, 40, 10, 10, 10, 10, 10, 10, 10, 12, 30, 14, 12];
+    const sheet1VisibleCols = [13, 12, 6, 6, 6, 24, 36, 10, 10, 10, 10, 10, 10, 10, 12, 28, 14, 12];
     const sheet1Cols = [
       ...sheet1VisibleCols.map((w, i) => {
         return `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`;
@@ -926,9 +926,10 @@ exports.exportMonthXlsx = async (req, res) => {
       `<col min="19" max="19" width="2" hidden="1" customWidth="1"/>`
     ].join('');
     const sheet1Merges = [
-      'A1:J1', 'A2:J2', 'A3:J3',
-      'A4:J4',
-      'A5:R5'
+      'A1:R1', 'A2:R2', 'A3:R3',
+      'A4:R4',
+      'A5:R5',
+      `${colRef(SUM_COL0)}${summaryStartRow}:${colRef(SUM_COL0 + 7)}${summaryStartRow}`
     ].map(r => `<mergeCell ref="${r}"/>`).join('');
     const lastSheet1Row = 6 + Math.max(1, sheetRows.length);
     const sheet1Validations = [
@@ -939,16 +940,17 @@ exports.exportMonthXlsx = async (req, res) => {
     const sheet1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
   <sheetPr><pageSetUpPr fitToPage="1"/></sheetPr>
-  <sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews>
-  <sheetFormatPr defaultRowHeight="18"/>
+  <sheetViews><sheetView showGridLines="0" workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="A7" sqref="A7"/></sheetView></sheetViews>
+  <sheetFormatPr defaultRowHeight="20"/>
   <cols>${sheet1Cols}</cols>
   <sheetData>${sheet1Rows.join('')}</sheetData>
   <sheetProtection sheet="1" objects="1" scenarios="1" />
   <mergeCells count="${(sheet1Merges.match(/<mergeCell /g) || []).length}">${sheet1Merges}</mergeCells>
   <dataValidations count="3">${sheet1Validations}</dataValidations>
   <printOptions horizontalCentered="1"/>
-  <pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>
+  <pageMargins left="0.3" right="0.3" top="0.4" bottom="0.5" header="0.2" footer="0.25"/>
   <pageSetup paperSize="9" orientation="landscape" fitToWidth="1" fitToHeight="0"/>
+  <headerFooter><oddFooter>&amp;L${esc(`${employeeName || ''}　${monthLabel}`)}&amp;R&amp;P / &amp;N</oddFooter></headerFooter>
 </worksheet>`;
     const sheet2Header = planColumns.map((c, i) => cell(`${colRef(i + 1)}1`, c.header, 3));
     const sheet2Rows = [rowXml(1, sheet2Header, 22)];
@@ -987,65 +989,11 @@ exports.exportMonthXlsx = async (req, res) => {
 </worksheet>`;
     const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-  <fonts count="4">
-    <font><sz val="11"/><color rgb="FF000000"/><name val="Meiryo"/></font>
-    <font><b/><sz val="11"/><color rgb="FF000000"/><name val="Meiryo"/></font>
-    <font><b/><sz val="11"/><color rgb="FFFFFFFF"/><name val="Meiryo"/></font>
-    <font><sz val="11"/><color rgb="FFC62828"/><name val="Meiryo"/></font>
-  </fonts>
-  <fills count="18">
-    <fill><patternFill patternType="none"/></fill>
-    <fill><patternFill patternType="gray125"/></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFE8F5E9"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFD9EAD3"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFE7E6E6"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFF4CCCC"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFFF2CC"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFF9CB9C"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFFFF"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFEAF4FF"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFFF4E5"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FF4472C4"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFDBEAFE"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFF3F4F6"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFFFDE7"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFFEE2E2"/><bgColor indexed="64"/></patternFill></fill>
-    <fill><patternFill patternType="solid"><fgColor rgb="FFD1FAE5"/><bgColor indexed="64"/></patternFill></fill>
-  </fills>
-  <borders count="2">
-    <border><left/><right/><top/><bottom/><diagonal/></border>
-    <border><left style="thin"><color rgb="FFD0D7DE"/></left><right style="thin"><color rgb="FFD0D7DE"/></right><top style="thin"><color rgb="FFD0D7DE"/></top><bottom style="thin"><color rgb="FFD0D7DE"/></bottom><diagonal/></border>
-  </borders>
+  <fonts count="${xlsxFonts.length}">${xlsxFonts.join("")}</fonts>
+  <fills count="${xlsxFills.length}">${xlsxFills.join("")}</fills>
+  <borders count="${xlsxBorders.length}">${xlsxBorders.join("")}</borders>
   <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
-  <cellXfs count="26">
-    <xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="5" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="6" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="7" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="1" fillId="8" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyAlignment="1"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="2" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="9" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="9" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="1" fillId="10" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="1" fillId="11" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
-    <xf numFmtId="0" fontId="3" fillId="9" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="3" fillId="9" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="3" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="3" fillId="6" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
-    <xf numFmtId="0" fontId="2" fillId="12" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="13" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="14" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="15" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="16" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-    <xf numFmtId="0" fontId="0" fillId="17" borderId="1" xfId="0" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-  </cellXfs>
+  <cellXfs count="${xfList.length}">${xfList.join("")}</cellXfs>
   <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
 </styleSheet>`;
     // Sheet 3: 現場・作業内容
@@ -1072,7 +1020,7 @@ exports.exportMonthXlsx = async (req, res) => {
 </worksheet>`;
 
     const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="入力用勤怠表" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="171027" fullCalcOnLoad="1"/></workbook>`;
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="入力用勤怠表" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">'入力用勤怠表'!$6:$6</definedName></definedNames><calcPr calcId="171027" fullCalcOnLoad="1"/></workbook>`;
     const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
     const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
