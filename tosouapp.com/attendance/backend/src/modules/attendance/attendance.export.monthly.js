@@ -548,10 +548,9 @@ exports.exportMonthXlsx = async (req, res) => {
         if (isLeaveApplied || hasTime) return '承認待ち';
         return '';
       })();
-      // 承認者: chỉ ghi tên ở ngày đã 確認済み/承認済み VÀ có dữ liệu (có giờ, hoặc đã chọn 区分 như 有給).
-      // Ngày chưa đi làm / chưa có dữ liệu thì để trống.
-      const rowHasData = hasTime || (!!dailyKubun && !isRegularOffRow && dailyKubun !== '休日');
-      const approverForRow = (approveStatus === '確認済み' || approveStatus === '承認済み') && rowHasData ? approverDisplayName : '';
+      // 承認者: ghi tên ở mọi ngày đã 確認済み/承認済み (kể cả ngày nghỉ).
+      // Ngày 未申請 / 承認待ち (chưa xác nhận) thì để trống.
+      const approverForRow = (approveStatus === '確認済み' || approveStatus === '承認済み') ? approverDisplayName : '';
       sheetRows.push({
         isOff,
         cells: [
