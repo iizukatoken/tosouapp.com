@@ -375,21 +375,29 @@ const renderNotices = async (date) => {
     if (!box) return;
 
     // Lấy các ngày phải đi làm nhưng thiếu chấm công của tháng đang xem (chỉ tính đến hôm qua)
-    const yy = String(date || '').slice(0, 4);
-    const mm = String(date || '').slice(5, 7);
+    // + tháng trước: ngày sót lại của tháng trước vẫn phải 調整申請 (trừ khi tháng trước đã 承認/khoá).
+    const yy = parseInt(String(date || '').slice(0, 4), 10);
+    const mm = parseInt(String(date || '').slice(5, 7), 10);
+    const prevY = mm === 1 ? yy - 1 : yy;
+    const prevM = mm === 1 ? 12 : mm - 1;
+    const fetchMissing = (y, m) => fetchJSONAuth(`/api/attendance/month/missing/me?year=${encodeURIComponent(y)}&month=${encodeURIComponent(m)}`).catch(() => null);
     let missing = [];
+    let prevMissing = [];
     try {
-      const mr = await fetchJSONAuth(`/api/attendance/month/missing/me?year=${encodeURIComponent(yy)}&month=${encodeURIComponent(mm)}`).catch(() => null);
-      missing = Array.isArray(mr?.missing) ? mr.missing : [];
-    } catch (e) { missing = []; }
+      const [cur, prev] = await Promise.all([fetchMissing(yy, mm), fetchMissing(prevY, prevM)]);
+      missing = Array.isArray(cur?.missing) ? cur.missing : [];
+      if (prev && prev.monthStatus !== 'approved') prevMissing = Array.isArray(prev?.missing) ? prev.missing : [];
+    } catch (e) { missing = []; prevMissing = []; }
+    // Ngày tháng trước chưa 申請 (không phải pending) → cảnh báo nổi bật
+    const prevOpenCount = prevMissing.filter(it => String(it?.adjust?.status || '') !== 'pending').length;
 
     // 最終更新日: nếu có cảnh báo thì lấy hôm nay (dữ liệu vừa được kiểm tra), ngược lại "—"
     const today = todayJST();
     if (title) {
-      title.textContent = `お知らせ（最終更新日：${missing.length ? fmtYmd(today) : '—'}）`;
+      title.textContent = `お知らせ（最終更新日：${(missing.length || prevMissing.length) ? fmtYmd(today) : '—'}）`;
     }
 
-    if (!missing.length) {
+    if (!missing.length && !prevMissing.length) {
       box.innerHTML = `<div class="simple-notice-empty">お知らせはありません</div>`;
       return;
     }
@@ -402,7 +410,7 @@ const renderNotices = async (date) => {
       return '打刻が未完了です。';
     };
 
-    const items = missing.map(it => {
+    const renderItem = (it) => {
       const d = it.date;
       const adjStatus = String(it?.adjust?.status || '');
       // 調整申請済み・承認待ち: 再申請を促さず、申請中であることだけを表示
@@ -425,8 +433,19 @@ const renderNotices = async (date) => {
         <a class="simple-notice-miss-btn" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(d)}">${adjStatus === 'rejected' ? '再申請' : '調整申請'}</a>
       </div>
     `;
-    }).join('');
-    box.innerHTML = `<div class="simple-notice-miss">${items}</div>`;
+    };
+    // Tháng trước: khối riêng ở trên cùng, viền đỏ + tiêu đề nhắc phải 調整申請
+    const prevBlock = prevMissing.length ? `
+      <div class="simple-notice-prev${prevOpenCount ? '' : ' is-all-pending'}">
+        <div class="simple-notice-prev-head">
+          ${prevOpenCount
+            ? `【前月の打刻漏れ】${prevM}月に未完了の打刻が ${prevOpenCount} 件あります。調整申請を行ってください。`
+            : `【前月の打刻漏れ】${prevM}月の調整申請はすべて承認待ちです。`}
+        </div>
+        <div class="simple-notice-miss">${prevMissing.map(renderItem).join('')}</div>
+      </div>` : '';
+    const curBlock = missing.length ? `<div class="simple-notice-miss">${missing.map(renderItem).join('')}</div>` : '';
+    box.innerHTML = prevBlock + curBlock;
   } catch (e) {
     try {
       const box = $('#noticeBox');

@@ -1599,3 +1599,34 @@ body {
 }
 .simple-notice-miss-item.is-pending .simple-notice-miss-date { color: #1d4ed8; }
 .simple-notice-miss-item.is-pending .simple-notice-miss-msg { color: #1e3a8a; }
+/* 前月の打刻漏れ: 当月の警告より上に、赤枠で目立たせる (前月が 承認済み なら表示しない) */
+.simple-notice-prev {
+  margin: 10px 12px 0;
+  border: 1px solid #fecaca;
+  border-left: 4px solid #dc2626;
+  border-radius: 8px;
+  background: #fef2f2;
+}
+.simple-notice-prev-head {
+  padding: 10px 12px 0;
+  color: #b91c1c;
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.simple-notice-prev .simple-notice-miss-item:not(.is-pending) {
+  background: #fff;
+  border-color: #fecaca;
+  border-left-color: #dc2626;
+}
+.simple-notice-prev .simple-notice-miss-item:not(.is-pending) .simple-notice-miss-date { color: #b91c1c; }
+.simple-notice-prev .simple-notice-miss-item:not(.is-pending) .simple-notice-miss-msg { color: #7f1d1d; }
+.simple-notice-prev .simple-notice-miss-item:not(.is-pending) .simple-notice-miss-btn { background: #dc2626; }
+.simple-notice-prev .simple-notice-miss-item:not(.is-pending) .simple-notice-miss-btn:hover { background: #b91c1c; }
+/* 前月分がすべて 承認待ち のときは青系で落ち着かせる */
+.simple-notice-prev.is-all-pending {
+  border-color: #bfdbfe;
+  border-left-color: #3b82f6;
+  background: #eff6ff;
+}
+.simple-notice-prev.is-all-pending .simple-notice-prev-head { color: #1d4ed8; }

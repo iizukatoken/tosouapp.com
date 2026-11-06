@@ -330,7 +330,9 @@ exports.getMonthMissingMe = async (req, res) => {
       } catch (e) { /* bảng chưa tồn tại → hiển thị cảnh báo như cũ */ }
     }
 
-    res.status(200).json({ userId, year: y, month: m, missing });
+    // monthStatus: màn hình 簡易登録 dùng để bỏ qua tháng trước đã 承認 (đã khoá, không 申請 được nữa)
+    const monthStatus = await getMonthStatusValue(userId, y, m).catch(() => null);
+    res.status(200).json({ userId, year: y, month: m, monthStatus: monthStatus || 'draft', missing });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
