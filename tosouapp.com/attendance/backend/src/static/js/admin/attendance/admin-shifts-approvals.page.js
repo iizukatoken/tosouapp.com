@@ -151,11 +151,12 @@ const CSS = `
   .clickable-leave { cursor: pointer; }
   .sa-cell-big { width: 100%; height: 30px; font-size: 13px; }
   /* 内容を見る（月カレンダー） */
-  .sa-ov { position: fixed; inset: 0; background: rgba(15,23,42,.45); z-index: 9990; display: flex; align-items: center; justify-content: center; padding: 16px; }
-  .sa-modal { background: #fff; border-radius: 12px; width: min(560px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
-  .sa-mh { display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 18px 10px; border-bottom: 1px solid #e2e8f0; }
-  .sa-mb { padding: 14px 18px; }
-  .sa-mf { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; flex-wrap: wrap; }
+  /* 上部メニュー（z-index が非常に高い）の下から表示し、見出しとボタンは常に見えるようにする */
+  .sa-ov { position: fixed; inset: 0; top: var(--topbar-height, 52px); background: rgba(15,23,42,.45); z-index: 9990; display: flex; align-items: center; justify-content: center; padding: 12px 16px; box-sizing: border-box; }
+  .sa-modal { background: #fff; border-radius: 12px; width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .sa-mh { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 18px 10px; border-bottom: 1px solid #e2e8f0; }
+  .sa-mb { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px 18px; }
+  .sa-mf { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; flex-wrap: wrap; }
   .sa-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
   .sa-cal .wd { text-align: center; font-size: 11.5px; font-weight: 700; color: #64748b; padding-bottom: 2px; }
   .sa-cal .day { border: 1px solid #e2e8f0; border-radius: 6px; padding: 3px; min-height: 50px; box-sizing: border-box; }
