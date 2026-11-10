@@ -3,6 +3,17 @@ const deptChange = require('../departments/department.change.service');
 const bcrypt = require('bcrypt');
 const { bcryptRounds } = require('../../config/env');
 const { invalidateUserCache } = require('../../core/middleware/authMiddleware');
+const { canAssignRole } = require('../../utils/normalizeRole');
+
+// Chặn khi đổi sang role không được phép gán, hoặc đổi role của người đang giữ role
+// cao hơn quyền gán của mình (vd. admin công ty hạ quyền sysadmin). Giữ nguyên role thì cho qua.
+function roleForbidden(req, role, currentRole = null) {
+  if (role == null || String(role).trim() === '') return false;
+  const { normalizeRole } = require('../../utils/normalizeRole');
+  if (currentRole != null && normalizeRole(role) === normalizeRole(currentRole)) return false;
+  if (!canAssignRole(req.user?.role, role)) return true;
+  return currentRole != null && !canAssignRole(req.user?.role, currentRole);
+}
 
 function normalizeUserListResult(rows, limit, offset) {
   const normalizedRows = Array.isArray(rows) ? rows : [];
@@ -80,6 +91,7 @@ exports.create = async (req, res) => {
     if (!username || !email || !password || !(role || departmentId !== undefined)) {
       return res.status(400).json({ message: 'Missing username/email/password' });
     }
+    if (roleForbidden(req, role)) return res.status(403).json({ message: 'この権限は付与できません' });
     // Enforce password policy
     const { valid, message } = validatePassword(password);
     if (!valid) return res.status(400).json({ message });
@@ -146,6 +158,7 @@ exports.update = async (req, res) => {
     // 部署を変えたときは異動履歴も自動で記録する（過去の月は元の部署のまま集計されるように）
     const before = await repo.getUserById(id, req.tenantId || null);
     if (!before) return res.status(404).json({ message: 'User not found' });
+    if (roleForbidden(req, body.role, before.role)) return res.status(403).json({ message: 'この権限は付与できません' });
     await deptChange.saveWithDepartmentChange({
       before,
       toDepartmentId: body.departmentId,
@@ -241,6 +254,9 @@ exports.setRole = async (req, res) => {
     const id = req.params.id;
     const { role } = req.body || {};
     if (!id || !role) return res.status(400).json({ message: 'Missing id/role' });
+    const current = await repo.getUserById(id, req.tenantId || null);
+    if (!current) return res.status(404).json({ message: 'User not found' });
+    if (roleForbidden(req, role, current.role)) return res.status(403).json({ message: 'この権限は付与できません' });
     await repo.setRole(id, role, req.tenantId || null);
     await refreshRepo.deleteUserTokens(id);
     res.status(200).json({ id, role });

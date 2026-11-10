@@ -48,4 +48,19 @@ function canAccess(actorRole, requiredRole) {
   return roleLevel(actorRole) >= roleLevel(requiredRole);
 }
 
-module.exports = { normalizeRole, roleLevel, canAccess };
+/**
+ * Người có role actorRole có được gán role targetRole cho người khác không.
+ * sysadmin (toàn nền tảng) chỉ sysadmin gán; owner chỉ sysadmin/owner gán —
+ * admin của một công ty gán được 2 role này là xem được dữ liệu mọi công ty.
+ * Role lạ (không có trong ROLE_LEVEL) luôn bị từ chối.
+ */
+function canAssignRole(actorRole, targetRole) {
+  const target = normalizeRole(targetRole);
+  if (!(target in ROLE_LEVEL)) return false;
+  const actor = normalizeRole(actorRole);
+  if (target === 'sysadmin') return actor === 'sysadmin';
+  if (target === 'owner') return actor === 'sysadmin' || actor === 'owner';
+  return true;
+}
+
+module.exports = { normalizeRole, roleLevel, canAccess, canAssignRole };

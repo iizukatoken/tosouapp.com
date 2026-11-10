@@ -288,11 +288,7 @@ router.post('/profile-change',
         approved_by BIGINT UNSIGNED NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    const allowedKeys = ['username','email','role','departmentId','level','managerId','employmentType','hireDate','birthDate','gender','phone','avatarUrl','probationDate','officialDate','address','employmentStatus','contractEnd','baseSalary','shiftId','joinDate'];
-    const filtered = {};
-    for (const k of allowedKeys) {
-      if (b[k] !== undefined && b[k] !== null && String(b[k]).trim() !== '') filtered[k] = b[k];
-    }
+    const filtered = require('./profileChange.fields').pickProfileChangeFields(b);
     if (!Object.keys(filtered).length) return res.status(400).json({ message: 'No changes provided' });
     const [result] = await db.query(`INSERT INTO user_change_requests (user_id, fields_json, status) VALUES (?, ?, 'pending')`, [userId, JSON.stringify(filtered)]);
     res.status(201).json({ id: result.insertId });

@@ -16,15 +16,4 @@ router.get('/questions/my', authenticate, resolveTenant, ctrl.getMyQuestions);
 router.get('/admin/questions', authenticate, resolveTenant, ctrl.getAllQuestions);
 router.post('/admin/questions/:questionId/answer', authenticate, resolveTenant, ctrl.validateAdminAnswer, ctrl.answerQuestion);
 
-// DEBUG: Check all questions (remove in production)
-router.get('/debug/all-questions', async (req, res) => {
-  try {
-    const db = require('../../core/database/mysql');
-    const [rows] = await db.query('SELECT id, user_id, question, status, created_at FROM faq_user_questions ORDER BY created_at DESC LIMIT 20');
-    res.json({ count: rows.length, data: rows });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 module.exports = router;

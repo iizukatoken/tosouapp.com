@@ -4,6 +4,7 @@ const deptChange = require('../departments/department.change.service');
 const salaryService = require('../salary/salary.service');
 const refreshRepo = require('../auth/refresh.repository');
 const db = require('../../core/database/mysql');
+const { pickProfileChangeFields } = require('../employee/profileChange.fields');
 
 function normalizeUserListResult(rows, limit, offset) {
   const normalizedRows = Array.isArray(rows) ? rows : [];
@@ -249,37 +250,19 @@ exports.approveProfileChange = async (req, res) => {
     const row = rows[0];
     if (!row) return res.status(404).json({ message: 'Not found' });
     if (row.status !== 'pending') return res.status(409).json({ message: 'Already processed' });
-    const target = await userRepo.getUserById(row.user_id);
+    // Không ai được tự duyệt yêu cầu của chính mình.
+    if (String(row.user_id) === String(req.user?.id)) {
+      return res.status(403).json({ message: '自分の申請は承認できません' });
+    }
     if (String(status).toLowerCase() === 'approved') {
-      let fields = {};
-      try { fields = JSON.parse(row.fields_json) || {}; } catch (e) { /* silently ignored */ }
-      // 申請で部署が変わる場合は、承認した日を異動日として履歴に記録する
-      await deptChange.saveWithDepartmentChange({
-        before: target, toDepartmentId: fields.departmentId, effectiveDate: null,
-        actorId: req.user?.id || null, tenantId: req.tenantId || null,
-        save: () => userRepo.updateUser(row.user_id, {
-        username: fields.username,
-        email: fields.email,
-        role: fields.role,
-        departmentId: fields.departmentId,
-        level: fields.level,
-        managerId: fields.managerId,
-        employmentType: fields.employmentType,
-        hireDate: fields.hireDate,
-        birthDate: fields.birthDate,
-        gender: fields.gender,
-        phone: fields.phone,
-        avatarUrl: fields.avatarUrl,
-        probationDate: fields.probationDate,
-        officialDate: fields.officialDate,
-        address: fields.address,
-        employmentStatus: fields.employmentStatus,
-        contractEnd: fields.contractEnd,
-        baseSalary: fields.baseSalary,
-        shiftId: fields.shiftId,
-        joinDate: fields.joinDate
-      })
-      });
+      let raw = {};
+      try { raw = JSON.parse(row.fields_json) || {}; } catch (e) { /* silently ignored */ }
+      // Chỉ áp dụng thông tin cá nhân — yêu cầu cũ có thể còn chứa role / lương / phòng ban.
+      const fields = pickProfileChangeFields(raw);
+      if (!Object.keys(fields).length) {
+        return res.status(422).json({ message: '承認できる項目がありません（権限・給与・部署は社員管理画面で変更してください）' });
+      }
+      await userRepo.updateUser(row.user_id, fields);
       await db.query(`UPDATE user_change_requests SET status='approved', approved_by=?, approved_at=CURRENT_TIMESTAMP WHERE id=?`, [req.user.id, id]);
       return res.status(200).json({ id, status: 'approved' });
     } else if (String(status).toLowerCase() === 'rejected') {
