@@ -3,13 +3,12 @@ const deptChange = require('../departments/department.change.service');
 const bcrypt = require('bcrypt');
 const { bcryptRounds } = require('../../config/env');
 const { invalidateUserCache } = require('../../core/middleware/authMiddleware');
-const { canAssignRole } = require('../../utils/normalizeRole');
+const { canAssignRole, normalizeRole } = require('../../utils/normalizeRole');
 
 // Chặn khi đổi sang role không được phép gán, hoặc đổi role của người đang giữ role
 // cao hơn quyền gán của mình (vd. admin công ty hạ quyền sysadmin). Giữ nguyên role thì cho qua.
 function roleForbidden(req, role, currentRole = null) {
   if (role == null || String(role).trim() === '') return false;
-  const { normalizeRole } = require('../../utils/normalizeRole');
   if (currentRole != null && normalizeRole(role) === normalizeRole(currentRole)) return false;
   if (!canAssignRole(req.user?.role, role)) return true;
   return currentRole != null && !canAssignRole(req.user?.role, currentRole);
@@ -158,7 +157,12 @@ exports.update = async (req, res) => {
     // 部署を変えたときは異動履歴も自動で記録する（過去の月は元の部署のまま集計されるように）
     const before = await repo.getUserById(id, req.tenantId || null);
     if (!before) return res.status(404).json({ message: 'User not found' });
-    if (roleForbidden(req, body.role, before.role)) return res.status(403).json({ message: 'この権限は付与できません' });
+    if (body.role != null && String(body.role).trim() !== '' && normalizeRole(body.role) !== normalizeRole(before.role)) {
+      if (!canAssignRole(req.user?.role, body.role)) return res.status(403).json({ message: 'この権限は付与できません' });
+      // Người đang là owner/sysadmin: admin công ty không đổi role của họ. Form luôn gửi kèm role
+      // (lấy theo role trong công ty), nên bỏ qua role thay vì báo lỗi — các thông tin khác vẫn lưu.
+      if (roleForbidden(req, body.role, before.role)) delete body.role;
+    }
     await deptChange.saveWithDepartmentChange({
       before,
       toDepartmentId: body.departmentId,

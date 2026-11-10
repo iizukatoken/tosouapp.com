@@ -57,6 +57,14 @@ describe('申請 đổi hồ sơ', () => {
     expect(userRepo.updateUser).not.toHaveBeenCalled();
   });
 
+  it('vẫn từ chối được yêu cầu của chính mình', async () => {
+    mockChangeRequest(5, { phone: '090' });
+    const res = mockRes();
+    await approveProfileChange({ params: { id: '99' }, body: { status: 'rejected' }, tenantId: 1, user: { id: 5, role: 'manager' } }, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(userRepo.updateUser).not.toHaveBeenCalled();
+  });
+
   it('yêu cầu cũ chứa role / lương: chỉ áp dụng phần thông tin cá nhân', async () => {
     mockChangeRequest(20, { phone: '090', role: 'sysadmin', baseSalary: 999999 });
     const res = mockRes();
@@ -112,6 +120,17 @@ describe('Gán role', () => {
     const res = mockRes();
     await update({ params: { id: '2' }, body: { role: 'owner', phone: '090' }, tenantId: 1, user: { id: 1, role: 'admin' } }, res);
     expect(res.status).not.toHaveBeenCalledWith(403);
+  });
+
+  it('PATCH user: người đang là owner (form gửi role theo công ty = admin) → vẫn lưu, không đổi role', async () => {
+    userRepo.getUserById.mockResolvedValue({ id: 2, role: 'owner' });
+    const res = mockRes();
+    await update({ params: { id: '2' }, body: { role: 'admin', phone: '090' }, tenantId: 1, user: { id: 1, role: 'admin' } }, res);
+    expect(res.status).not.toHaveBeenCalledWith(403);
+    expect(userRepo.updateUser).toHaveBeenCalled();
+    const saved = userRepo.updateUser.mock.calls[0][1];
+    expect(saved.role).toBeUndefined();
+    expect(saved.phone).toBe('090');
   });
 
   it('PATCH user: admin đổi role thành sysadmin → 403', async () => {

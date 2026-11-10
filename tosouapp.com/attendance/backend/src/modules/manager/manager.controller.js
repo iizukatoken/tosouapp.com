@@ -250,11 +250,11 @@ exports.approveProfileChange = async (req, res) => {
     const row = rows[0];
     if (!row) return res.status(404).json({ message: 'Not found' });
     if (row.status !== 'pending') return res.status(409).json({ message: 'Already processed' });
-    // Không ai được tự duyệt yêu cầu của chính mình.
-    if (String(row.user_id) === String(req.user?.id)) {
-      return res.status(403).json({ message: '自分の申請は承認できません' });
-    }
     if (String(status).toLowerCase() === 'approved') {
+      // Không ai được tự duyệt yêu cầu của chính mình.
+      if (String(row.user_id) === String(req.user?.id)) {
+        return res.status(403).json({ message: '自分の申請は承認できません' });
+      }
       let raw = {};
       try { raw = JSON.parse(row.fields_json) || {}; } catch (e) { /* silently ignored */ }
       // Chỉ áp dụng thông tin cá nhân — yêu cầu cũ có thể còn chứa role / lương / phòng ban.
