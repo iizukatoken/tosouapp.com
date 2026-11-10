@@ -16,41 +16,41 @@ const STATUS_LABEL = { pending: '承認待ち', approved: '承認済み', reject
 // 業務システム風（クラシック）: Meiryo 12.5px・罫線ありの表・フォルダ型タブ・小さめのボタン。
 // 管理画面共通CSS（表見出しの青背景・中央寄せ等）に負けないよう !important。
 const CSS = `
-  #reqUnified.req-unified { font-family: Meiryo, 'Yu Gothic UI', 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif !important; color: #222; background: #fff; padding: 12px 16px 0; box-sizing: border-box; font-size: 12.5px; line-height: 1.5; }
+  #reqUnified.req-unified { font-family: 'Meiryo UI', 'Yu Gothic UI', Meiryo, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif !important; color: #333; background: #fff; padding: 12px 16px 0; box-sizing: border-box; font-size: 12px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
   #reqUnified.req-unified * { font-family: inherit !important; }
-  #reqUnified.req-unified .ru-title { font-size: 15px !important; font-weight: 700 !important; margin: 0 0 10px !important; padding: 2px 0 2px 8px; border-left: 4px solid #0b2c66; color: #1a2b44; line-height: 1.3; }
+  #reqUnified.req-unified .ru-title { font-size: 14px !important; font-weight: 700 !important; margin: 0 0 10px !important; padding: 1px 0 1px 8px; border-left: 3px solid #0b2c66; color: #1f2d3d; line-height: 1.3; }
 
   /* フォルダ型タブ */
   #reqUnified.req-unified .ru-tabs { display: flex; gap: 2px; align-items: flex-end; border-bottom: 1px solid #aeb8c4; padding-left: 2px; }
   #reqUnified.req-unified .ru-tab {
-    height: 28px !important; padding: 0 14px !important; margin: 0 0 -1px !important;
+    height: 26px !important; padding: 0 12px !important; margin: 0 0 -1px !important;
     border: 1px solid #aeb8c4 !important; border-bottom: none !important; border-radius: 3px 3px 0 0 !important;
-    background: #eef1f4 !important; color: #3a4553 !important; font-size: 12.5px !important; font-weight: 400 !important;
-    cursor: pointer; box-shadow: none !important; line-height: 26px !important; white-space: nowrap; }
+    background: #f0f2f5 !important; color: #555 !important; font-size: 12px !important; font-weight: 400 !important;
+    cursor: pointer; box-shadow: none !important; line-height: 24px !important; white-space: nowrap; }
   #reqUnified.req-unified .ru-tab:hover { background: #e3e8ee !important; }
   #reqUnified.req-unified .ru-tab.active, #reqUnified.req-unified .ru-tab.active:hover {
     background: #fff !important; color: #0b2c66 !important; font-weight: 700 !important;
-    border-top: 2px solid #0b2c66 !important; height: 30px !important; border-bottom: 1px solid #fff !important; }
-  #reqUnified.req-unified .ru-tabcount { margin-left: 3px; color: #6b7684; }
-  #reqUnified.req-unified .ru-tab.hot .ru-tabcount { color: #c0392b; font-weight: 700; }
+    border-top: 2px solid #0b2c66 !important; height: 27px !important; border-bottom: 1px solid #fff !important; }
+  #reqUnified.req-unified .ru-tabcount { margin-left: 3px; color: #999; font-weight: 400; }
+  #reqUnified.req-unified .ru-tab.hot .ru-tabcount { color: #c0392b; font-weight: 600; }
 
   #reqUnified.req-unified .ru-panel { padding: 10px 0 16px; }
   #reqUnified.req-unified .ru-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
   #reqUnified.req-unified .ru-monthnav { display: inline-flex; align-items: center; gap: 6px; }
-  #reqUnified.req-unified .ru-month { font-size: 13.5px; font-weight: 700; min-width: 84px; text-align: center; color: #1a2b44; }
-  #reqUnified.req-unified .ru-count { color: #5b6573; margin-left: 4px; }
+  #reqUnified.req-unified .ru-month { font-size: 12.5px; font-weight: 700; min-width: 78px; text-align: center; color: #1f2d3d; }
+  #reqUnified.req-unified .ru-count { color: #777; margin-left: 4px; }
   #reqUnified.req-unified .ru-msg { color: #b42318; }
   #reqUnified.req-unified .ru-msg:not(:empty) { margin-bottom: 6px; }
 
   /* ボタン・セレクト */
   #reqUnified.req-unified .ru-btn, #reqUnified.req-unified .ru-select {
     display: inline-flex !important; align-items: center; justify-content: center; box-sizing: border-box;
-    height: 26px !important; padding: 0 10px !important; margin: 0 !important;
-    border: 1px solid #aeb8c4 !important; border-radius: 3px !important; background: #fff !important; color: #222 !important;
-    font-size: 12px !important; font-weight: 400 !important; line-height: 1 !important;
+    height: 24px !important; padding: 0 10px !important; margin: 0 !important;
+    border: 1px solid #b4bdc8 !important; border-radius: 3px !important; background: #fff !important; color: #333 !important;
+    font-size: 11.5px !important; font-weight: 400 !important; line-height: 1 !important;
     cursor: pointer; text-decoration: none !important; white-space: nowrap; box-shadow: none !important; }
   #reqUnified.req-unified .ru-btn:hover { background: #f1f4f7 !important; border-color: #8c97a5 !important; }
-  #reqUnified.req-unified .ru-btn.sm { height: 24px !important; padding: 0 9px !important; }
+  #reqUnified.req-unified .ru-btn.sm { height: 22px !important; padding: 0 8px !important; }
   #reqUnified.req-unified .ru-btn.ok { background: #0b2c66 !important; border-color: #0b2c66 !important; color: #fff !important; }
   #reqUnified.req-unified .ru-btn.ok:hover { background: #082251 !important; }
   #reqUnified.req-unified .ru-btn.ng { color: #b42318 !important; border-color: #d9a6a0 !important; }
@@ -60,28 +60,28 @@ const CSS = `
 
   /* 罫線ありの表 */
   #reqUnified.req-unified .ru-tablewrap { overflow-x: auto; }
-  #reqUnified.req-unified .ru-table { width: 100% !important; min-width: 880px !important; border-collapse: collapse !important; table-layout: auto !important; display: table !important; margin: 0 !important; border: 1px solid #b9c3ce !important; font-size: 12.5px !important; background: #fff; }
+  #reqUnified.req-unified .ru-table { width: 100% !important; min-width: 880px !important; border-collapse: collapse !important; table-layout: auto !important; display: table !important; margin: 0 !important; border: 1px solid #c3cbd4 !important; font-size: 12px !important; background: #fff; }
   #reqUnified.req-unified .ru-table th {
     position: static !important;
     background: #edf0f4 !important; background-image: linear-gradient(#f6f8fa, #e8ecf1) !important;
-    color: #2b3644 !important; font-size: 12px !important; font-weight: 700 !important; text-align: left !important;
-    padding: 5px 8px !important; border: 1px solid #b9c3ce !important; white-space: nowrap; height: auto !important; }
-  #reqUnified.req-unified .ru-table td { padding: 5px 8px !important; border: 1px solid #d3dae2 !important; vertical-align: middle !important; color: #222 !important; font-size: 12.5px !important; text-align: left !important; background: #fff; }
+    color: #444 !important; font-size: 11.5px !important; font-weight: 600 !important; text-align: left !important;
+    padding: 4px 8px !important; border: 1px solid #c3cbd4 !important; white-space: nowrap; height: auto !important; }
+  #reqUnified.req-unified .ru-table td { padding: 4px 8px !important; border: 1px solid #d9dfe6 !important; vertical-align: middle !important; color: #333 !important; font-size: 12px !important; text-align: left !important; background: #fff; }
   #reqUnified.req-unified .ru-table tbody tr:nth-child(even) td { background: #f9fafb; }
   #reqUnified.req-unified .ru-table tbody tr:hover td { background: #eef4fb; }
   #reqUnified.req-unified .ru-table tr.is-warn td { background: #fdf1f0 !important; }
   #reqUnified.req-unified .ru-table .nowrap { white-space: nowrap !important; word-break: normal !important; }
   #reqUnified.req-unified .ru-table .c-content { min-width: 170px; }
   #reqUnified.req-unified .ru-table .c-reason { min-width: 150px; }
-  #reqUnified.req-unified .ru-sub { color: #6b7684; font-size: 11.5px; }
-  #reqUnified.req-unified .ru-muted { color: #4a5563 !important; }
-  #reqUnified.req-unified .ru-warn { color: #b42318; font-size: 11.5px; margin-top: 2px; }
-  #reqUnified.req-unified .ru-note { color: #6b7684; font-size: 11.5px; }
+  #reqUnified.req-unified .ru-sub { color: #888; font-size: 11px; }
+  #reqUnified.req-unified .ru-muted { color: #666 !important; }
+  #reqUnified.req-unified .ru-warn { color: #b42318; font-size: 11px; margin-top: 2px; }
+  #reqUnified.req-unified .ru-note { color: #888; font-size: 11px; }
   #reqUnified.req-unified .ru-empty { padding: 16px 8px !important; color: #6b7684 !important; text-align: center !important; }
   #reqUnified.req-unified .ru-ops { display: flex; gap: 4px; flex-wrap: nowrap; align-items: center; }
 
   /* 状態（角型の枠付きラベル） */
-  #reqUnified.req-unified .ru-pill { display: inline-block; padding: 0 6px; border: 1px solid; border-radius: 2px; font-size: 11.5px; line-height: 18px; white-space: nowrap; }
+  #reqUnified.req-unified .ru-pill { display: inline-block; padding: 0 6px; border: 1px solid; border-radius: 2px; font-size: 11px; line-height: 17px; white-space: nowrap; }
   #reqUnified.req-unified .ru-pill.pending { color: #a15c07; border-color: #e7c08a; background: #fff8ec; }
   #reqUnified.req-unified .ru-pill.approved { color: #1e6b34; border-color: #a9d3b5; background: #f1faf3; }
   #reqUnified.req-unified .ru-pill.rejected { color: #a3231a; border-color: #e3aaa4; background: #fdf2f1; }
