@@ -1,7 +1,6 @@
 const { generateRegistrationOptions, verifyRegistrationResponse, generateAuthenticationOptions, verifyAuthenticationResponse } = require('@simplewebauthn/server');
 const authRepository = require('../auth/auth.repository');
 const passkeyRepo = require('./webauthn.repository');
-const userRepo = require('../users/user.repository');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const refreshRepo = require('../auth/refresh.repository');
@@ -116,28 +115,40 @@ exports.loginVerify = async (req, res) => {
   if (!email || !authResp) return res.status(400).json({ message: 'Missing email/response' });
   const expectedChallenge = challengeStore.get(`auth:${email}`);
   if (!expectedChallenge) return res.status(400).json({ message: 'Challenge missing' });
+  // Challenge chỉ dùng một lần, kể cả khi xác thực thất bại.
+  challengeStore.delete(`auth:${email}`);
   const rpId = rpIdFromReq(req);
   const origin = originFromReq(req);
-  const credIdBuf = Buffer.from(authResp.rawId, 'base64url');
+  const credIdBuf = Buffer.from(String(authResp.rawId || ''), 'base64url');
   const stored = await passkeyRepo.findByCredentialId(Buffer.from(credIdBuf).toString('base64url'));
+  if (!stored) return res.status(401).json({ message: 'Unknown credential' });
+  // Passkey phải thuộc đúng người có email này — nếu không, ai có passkey của mình
+  // cũng đăng nhập được vào tài khoản người khác chỉ bằng cách đổi email.
+  const user = await authRepository.findUserByEmail(email);
+  if (!user || String(stored.user_id) !== String(user.id)) {
+    return res.status(401).json({ message: 'Verification failed' });
+  }
+  if (String(user.employment_status || 'active') !== 'active') {
+    return res.status(403).json({ message: 'Account inactive' });
+  }
+  if (await authRepository.isLocked(user.id)) {
+    return res.status(423).json({ message: 'Account locked. Try later.' });
+  }
   const verification = await verifyAuthenticationResponse({
     response: authResp,
     expectedChallenge,
     expectedOrigin: origin,
     expectedRPID: rpId,
-    authenticator: stored ? {
+    authenticator: {
       credentialID: Buffer.from(stored.credential_id, 'base64url'),
       credentialPublicKey: Buffer.from(stored.public_key, 'base64url'),
       counter: Number(stored.counter || 0)
-    } : undefined
+    }
   });
-  if (!stored) return res.status(401).json({ message: 'Unknown credential' });
   if (!verification.verified) return res.status(401).json({ message: 'Verification failed' });
-  if (verification.authenticationInfo && stored) {
+  if (verification.authenticationInfo) {
     await passkeyRepo.updateCounter(stored.credential_id, verification.authenticationInfo.newCounter || stored.counter || 0);
   }
-  const user = await userRepo.getUserByEmail(email);
-  if (!user) return res.status(404).json({ message: 'User not found' });
   const role = user.role || 'employee';
   const tokenVersion = user.token_version || 1;
   const token = jwt.sign({ id: user.id, role, v: tokenVersion }, jwtSecretCurrent, { expiresIn: accessTokenExpires });
