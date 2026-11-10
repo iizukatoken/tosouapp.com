@@ -30,6 +30,11 @@ export async function mount({ content }) {
   if (!parent) return null;
 
   const state = { tab: readTab(), month: ym(new Date()), status: 'pending', items: [], summary: {}, busy: false, adjustChanged: false };
+  // ?tab=leave など（旧「休暇申請承認」URL からの転送）
+  try {
+    const urlTab = new URLSearchParams(window.location.search).get('tab');
+    if (urlTab && TABS.some(t => t.key === urlTab)) { state.tab = urlTab; saveTab(urlTab); }
+  } catch { /* ignore */ }
   if (!TABS.some(t => t.key === state.tab)) state.tab = 'all';
 
   const root = document.createElement('div');
@@ -103,6 +108,11 @@ export async function mount({ content }) {
           + `<button type="button" data-act="reject" data-i="${idx}" style="padding:3px 10px;background:#dc2626;color:#fff;border:none;border-radius:4px;">却下</button>`;
       } else if (!r.actions && r.source === 'shift') {
         ops = '<span style="color:#64748b;">シフト承認で決定</span>';
+      }
+      // シフトは日ごとの出勤・休みを月カレンダーで確認してから承認する
+      if (r.category === 'shift') {
+        const href = `/admin/attendance/shifts-approvals?month=${encodeURIComponent(r.targetDate)}&view=${encodeURIComponent(r.userId)}`;
+        ops = `<a href="${href}" style="display:inline-block;padding:3px 10px;margin-right:4px;border:1px solid #0b5ed7;color:#0b5ed7;border-radius:4px;text-decoration:none;">内容を見る</a>` + ops;
       }
       const warn = r.warning ? `<div style="color:#b91c1c;font-size:12px;margin-top:2px;">⚠ ${esc(r.warning)}</div>` : '';
       const who = `${esc(r.applicantName)}${r.employeeCode ? `<div style="color:#64748b;font-size:11px;">${esc(r.employeeCode)}${r.departmentName ? ' / ' + esc(r.departmentName) : ''}</div>` : ''}`;

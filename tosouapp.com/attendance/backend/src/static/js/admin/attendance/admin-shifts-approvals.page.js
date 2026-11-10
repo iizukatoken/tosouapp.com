@@ -15,7 +15,15 @@ async function te({ content: o }) {
   l = o; l.style.visibility = "";
   const d = new Date(); d.setMonth(d.getMonth() + 1);
   g = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  // 申請一覧（統合）の「内容を見る」から: ?month=YYYY-MM&view=<userId> でその人の月カレンダーを開く
+  let viewId = "";
+  try {
+    const qs = new URLSearchParams(window.location.search);
+    if (/^\d{4}-\d{2}$/.test(qs.get("month") || "")) g = qs.get("month");
+    viewId = qs.get("view") || "";
+  } catch { /* ignore */ }
   await I();
+  if (viewId) openView(viewId);
 }
 
 function h(o) { return o == null ? "" : String(o).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }

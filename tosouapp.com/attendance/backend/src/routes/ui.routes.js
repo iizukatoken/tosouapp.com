@@ -183,6 +183,9 @@ router.get('/ui/employees/', (req, res) => sendAdminPageNoCache(req, res, 'admin
 router.get('/admin/attendance/monthly', (req, res) => sendAdminPageNoCache(req, res, 'admin-attendance-monthly.html'));
 router.get('/admin/attendance/monthly/', (req, res) => sendAdminPageNoCache(req, res, 'admin-attendance-monthly.html'));
 
+// 休暇申請承認 は 調整申請一覧（統合）の「有給・休暇」タブに統合した。旧URL（通知・ポータルのリンク）はそちらへ。
+router.get(['/admin/leave/requests', '/admin/leave/requests/'], (req, res) => res.redirect(302, '/admin/attendance/adjust-requests?tab=leave'));
+
 router.get(/^\/admin(?:\/.*)?$/, (req, res) => {
   const role = roleOf(req.user?.role);
   if (role === 'employee') {
