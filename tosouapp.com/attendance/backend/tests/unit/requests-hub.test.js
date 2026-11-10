@@ -23,6 +23,8 @@ const { fetchMerged } = require('../../src/modules/requestsHub/requestsHub.admin
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // シフト/プロフィール/その他/警告 の追加クエリは既定で空
+  db.query.mockResolvedValue([[]]);
 });
 
 describe('fetchMerged', () => {
@@ -86,5 +88,65 @@ describe('fetchMerged', () => {
     expect(leaveSql).toMatch(/from_attendance/);
     expect(leaveSql).toMatch(/AUTO_CANCEL/);
     expect(leaveSql).toMatch(/AUTO_RECONCILE/);
+  });
+
+  it('シフト提出・プロフィール変更・その他の申請もまとめ、それぞれの承認APIを持つ', async () => {
+    db.query
+      .mockResolvedValueOnce([[]]) // leave
+      .mockResolvedValueOnce([[]]) // adjust
+      .mockResolvedValueOnce([[{ id: 7, userId: 20, month: '2026-09', status: 'PENDING', updated_at: null, employeeCode: 'E20', username: '高橋', departmentName: '工事部' }]])
+      .mockResolvedValueOnce([[{ userId: 20, offDays: 8, paidDays: 2, otherLeaveDays: 0 }]])
+      .mockResolvedValueOnce([[{ id: 3, userId: 21, fields_json: JSON.stringify({ phone: '090', role: 'admin' }), status: 'pending', created_at: '2026-09-03 10:00:00', approved_at: null, username: '伊藤' }]])
+      .mockResolvedValueOnce([[{ id: 9, userId: 22, request_no: 'R-1', record_type: '残業申請', detail: '9/10 2時間', office: '', status: '申請済み', created_at: '2026-09-10 09:00:00', updated_at: null, username: '渡辺' }]]);
+
+    const rows = await fetchMerged({ tenantId: 1, month: '2026-09', dept: '', userId: null, status: '', q: '' });
+    const byType = Object.fromEntries(rows.map(r => [r.type, r]));
+
+    expect(byType.shift.content).toBe('休日 8日 / 有給 2日');
+    expect(byType.shift.actions.approve.body).toEqual({ userId: 20, month: '2026-09', status: 'APPROVED' });
+    // プロフィール: 個人情報だけ表示 (role は出さない)
+    expect(byType.profile.content).toBe('電話: 090');
+    expect(byType.profile.actions.approve.url).toBe('/api/manager/profile-change/3/status');
+    expect(byType.other.typeLabel).toBe('残業申請');
+    expect(byType.other.status).toBe('pending');
+    expect(byType.other.actions.approve.url).toBe('/api/admin/requests/other/9/status');
+  });
+
+  it('シフト由来の有給は個別に承認/却下できず、区分由来の欠勤は休暇申請として出る', async () => {
+    db.query.mockResolvedValueOnce([[
+      { id: 4, userId: 10, startDate: '2026-09-08', endDate: '2026-09-08', type: 'paid', reason: 'from_shift', status: 'approved', username: 'A' },
+      { id: 5, userId: 10, startDate: '2026-09-09', endDate: '2026-09-09', type: 'absence', reason: 'from_kubun', status: 'pending', username: 'A' }
+    ]]);
+    const rows = await fetchMerged({ tenantId: 1, month: '2026-09', dept: '', userId: null, status: '', q: '' });
+    const shiftPaid = rows.find(r => r.requestId === 4);
+    const absence = rows.find(r => r.requestId === 5);
+    expect(shiftPaid.actions).toBeNull();
+    expect(shiftPaid.reason).toBe('シフト提出より');
+    expect(absence.typeLabel).toBe('休暇申請');
+    expect(absence.content).toBe('欠勤（全日）');
+    expect(absence.actions.reject.url).toBe('/api/leave/5/status');
+  });
+
+  it('却下した有給なのに月次表が有給のままなら警告を付ける', async () => {
+    db.query
+      .mockResolvedValueOnce([[{ id: 6, userId: 10, startDate: '2026-09-15', endDate: '2026-09-15', type: 'paid', reason: '', status: 'rejected', username: 'A' }]])
+      .mockResolvedValueOnce([[]]) // adjust
+      .mockResolvedValueOnce([[]]) // shift
+      .mockResolvedValueOnce([[]]) // profile
+      .mockResolvedValueOnce([[]]) // other
+      .mockResolvedValueOnce([[{ userId: 10, date: '2026-09-15' }]]); // attendance_daily
+    const rows = await fetchMerged({ tenantId: 1, month: '2026-09', dept: '', userId: null, status: '', q: '' });
+    expect(rows[0].warning).toMatch(/有給のまま/);
+  });
+
+  it('まだ作られていないテーブル (ER_NO_SUCH_TABLE) は空として扱う', async () => {
+    const noTable = Object.assign(new Error('no table'), { code: 'ER_NO_SUCH_TABLE' });
+    db.query
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[]])
+      .mockRejectedValueOnce(noTable)
+      .mockRejectedValueOnce(noTable)
+      .mockRejectedValueOnce(noTable);
+    await expect(fetchMerged({ tenantId: 1, month: '2026-09', dept: '', userId: null, status: '', q: '' })).resolves.toEqual([]);
   });
 });

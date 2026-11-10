@@ -273,13 +273,17 @@ exports.createPaid = async (req, res) => {
       return res.status(200).json({ id: existed.id, duplicated: true, status: existed.status });
     }
     const id = await repo.create({ userId, startDate, endDate, type: 'paid', reason, tenantId: req.tenantId || null });
+    // Chọn 有給休暇 trên bảng tháng: đơn 区分 khác (欠勤…) của cùng ngày không còn đúng.
+    if (String(startDate) === String(endDate)) {
+      try { await repo.cancelKubunRequestsByDate(userId, String(startDate).slice(0, 10), req.tenantId || null); } catch (e) { reportSwallowed('leave.createPaid.cancelKubun', e); }
+    }
     try {
       const userName = String(req.user?.username || req.user?.email || `user#${userId}`);
       await noticesRepo.createAdminNotification({
         kind: 'leave_request',
         title: '有給申請',
         message: `${userName} さんが有給申請しました（${startDate} ~ ${endDate}）`,
-        linkUrl: '/admin/leave/requests',
+        linkUrl: '/admin/attendance/adjust-requests',
         payload: { source: 'leave', requestId: id, userId, startDate, endDate, type: 'paid' },
         createdBy: userId,
         audience: 'admin_manager'
@@ -290,8 +294,8 @@ exports.createPaid = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-// API: 任意の休暇区分（欠勤・半休(有給)・無給休暇 など）の申請を管理者へ通知する（通知のみ・有給残数には影響しない）。
-// 有給休暇は createPaid 側でリクエスト作成＋通知を行うため、この API では通知のみを扱う。
+// API: 休暇区分（欠勤・半休(有給)・無給休暇 など）を選んだら承認待ちの申請を作り、管理者へ通知する。
+// 有給休暇は createPaid 側でリクエスト作成＋通知を行う。有給残数は月次表の区分で計算される（承認では変わらない）。
 const LEAVE_KUBUN_LABELS = {
   '有給休暇': '有給休暇',
   '半休(有給)': '半休（有給）',
@@ -300,6 +304,15 @@ const LEAVE_KUBUN_LABELS = {
   '欠勤': '欠勤',
   '無給休暇': '無給休暇',
   '代替休日': '代替休日'
+};
+// 区分 → loại đơn trong leave_requests (有給休暇 đi đường /paid riêng).
+const LEAVE_KUBUN_TYPES = {
+  '半休(有給)': 'paid_half',
+  '半休（有給）': 'paid_half',
+  '半休': 'half',
+  '欠勤': 'absence',
+  '無給休暇': 'unpaid',
+  '代替休日': 'substitute'
 };
 exports.notifyLeaveKubun = async (req, res) => {
   try {
@@ -314,19 +327,27 @@ exports.notifyLeaveKubun = async (req, res) => {
     if (!label) {
       return res.status(200).json({ ok: true, skipped: true });
     }
+    // 区分 nghỉ = một đơn chờ duyệt (hiện ở 申請一覧 cùng 調整申請).
+    let request = null;
+    const leaveType = LEAVE_KUBUN_TYPES[kubunRaw];
+    if (leaveType) {
+      await repo.cancelKubunRequestsByDate(userId, date, req.tenantId || null, leaveType);
+      request = await repo.ensureKubunRequest({ userId, date, type: leaveType, tenantId: req.tenantId || null });
+      if (!request.created) return res.status(200).json({ ok: true, requestId: request.id, duplicated: true });
+    }
     try {
       const userName = String(req.user?.username || req.user?.email || `user#${userId}`);
       await noticesRepo.createAdminNotification({
         kind: 'leave_request',
         title: '休暇申請',
         message: `${userName} さんが${label}を申請しました（${date}）`,
-        linkUrl: '/admin/leave/requests',
-        payload: { source: 'attendance_kubun', userId, date, kubun: kubunRaw },
+        linkUrl: '/admin/attendance/adjust-requests',
+        payload: { source: 'attendance_kubun', userId, date, kubun: kubunRaw, requestId: request?.id || null },
         createdBy: userId,
         audience: 'admin_manager'
       });
     } catch (e) { /* silently ignored */ }
-    res.status(201).json({ ok: true });
+    res.status(201).json({ ok: true, requestId: request?.id || null });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -339,7 +360,9 @@ exports.cancelMyPaid = async (req, res) => {
       return res.status(400).json({ message: 'Missing userId/date' });
     }
     const affected = await repo.cancelOwnPaidByDate(userId, date, req.tenantId || null);
-    return res.status(200).json({ ok: true, affected });
+    // Bảng tháng gọi API này mỗi khi đổi 区分 sang loại khác 有給 → huỷ luôn đơn 区分 cũ của ngày đó.
+    const kubunCancelled = await repo.cancelKubunRequestsByDate(userId, date, req.tenantId || null);
+    return res.status(200).json({ ok: true, affected, kubunCancelled });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -474,7 +497,8 @@ exports.updateStatus = async (req, res) => {
           targetUserId: row.userId,
           targetDate: row.startDate ? String(row.startDate).slice(0, 10) : null,
           targetMonth: row.startDate ? String(row.startDate).slice(0, 7) : null,
-          message: `休暇申請（${String(row.startDate || '').slice(0, 10)} ~ ${String(row.endDate || '').slice(0, 10)}）が${statusLabel}されました。`,
+          message: `休暇申請（${String(row.startDate || '').slice(0, 10)} ~ ${String(row.endDate || '').slice(0, 10)}）が${statusLabel}されました。`
+            + (status === 'rejected' ? '月次勤怠の区分を確認・修正してください。' : ''),
           createdBy: req.user?.id || null,
           kind: 'approval',
           title: '休暇申請'
@@ -1026,7 +1050,8 @@ exports.approve = async (req, res) => {
           targetUserId: row.userId,
           targetDate: row.startDate ? String(row.startDate).slice(0, 10) : null,
           targetMonth: row.startDate ? String(row.startDate).slice(0, 7) : null,
-          message: `休暇申請（${String(row.startDate || '').slice(0, 10)} ~ ${String(row.endDate || '').slice(0, 10)}）が${statusLabel}されました。`,
+          message: `休暇申請（${String(row.startDate || '').slice(0, 10)} ~ ${String(row.endDate || '').slice(0, 10)}）が${statusLabel}されました。`
+            + (status === 'rejected' ? '月次勤怠の区分を確認・修正してください。' : ''),
           createdBy: req.user?.id || null,
           kind: 'approval',
           title: '休暇申請'

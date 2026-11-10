@@ -41,6 +41,20 @@ exports.create = async (req, res) => {
     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
     const { recordType, detail, office } = req.body || {};
     const { id, requestNo } = await repo.create({ userId, recordType, detail, office });
+    // 申請一覧（統合）で承認できるよう管理者へ通知（以前は誰にも届かなかった）
+    try {
+      const typeLabel = String(recordType || '申請').replace(/^\d+_/, '');
+      await require('../notices/notices.repository').createAdminNotification({
+        kind: 'employee_request',
+        title: typeLabel,
+        message: `${req.user?.username || req.user?.email || '社員'} さんが${typeLabel}を提出しました`,
+        linkUrl: '/admin/attendance/adjust-requests',
+        payload: { source: 'employee_requests', requestId: id, userId },
+        createdBy: userId,
+        audience: 'admin_manager',
+        tenantId: req.tenantId || null
+      });
+    } catch (e) { /* 通知は best-effort */ }
     res.status(201).json({ id, requestNo });
   } catch (e) {
     res.status(500).json({ message: e.message });

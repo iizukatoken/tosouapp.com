@@ -455,6 +455,90 @@ module.exports = {
     `;
     await db.query(sql, [status, processedBy || null, processedBy ? new Date() : null, id]);
   },
+  /**
+   * シフト承認 = 有給承認: ngày 有給 trong ca của tháng → đơn 有給 (reason 'from_shift').
+   * shiftStatus APPROVED: tạo/duyệt đơn cho từng ngày; ngày đã bỏ khỏi ca → 却下 đơn from_shift cũ.
+   * REJECTED: 却下 các đơn from_shift của tháng. PENDING/draft: đưa đơn from_shift về pending.
+   * Không đụng attendance_daily (quy tắc cứng của シフト承認).
+   */
+  async syncShiftPaidLeaves({ userId, month, paidDays = [], shiftStatus, approverId = null, tenantId = null }) {
+    const tid = _tid(tenantId);
+    const REASON = 'from_shift';
+    // paidDays: [{ date, type: 'paid' | 'paid_half' }] — 有給休暇 と 半休(有給)
+    const days = [];
+    const seen = new Set();
+    for (const p of paidDays || []) {
+      const date = String(p?.date || '').slice(0, 10);
+      const type = p?.type === 'paid_half' ? 'paid_half' : 'paid';
+      if (!date.startsWith(`${month}-`) || seen.has(`${date}|${type}`)) continue;
+      seen.add(`${date}|${type}`);
+      days.push({ date, type });
+    }
+    const tenantFilter = tid != null ? ' AND tenant_id = ?' : '';
+    const tenantParams = tid != null ? [tid] : [];
+    const result = { approved: 0, rejected: 0, reopened: 0 };
+
+    if (shiftStatus === 'APPROVED') {
+      for (const { date, type } of days) {
+        const existing = await this.findExactRequest({ userId, startDate: date, endDate: date, type, statuses: ['pending', 'approved'], tenantId: tid });
+        if (existing && existing.status === 'approved') continue;
+        const id = existing ? existing.id : await this.create({ userId, startDate: date, endDate: date, type, reason: REASON, tenantId: tid });
+        await this.updateStatus(id, 'approved', tid, approverId);
+        result.approved++;
+      }
+      const keys = days.map(d => `${d.date}|${d.type}`);
+      const notIn = keys.length ? ` AND CONCAT(DATE_FORMAT(startDate, '%Y-%m-%d'), '|', type) NOT IN (${keys.map(() => '?').join(',')})` : '';
+      const [r] = await db.query(
+        `UPDATE leave_requests SET status = 'rejected', processed_by = ?, processed_at = ?,
+           reason = CONCAT(COALESCE(reason, ''), ' / [SHIFT_CHANGED]')
+         WHERE userId = ? AND type IN ('paid', 'paid_half') AND reason LIKE '%from_shift%' AND status IN ('pending', 'approved')
+           AND startDate LIKE ?${notIn}${tenantFilter}`,
+        [approverId, approverId ? new Date() : null, userId, `${month}-%`, ...keys, ...tenantParams]
+      );
+      result.rejected = Number(r?.affectedRows || 0);
+      return result;
+    }
+    if (shiftStatus === 'REJECTED') {
+      const [r] = await db.query(
+        `UPDATE leave_requests SET status = 'rejected', processed_by = ?, processed_at = ?
+         WHERE userId = ? AND type IN ('paid', 'paid_half') AND reason LIKE '%from_shift%' AND status IN ('pending', 'approved')
+           AND startDate LIKE ?${tenantFilter}`,
+        [approverId, approverId ? new Date() : null, userId, `${month}-%`, ...tenantParams]
+      );
+      result.rejected = Number(r?.affectedRows || 0);
+      return result;
+    }
+    const [r] = await db.query(
+      `UPDATE leave_requests SET status = 'pending', processed_by = NULL, processed_at = NULL
+       WHERE userId = ? AND type IN ('paid', 'paid_half') AND reason LIKE '%from_shift%' AND status = 'approved'
+         AND startDate LIKE ?${tenantFilter}`,
+      [userId, `${month}-%`, ...tenantParams]
+    );
+    result.reopened = Number(r?.affectedRows || 0);
+    return result;
+  },
+  // Đơn tạo khi nhân viên chọn 区分 nghỉ (欠勤/無給/半休/半休(有給)/代替休日) trên bảng tháng.
+  async ensureKubunRequest({ userId, date, type, tenantId = null }) {
+    const existing = await this.findExactRequest({ userId, startDate: date, endDate: date, type, statuses: ['pending', 'approved'], tenantId });
+    if (existing) return { id: existing.id, created: false };
+    const id = await this.create({ userId, startDate: date, endDate: date, type, reason: 'from_kubun', tenantId });
+    return { id, created: true };
+  },
+  // Nhân viên đổi 区分 của ngày → huỷ các đơn 区分 cũ (chỉ đơn sinh từ 区分, không đụng đơn nhân viên tự viết).
+  async cancelKubunRequestsByDate(userId, date, tenantId = null, exceptType = null) {
+    const tid = _tid(tenantId);
+    const params = [userId, date, date];
+    let extra = '';
+    if (exceptType) { extra += ' AND type <> ?'; params.push(exceptType); }
+    if (tid != null) { extra += ' AND tenant_id = ?'; params.push(tid); }
+    const [res] = await db.query(`
+      UPDATE leave_requests
+      SET status = 'rejected', reason = CONCAT(COALESCE(reason, ''), ' / [AUTO_CANCEL] kubun changed')
+      WHERE userId = ? AND reason LIKE '%from_kubun%' AND status IN ('pending', 'approved')
+        AND startDate <= ? AND endDate >= ?${extra}
+    `, params);
+    return Number(res?.affectedRows || 0);
+  },
   async cancelOwnPaidByDate(userId, date, tenantId = null) {
     const tid = _tid(tenantId);
     const params = [userId, date, date];
@@ -500,7 +584,9 @@ module.exports = {
           AND lr.status = 'approved'
           AND lr.startDate = lr.endDate
           AND (
-            (ad.userId IS NOT NULL AND REPLACE(TRIM(COALESCE(ad.kubun, '')), '　', '') <> '有給休暇')
+            (ad.userId IS NOT NULL AND REPLACE(TRIM(COALESCE(ad.kubun, '')), '　', '') <> '有給休暇'
+              -- 有給 từ シフト承認 không ghi 区分 vào bảng tháng: 区分 trống không phải là "đã đổi"
+              AND NOT (COALESCE(lr.reason, '') LIKE '%from_shift%' AND REPLACE(TRIM(COALESCE(ad.kubun, '')), '　', '') = ''))
             OR (a.id IS NOT NULL AND (a.checkIn IS NOT NULL OR a.checkOut IS NOT NULL))
           )
           ${tenantFilter}
@@ -536,6 +622,7 @@ module.exports = {
           AND lr.status = 'approved'
           AND lr.startDate = lr.endDate
           AND REPLACE(TRIM(COALESCE(ad.kubun, '')), '　', '') <> '有給休暇'
+          AND NOT (COALESCE(lr.reason, '') LIKE '%from_shift%' AND REPLACE(TRIM(COALESCE(ad.kubun, '')), '　', '') = '')
           ${tenantFilter2}
       `;
       const [candidates2] = await db.query(selectSql2, params2);

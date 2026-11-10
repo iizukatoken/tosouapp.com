@@ -14,10 +14,67 @@ const monthRange = (month) => {
 };
 const fmtHm = (dt) => dt ? String(dt).slice(11, 16) : '--:--';
 
-const LEAVE_TYPE_LABEL = { paid: '有給休暇', unpaid: '無給休暇', sick: '欠勤', absence: '欠勤' };
+const LEAVE_TYPE_LABEL = {
+  paid: '有給休暇', paid_half: '半休（有給）', unpaid: '無給休暇', sick: '欠勤', absence: '欠勤',
+  half: '半休', substitute: '代替休日'
+};
+const PAID_TYPES = new Set(['paid', 'paid_half']);
+const PROFILE_FIELD_LABEL = { username: '氏名', email: 'メール', birthDate: '生年月日', gender: '性別', phone: '電話', avatarUrl: '写真', address: '住所' };
+const OTHER_STATUS = { '申請済み': 'pending', '承認済み': 'approved', '却下': 'rejected' };
+const SHIFT_STATUS = { PENDING: 'pending', APPROVED: 'approved', REJECTED: 'rejected' };
 
-// 種別/部署/社員/ステータス/検索 でフィルタしつつ leave_requests + time_adjust_requests を
-// 1本のリストに正規化してまとめる。承認/却下は各元APIにそのまま流す(このモジュールでは変更しない)。
+// 承認/却下は各元APIにそのまま流す: 画面はこの actions をそのまま呼ぶ。
+const leaveActions = (id) => ({
+  approve: { method: 'PATCH', url: `/api/leave/${id}/status`, body: { status: 'approved' } },
+  reject: { method: 'PATCH', url: `/api/leave/${id}/status`, body: { status: 'rejected' } }
+});
+const adjustActions = (id) => ({
+  approve: { method: 'PATCH', url: `/api/adjust/${id}/status`, body: { status: 'approved' } },
+  reject: { method: 'PATCH', url: `/api/adjust/${id}/status`, body: { status: 'rejected' }, noteField: 'adminNote', noteRequired: true }
+});
+const shiftActions = (userId, month) => ({
+  approve: { method: 'POST', url: '/api/attendance/shifts/submissions/approve', body: { userId, month, status: 'APPROVED' } },
+  reject: { method: 'POST', url: '/api/attendance/shifts/submissions/approve', body: { userId, month, status: 'REJECTED' } }
+});
+const profileActions = (id) => ({
+  approve: { method: 'PATCH', url: `/api/manager/profile-change/${id}/status`, body: { status: 'approved' } },
+  reject: { method: 'PATCH', url: `/api/manager/profile-change/${id}/status`, body: { status: 'rejected' } }
+});
+const otherActions = (id) => ({
+  approve: { method: 'PATCH', url: `/api/admin/requests/other/${id}/status`, body: { status: 'approved' } },
+  reject: { method: 'PATCH', url: `/api/admin/requests/other/${id}/status`, body: { status: 'rejected' } }
+});
+
+// Bảng tạo lười (CREATE TABLE IF NOT EXISTS khi lần đầu dùng) có thể chưa tồn tại → coi như rỗng.
+async function queryOptional(sql, params) {
+  try {
+    const [rows] = await db.query(sql, params);
+    return rows || [];
+  } catch (e) {
+    if (e && (e.code === 'ER_NO_SUCH_TABLE' || e.errno === 1146)) return [];
+    throw e;
+  }
+}
+
+function userFilters({ tenantId, dept, userId, q }, userCol) {
+  const where = [];
+  const params = [];
+  if (tenantId) { where.push('u.tenant_id = ?'); params.push(tenantId); }
+  if (dept) { where.push('d.name = ?'); params.push(dept); }
+  if (userId) { where.push(`${userCol} = ?`); params.push(userId); }
+  if (q) { where.push('(u.employee_code LIKE ? OR u.username LIKE ?)'); params.push(`%${q}%`, `%${q}%`); }
+  return { sql: where.map(w => ` AND ${w}`).join(''), params };
+}
+
+function nextDay(ymd) {
+  const t = new Date(`${ymd}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() + 1);
+  return t.toISOString().slice(0, 10);
+}
+
+// 種別/部署/社員/ステータス/検索 でフィルタしつつ、社員の申請をすべて 1本のリストに正規化してまとめる:
+// 有給・休暇 (leave_requests) / 打刻修正 (time_adjust_requests) / シフト提出 (shift_month_status) /
+// プロフィール変更 (user_change_requests) / その他 (employee_requests: 残業申請・休日申請・通勤交通費)。
 async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
   const { start, end } = monthRange(month);
 
@@ -25,11 +82,13 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
   // reconcileApprovedPaidWithAttendance が「勤怠画面で有給休暇のkubunを付けた/外した」
   // 副作用として自動生成する行 (reason に from_attendance / [AUTO_CANCEL] / [AUTO_RECONCILE]
   // が入る) は、本人が事前に申請したものではないため、申請・承認一覧には出さない。
+  // [SHIFT_CHANGED] = シフト再提出で有給日から外れた from_shift 行。
   const leaveWhere = [
     'lr.startDate <= ? AND lr.endDate >= ?',
     "COALESCE(lr.reason, '') NOT LIKE '%from_attendance%'",
     "COALESCE(lr.reason, '') NOT LIKE '%[AUTO_CANCEL]%'",
-    "COALESCE(lr.reason, '') NOT LIKE '%[AUTO_RECONCILE]%'"
+    "COALESCE(lr.reason, '') NOT LIKE '%[AUTO_RECONCILE]%'",
+    "COALESCE(lr.reason, '') NOT LIKE '%[SHIFT_CHANGED]%'"
   ];
   const leaveParams = [end, start];
   if (tenantId) { leaveWhere.push('u.tenant_id = ?'); leaveParams.push(tenantId); }
@@ -68,23 +127,106 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
     WHERE ${adjWhere.join(' AND ')}
   `, adjParams);
 
+  const filt = { tenantId, dept, userId, q };
+
+  const sf = userFilters(filt, 's.userId');
+  const shiftRows = await queryOptional(`
+    SELECT s.id, s.userId, s.month, s.status, s.updated_at,
+           u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName
+    FROM shift_month_status s
+    JOIN users u ON u.id = s.userId
+    LEFT JOIN departments d ON d.id = u.departmentId
+    WHERE s.month = ? AND s.status IN ('PENDING', 'APPROVED', 'REJECTED')${sf.sql}
+  `, [month, ...sf.params]);
+  const shiftCounts = new Map();
+  if (shiftRows.length) {
+    const ids = [...new Set(shiftRows.map(r => r.userId))];
+    const counts = await queryOptional(`
+      SELECT userId,
+             SUM(status = 'OFF') AS offDays,
+             SUM(status = 'LEAVE' AND leaveType = 'paid') AS paidDays,
+             SUM(status = 'LEAVE' AND leaveType = 'paid_half') AS paidHalfDays,
+             SUM(status = 'LEAVE' AND COALESCE(leaveType, '') NOT IN ('paid', 'paid_half')) AS otherLeaveDays
+      FROM shift_requests
+      WHERE userId IN (${ids.map(() => '?').join(',')}) AND date LIKE ?
+      GROUP BY userId
+    `, [...ids, `${month}-%`]);
+    for (const c of counts) shiftCounts.set(c.userId, c);
+  }
+
+  const pf = userFilters(filt, 'ucr.user_id');
+  const profileRows = await queryOptional(`
+    SELECT ucr.id, ucr.user_id AS userId, ucr.fields_json, ucr.status, ucr.created_at, ucr.approved_at,
+           u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName,
+           pu.username AS processedByName
+    FROM user_change_requests ucr
+    JOIN users u ON u.id = ucr.user_id
+    LEFT JOIN departments d ON d.id = u.departmentId
+    LEFT JOIN users pu ON pu.id = ucr.approved_by
+    WHERE DATE(ucr.created_at) BETWEEN ? AND ?${pf.sql}
+  `, [start, end, ...pf.params]);
+
+  const of = userFilters(filt, 'er.user_id');
+  const otherRows = await queryOptional(`
+    SELECT er.id, er.user_id AS userId, er.request_no, er.record_type, er.detail, er.office, er.status,
+           er.created_at, er.updated_at,
+           u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName
+    FROM employee_requests er
+    JOIN users u ON u.id = er.user_id
+    LEFT JOIN departments d ON d.id = u.departmentId
+    WHERE DATE(er.created_at) BETWEEN ? AND ?${of.sql}
+  `, [start, end, ...of.params]);
+
+  // 却下した有給なのに月次表の区分が有給のまま → 有給残数から引かれ続けるので警告を出す。
+  const stillPaid = new Set();
+  const rejectedPaid = (leaveRows || []).filter(r => r.status === 'rejected' && PAID_TYPES.has(r.type));
+  if (rejectedPaid.length) {
+    const ids = [...new Set(rejectedPaid.map(r => r.userId))];
+    const kubunRows = await queryOptional(`
+      SELECT userId, date FROM attendance_daily
+      WHERE userId IN (${ids.map(() => '?').join(',')}) AND date BETWEEN ? AND ?
+        AND REPLACE(TRIM(COALESCE(kubun, '')), '　', '') IN ('有給休暇', '半休(有給)')
+    `, [...ids, start, end]);
+    for (const k of kubunRows) stillPaid.add(`${k.userId}|${String(k.date).slice(0, 10)}`);
+  }
+
+  const base = (r) => ({
+    userId: r.userId,
+    applicantName: r.username || '',
+    employeeCode: r.employeeCode || null,
+    departmentName: r.departmentName || null
+  });
+
   const normLeave = (leaveRows || []).map(r => {
-    const sameDay = String(r.startDate).slice(0, 10) === String(r.endDate).slice(0, 10);
+    const s = String(r.startDate).slice(0, 10);
+    const e = String(r.endDate).slice(0, 10);
+    const sameDay = s === e;
+    const label = LEAVE_TYPE_LABEL[r.type] || '休暇';
+    const fromShift = String(r.reason || '').includes('from_shift');
+    const fromKubun = String(r.reason || '').includes('from_kubun');
+    let warning = null;
+    if (r.status === 'rejected' && PAID_TYPES.has(r.type)) {
+      for (let d = s; d <= e; d = nextDay(d)) {
+        if (stillPaid.has(`${r.userId}|${d}`)) { warning = '却下済みですが月次勤怠の区分が有給のままです（有給残数から引かれます）'; break; }
+      }
+    }
     return {
       type: 'leave',
-      typeLabel: '有給申請',
+      category: 'leave',
+      typeLabel: PAID_TYPES.has(r.type) ? '有給申請' : '休暇申請',
       requestId: r.id,
-      userId: r.userId,
-      applicantName: r.username || '',
-      employeeCode: r.employeeCode || null,
-      departmentName: r.departmentName || null,
-      targetDate: sameDay ? String(r.startDate).slice(0, 10) : `${String(r.startDate).slice(0, 10)}〜${String(r.endDate).slice(0, 10)}`,
-      content: `${LEAVE_TYPE_LABEL[r.type] || '休暇'}${sameDay ? '（全日）' : ''}`,
-      reason: r.reason || '',
+      ...base(r),
+      targetDate: sameDay ? s : `${s}〜${e}`,
+      content: `${label}${sameDay && !['paid_half', 'half'].includes(r.type) ? '（全日）' : ''}`,
+      reason: fromShift ? 'シフト提出より' : (fromKubun ? '月次勤怠の区分より' : (r.reason || '')),
+      source: fromShift ? 'shift' : (fromKubun ? 'kubun' : 'request'),
       status: r.status,
       processedByName: r.processedByName || null,
       processedAt: r.processed_at || null,
-      sortDate: String(r.startDate).slice(0, 10)
+      warning,
+      // シフト由来の有給はシフト承認で決まる（ここで個別に承認/却下しない）
+      actions: fromShift ? null : leaveActions(r.id),
+      sortDate: s
     };
   });
 
@@ -92,23 +234,94 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
     const d = String(r.requestedCheckIn || r.requestedCheckOut || r.created_at || '').slice(0, 10);
     return {
       type: 'adjust',
+      category: 'adjust',
       typeLabel: '打刻修正',
       requestId: r.id,
-      userId: r.userId,
-      applicantName: r.username || '',
-      employeeCode: r.employeeCode || null,
-      departmentName: r.departmentName || null,
+      ...base(r),
       targetDate: d,
       content: `出勤 ${fmtHm(r.requestedCheckIn)} / 退勤 ${fmtHm(r.requestedCheckOut)}`,
       reason: r.reason || '',
       status: r.status,
       processedByName: r.processedByName || null,
       processedAt: r.processed_at || null,
+      actions: adjustActions(r.id),
       sortDate: d
     };
   });
 
-  return [...normLeave, ...normAdj].sort((a, b) => {
+  const normShift = shiftRows.map(r => {
+    const c = shiftCounts.get(r.userId) || {};
+    const parts = [];
+    if (Number(c.offDays)) parts.push(`休日 ${Number(c.offDays)}日`);
+    if (Number(c.paidDays)) parts.push(`有給 ${Number(c.paidDays)}日`);
+    if (Number(c.paidHalfDays)) parts.push(`半休(有給) ${Number(c.paidHalfDays)}日`);
+    if (Number(c.otherLeaveDays)) parts.push(`その他休暇 ${Number(c.otherLeaveDays)}日`);
+    const st = SHIFT_STATUS[r.status] || 'pending';
+    return {
+      type: 'shift',
+      category: 'shift',
+      typeLabel: 'シフト提出',
+      requestId: r.id,
+      ...base(r),
+      targetDate: r.month,
+      content: parts.length ? parts.join(' / ') : 'シフト（休日なし）',
+      reason: (Number(c.paidDays) || Number(c.paidHalfDays)) ? '承認すると有給も承認されます' : '',
+      status: st,
+      processedByName: null,
+      processedAt: st === 'pending' ? null : (r.updated_at || null),
+      actions: shiftActions(r.userId, r.month),
+      sortDate: `${r.month}-01`
+    };
+  });
+
+  const normProfile = profileRows.map(r => {
+    let fields = {};
+    try { fields = JSON.parse(r.fields_json) || {}; } catch (e) { fields = {}; }
+    const content = Object.keys(PROFILE_FIELD_LABEL)
+      .filter(k => fields[k] != null && String(fields[k]).trim() !== '')
+      .map(k => `${PROFILE_FIELD_LABEL[k]}: ${String(fields[k]).slice(0, 40)}`)
+      .join(' / ');
+    const d = String(r.created_at || '').slice(0, 10);
+    return {
+      type: 'profile',
+      category: 'profile',
+      typeLabel: 'プロフィール変更',
+      requestId: r.id,
+      ...base(r),
+      targetDate: d,
+      content: content || '（承認できる項目なし）',
+      reason: '',
+      status: ['approved', 'rejected'].includes(r.status) ? r.status : 'pending',
+      processedByName: r.processedByName || null,
+      processedAt: r.approved_at || null,
+      actions: profileActions(r.id),
+      sortDate: d
+    };
+  });
+
+  const normOther = otherRows.map(r => {
+    const d = String(r.created_at || '').slice(0, 10);
+    const st = OTHER_STATUS[String(r.status || '').trim()] || 'pending';
+    return {
+      type: 'other',
+      category: 'other',
+      typeLabel: String(r.record_type || 'その他').replace(/^\d+_/, ''),
+      requestId: r.id,
+      ...base(r),
+      targetDate: d,
+      content: [r.detail, r.office ? `（${r.office}）` : ''].filter(Boolean).join(' '),
+      reason: r.request_no || '',
+      status: st,
+      processedByName: null,
+      processedAt: st === 'pending' ? null : (r.updated_at || null),
+      actions: otherActions(r.id),
+      sortDate: d
+    };
+  });
+
+  let all = [...normLeave, ...normAdj, ...normShift, ...normProfile, ...normOther];
+  if (status) all = all.filter(r => r.status === status);
+  return all.sort((a, b) => {
     if (a.sortDate !== b.sortDate) return a.sortDate < b.sortDate ? 1 : -1;
     return b.requestId - a.requestId;
   });
@@ -131,14 +344,66 @@ router.get('/list', authorize('admin', 'manager'), async (req, res) => {
     const summary = {
       pending: allRows.filter(r => r.status === 'pending').length,
       approved: allRows.filter(r => r.status === 'approved').length,
-      rejected: allRows.filter(r => r.status === 'rejected').length
+      rejected: allRows.filter(r => r.status === 'rejected').length,
+      // タブのバッジ用: 種別ごとの承認待ち件数
+      pendingByCategory: allRows.reduce((acc, r) => {
+        if (r.status === 'pending') acc[r.category] = (acc[r.category] || 0) + 1;
+        return acc;
+      }, {})
     };
-    const filtered = status ? allRows.filter(r => r.status === status) : allRows;
+    const category = ['leave', 'adjust', 'shift', 'profile', 'other'].includes(String(req.query?.category || '')) ? String(req.query.category) : '';
+    const filtered = allRows.filter(r => (!status || r.status === status) && (!category || r.category === category));
     const total = filtered.length;
     const offset = (page - 1) * pageSize;
     const items = filtered.slice(offset, offset + pageSize);
 
     res.status(200).json({ month, items, total, page, pageSize, summary });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// その他の申請 (employee_requests: 残業申請・休日申請・通勤交通費) — trước đây không có màn hình duyệt.
+router.patch('/other/:id/status', authorize('admin', 'manager'), async (req, res) => {
+  try {
+    const id = parseInt(String(req.params.id || ''), 10);
+    const status = String(req.body?.status || '');
+    const label = { approved: '承認済み', rejected: '却下', pending: '申請済み' }[status];
+    if (!id || !label) return res.status(400).json({ message: 'Missing id/status' });
+    const params = [id];
+    let tenantSql = '';
+    if (req.tenantId) { tenantSql = ' AND u.tenant_id = ?'; params.push(req.tenantId); }
+    const [[row] = []] = await db.query(
+      `SELECT er.id, er.user_id AS userId, er.record_type, er.status, er.created_at
+       FROM employee_requests er JOIN users u ON u.id = er.user_id
+       WHERE er.id = ?${tenantSql} LIMIT 1`, params);
+    if (!row) return res.status(404).json({ message: 'Not found' });
+    if (String(row.userId) === String(req.user?.id) && status === 'approved') {
+      return res.status(403).json({ message: '自分の申請は承認できません' });
+    }
+    await db.query('UPDATE employee_requests SET status = ? WHERE id = ?', [label, id]);
+    try {
+      await require('../audit/audit.repository').writeLog({
+        userId: req.user.id, action: 'employee_request_status', path: req.path, method: req.method, ip: req.ip,
+        userAgent: req.headers['user-agent'], beforeData: JSON.stringify({ id, status: row.status }), afterData: JSON.stringify({ id, status: label })
+      });
+    } catch (e) { /* audit は best-effort */ }
+    if (status !== 'pending') {
+      try {
+        const typeLabel = String(row.record_type || '申請').replace(/^\d+_/, '');
+        await require('../notices/notices.repository').createNotice({
+          targetUserId: row.userId,
+          targetDate: null,
+          targetMonth: String(row.created_at ? new Date(row.created_at).toISOString() : '').slice(0, 7) || null,
+          message: `${typeLabel}が${status === 'approved' ? '承認' : '却下'}されました。`,
+          createdBy: req.user?.id || null,
+          kind: 'approval',
+          title: typeLabel,
+          tenantId: req.tenantId || null
+        });
+      } catch (e) { /* 通知は best-effort */ }
+    }
+    res.status(200).json({ id, status });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

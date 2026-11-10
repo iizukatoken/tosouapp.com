@@ -6,6 +6,8 @@ const noticesRepo = require('../notices/notices.repository');
 const userRepo = require('../users/user.repository');
 const auditRepo = require('../audit/audit.repository');
 const log = require('../../core/logger');
+const leaveRepo = require('../leave/leave.repository');
+const { reportSwallowed } = require('../../core/errorReporter');
 const { nowJSTMySQL } = require('../../utils/dateTime');
 const { timesheetMaxDays } = require('../../config/env');
 const {
@@ -459,6 +461,22 @@ exports.approveShiftMonth = async (req, res) => {
     }
     await db.query(`UPDATE shift_month_status SET status = ? WHERE userId = ? AND month = ?`, [status, userId, month]);
 
+    // シフト承認 = 有給承認: ngày 有給 trong ca thành đơn 有給 (hiện ở 申請一覧). Chỉ ghi leave_requests,
+    // không ghi bảng tháng (xem quy tắc cứng bên dưới). Lỗi ở đây không chặn việc duyệt ca.
+    let paidLeaveSync = null;
+    try {
+      const [leaveRows] = await db.query(
+        `SELECT date, leaveType FROM shift_requests WHERE userId = ? AND date LIKE ? AND status = 'LEAVE' AND leaveType IN ('paid', 'paid_half')`,
+        [userId, `${month}-%`]
+      );
+      paidLeaveSync = await leaveRepo.syncShiftPaidLeaves({
+        userId, month, shiftStatus: status, tenantId: tid, approverId: req.user?.id || null,
+        paidDays: (leaveRows || []).map(r => ({ date: String(r.date).slice(0, 10), type: r.leaveType })),
+      });
+    } catch (e) {
+      reportSwallowed('shift.approve.syncPaidLeave', e);
+    }
+
     // ⚠️ QUY TẮC CỨNG: Hành động APPROVED シフト CHỈ cập nhật trạng thái lịch (shift_month_status / shift_requests)
     //                     Tuyệt đối KHÔNG được tác động gì vào bảng attendance_daily (bảng tháng nhân viên).
     //                     Dữ liệu bảng tháng nhân viên chỉ được sửa trực tiếp tại màn hình bảng tháng (putMonthBulk / putDay).
@@ -500,7 +518,7 @@ exports.approveShiftMonth = async (req, res) => {
       }
     }
 
-    res.status(200).json({ success: true });
+    res.status(200).json({ success: true, paidLeaveSync });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
