@@ -3701,3 +3701,8 @@ body.embed .se-month-table-wrap #monthTableReal thead th {
 }
 /* 簡易登録画面へ: 文字に合わせた幅（se-btn-wide の最小幅をやめる） */
 #workingStart .se-page-head .se-shortcuts .se-btn { min-width: 0 !important; width: auto !important; padding: 0 12px !important; gap: 6px !important; }
+/* 見出し右側の切替ボタン（契約内容/業務内容・全体/社内勤務・実績/丸め/予定）: 文字に合わせて小さく */
+#contractList .se-tabs-seg .se-tab, #monthSummary .se-tabs-seg .se-tab, #dailySection .se-daily-head .se-tabs-seg .se-tab {
+  min-width: 0 !important; width: auto !important; height: 26px !important; line-height: 24px !important;
+  padding: 0 10px !important; font-size: 12px !important;
+}
