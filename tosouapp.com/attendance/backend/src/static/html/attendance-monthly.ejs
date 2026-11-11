@@ -6,7 +6,7 @@
   <title>月次勤怠入力</title>
   <link rel="stylesheet" href="/static/css/base.css?v=navy-20260408-1">
   <link rel="stylesheet" href="/static/css/attendance.css?v=20261016-navytop1">
-  <link rel="stylesheet" href="/static/css/attendance-monthly.css?v=20261111-mp1">
+  <link rel="stylesheet" href="/static/css/attendance-monthly.css?v=20261111-mp2">
   <link rel="stylesheet" href="/static/css/attendance-pdf-modal.css?v=navy-20260903-shukkinbo-fit30">
   <link rel="icon" href="data:,">
   <script src="/static/js/pages/session-idle.js?v=navy-20260403-1" defer></script>
@@ -88,6 +88,13 @@
             <div id="workingStart" class="toggleTarget">
               <div class="se-page-head">
                 <div class="se-page-title">月次勤怠入力</div>
+                <!-- 簡易登録画面へ: タイトルの横に置く -->
+                <div class="se-shortcuts" aria-label="ショートカット">
+                  <a class="se-btn primary se-btn-wide" href="/ui/attendance/simple" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
+                    <span aria-hidden="true">📱</span>
+                    <span>簡易登録画面へ</span>
+                  </a>
+                </div>
                 <div class="se-target-month">
                   <div class="se-target-label">対象年月</div>
                   <input id="monthPicker" class="se-target-input" type="month">
@@ -129,12 +136,6 @@
               </div>
             </div>
             <div id="contractList" class="toggleTarget">
-              <div class="se-shortcuts" aria-label="ショートカット">
-                <a class="se-btn primary se-btn-wide" href="/ui/attendance/simple" style="text-decoration:none;display:inline-flex;align-items:center;gap:8px;">
-                  <span aria-hidden="true">📱</span>
-                  <span>簡易登録画面へ</span>
-                </a>
-              </div>
               <section class="se-section" id="contractSection">
                 <div class="se-section-head se-contract-head">
                   <div class="se-daily-title">
