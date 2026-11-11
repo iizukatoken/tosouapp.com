@@ -249,7 +249,15 @@
       // không có kubun/ca đi làm cụ thể) nên hiển thị 休日 luôn — không còn 予定なし/【休日予定】,
       // không bắt nhân viên phải nhập tay. Chọn thẳng option "休日" thật để tránh
       // trùng lặp (placeholder + option cùng chữ "休日").
-      const isAutoHolidayDay = !!autoOff && !hasActualIn && !hasActualOut && !kubunInit;
+      // 画面でも同じ規則で判定する（サーバーの autoOff が来ない場合でも 休日予定 のまま残らないように）:
+      // その日が終わった休み（正社員: カレンダーの休日 / シフトの OFF、パート: 出勤シフトのない日）で、
+      // 打刻なし・区分なし・出勤/休暇のシフトなし → 休日。今日・これからは 休日予定 のまま。
+      const autoOffTodayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      const autoOffReq = String(shiftRequest?.status || '');
+      const autoOffLocal = String(dateStr) < autoOffTodayStr && !hasActual && !kubunInit
+        && autoOffReq !== 'WORKING' && autoOffReq !== 'LEAVE'
+        && (isPartTime || !!offDay || autoOffReq === 'OFF');
+      const isAutoHolidayDay = (!!autoOff || autoOffLocal) && !hasActualIn && !hasActualOut && !kubunInit;
       if (isAutoHolidayDay) {
         kubunInit = '休日';
         plannedKubun = '休日';
