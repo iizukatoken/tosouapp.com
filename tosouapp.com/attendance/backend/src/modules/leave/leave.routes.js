@@ -25,6 +25,18 @@ router.get('/balance', authenticate, authorize('employee','manager','admin'), co
 router.get('/summary', authenticate, permit('leaveAdmin','view'), controller.summary);
 router.post('/auto-grant/run', authenticate, permit('leaveAdmin','full'), controller.autoGrantNow);
 router.get('/my', authenticate, authorize('employee','manager','admin'), controller.listMine);
+// 簡易登録の「ステータス」用: 自分のその日の休暇申請の状況（承認済み / 申請中 / 差戻し）
+router.get('/my/day-status', authenticate, authorize('employee','manager','admin'), async (req, res) => {
+  try {
+    const date = String(req.query?.date || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return res.status(400).json({ message: 'Missing date' });
+    const repo = require('./leave.repository');
+    const map = await repo.listLeaveStatusByDate(req.user.id, date, date, req.tenantId || null);
+    res.status(200).json(map[date] || { status: null, type: null });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 router.get('/my-balance', authenticate, authorize('employee','manager','admin'), controller.myBalance);
 router.get('/user-balance', authenticate, authorize('manager','admin'), controller.userBalance);
 router.get('/admin-balances', authenticate, authorize('manager','admin'), controller.adminBalances);

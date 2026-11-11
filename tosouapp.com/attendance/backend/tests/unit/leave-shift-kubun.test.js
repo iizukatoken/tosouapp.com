@@ -87,3 +87,21 @@ describe('区分の休暇申請', () => {
     expect(sql).toMatch(/from_shift/);
   });
 });
+
+describe('listLeaveStatusByDate（状態表示用）', () => {
+  it('日ごとに 承認済み > 申請中 > 差戻し を返し、自動取消などは SQL で除く', async () => {
+    db.query.mockResolvedValueOnce([[
+      { id: 1, startDate: '2026-11-10', endDate: '2026-11-11', type: 'paid', status: 'rejected' },
+      { id: 2, startDate: '2026-11-11', endDate: '2026-11-11', type: 'paid_half', status: 'pending' },
+      { id: 3, startDate: '2026-11-12', endDate: '2026-11-12', type: 'absence', status: 'approved' }
+    ]]);
+    const map = await repo.listLeaveStatusByDate(23, '2026-11-01', '2026-11-30', 1);
+    expect(map['2026-11-10']).toEqual({ status: 'rejected', type: 'paid' });
+    expect(map['2026-11-11']).toEqual({ status: 'pending', type: 'paid_half' });
+    expect(map['2026-11-12']).toEqual({ status: 'approved', type: 'absence' });
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toMatch(/AUTO_CANCEL/);
+    expect(sql).toMatch(/SHIFT_CHANGED/);
+    expect(params).toEqual([23, '2026-11-30', '2026-11-01', 1]);
+  });
+});

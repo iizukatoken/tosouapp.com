@@ -32,6 +32,27 @@
     return !!isPartTime && !shiftWorking;
   };
 
+  // 社員が不安にならない状態表示（正当な状態は中立の文言・灰色）。
+  // null を返したら従来の判定を使う（退勤忘れ・作業内容未入力などは従来どおり）。
+  const LEAVE_STATUS_KUBUN = new Set(['有給休暇', '無給休暇', '欠勤', '代替休日', '半休', '半休(有給)']);
+  const friendlyDayStatus = ({ dateStr, kubun, hasActualIn, hasActualOut, isPlanned, isRegularOff, isAdminView, leaveStatus }) => {
+    const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    const hasActual = !!(hasActualIn || hasActualOut);
+    const k = String(kubun || '').trim();
+    // 休暇の日（打刻なし）: 申請の状況をそのまま出す
+    if (!hasActual && !isRegularOff && LEAVE_STATUS_KUBUN.has(k)) {
+      const st = String(leaveStatus?.status || '');
+      if (st === 'approved') return { text: '承認済み', cls: 'ok' };
+      if (st === 'rejected') return { text: '差戻し', cls: 'danger' };
+      return isAdminView ? { text: '承認待ち', cls: 'warn' } : { text: '申請中', cls: 'none' };
+    }
+    // 今日・これからの出勤予定日（まだ打刻なし）: 未申請 ではなく 出勤予定
+    if (isPlanned && !hasActual && String(dateStr || '') >= todayStr) return { text: '出勤予定', cls: 'none' };
+    // 今日 出勤済み・まだ退勤前: 勤務中
+    if (hasActualIn && !hasActualOut && String(dateStr || '') === todayStr) return { text: '勤務中', cls: 'none' };
+    return null;
+  };
+
   const renderTableFull = (host, detail, profile) => {
     if (!host) return;
     const days = Array.isArray(detail?.days) ? detail.days : [];
@@ -360,12 +381,19 @@
       const isConfirmed = !approved && hasActualIn && hasActualOut && !!String(daily?.memo || '').trim();
       let text = '未承認';
       let cls = 'warn';
+      const friendly = friendlyDayStatus({
+        dateStr, kubun: effectiveKubun, hasActualIn, hasActualOut, isPlanned, isRegularOff: isRegularOffRow, isAdminView,
+        leaveStatus: (detail?.leaveStatusByDate || {})[dateStr] || null
+      });
       if (approved) {
         text = '承認済み';
         cls = 'ok';
       } else if (isConfirmed || isAutoConfirmedNoWorkDay({ dateStr, hasActual, isOff, isPartTime, kubun: kubunInit, shiftWorking: shiftRequest?.status === 'WORKING' })) {
         text = '確認済み';
         cls = 'ok';
+      } else if (friendly) {
+        text = friendly.text;
+        cls = friendly.cls;
       } else if (isPlanned && !hasActual) {
         text = '未申請';
         cls = 'warn';
@@ -402,6 +430,8 @@
       tr.dataset.baseOff = isOff ? '1' : '0';
       tr.dataset.partTime = isPartTime ? '1' : '';
       tr.dataset.shiftWorking = shiftRequest?.status === 'WORKING' ? '1' : '';
+      // シフト申請の休暇（区分が未保存のとき）— 状態表示の再計算で使う
+      tr.dataset.plannedLeaveKubun = (!kubunInit && LEAVE_STATUS_KUBUN.has(plannedKubun)) ? plannedKubun : '';
       tr.dataset.id = seg?.id ? String(seg.id) : '';
       tr.dataset.clientId = tr.dataset.id ? '' : (seg?.clientId || makeClientId());
       tr.dataset.primary = primary ? '1' : '0';
@@ -905,12 +935,20 @@
         const isConfirmedNow = !monthApproved && hasActualInNow && hasActualOutNow && !!memoValNow;
         let stText = '未承認';
         let stCls = 'warn';
+        const friendlyNow = friendlyDayStatus({
+          dateStr, kubun: cls || rowEl.dataset.plannedLeaveKubun || '', hasActualIn: hasActualInNow, hasActualOut: hasActualOutNow, isPlanned,
+          isRegularOff: isRegularOffRowNow, isAdminView,
+          leaveStatus: (state.currentMonthDetail?.leaveStatusByDate || {})[dateStr] || null
+        });
         if (monthApproved) {
           stText = '承認済み';
           stCls = 'ok';
         } else if (isConfirmedNow || isAutoConfirmedNoWorkDay({ dateStr, hasActual: hasActualNow, isOff: offDay, isPartTime: rowEl.dataset.partTime === '1', kubun: cls, shiftWorking: rowEl.dataset.shiftWorking === '1' })) {
           stText = '確認済み';
           stCls = 'ok';
+        } else if (friendlyNow) {
+          stText = friendlyNow.text;
+          stCls = friendlyNow.cls;
         } else if (isPlanned && !hasActualNow) {
           stText = '未申請';
         } else if (isLeaveAppliedNow) {

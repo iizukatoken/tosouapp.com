@@ -724,9 +724,23 @@ const getSimpleStatusMeta = () => {
   const kubunEl = $('#kubun');
   const isPlanned = !!kubunEl?.classList?.contains('is-planned');
   const hasActualNow = !!(effectiveHm($('#startTime')) || effectiveHm($('#endTime')));
-  if (isPlanned && !hasActualNow) return { text: '未申請', cls: 'warn' };
+  const dateNow = String(window.state?.date || '');
+  const todayNow = todayJST();
+  const kubunNow = String(kubunEl?.value || '').trim();
+  const LEAVE_KUBUN = ['有給休暇', '無給休暇', '欠勤', '代替休日', '半休', '半休(有給)'];
   if (monthApproved) return { text: '承認済み', cls: 'ok' };
-  
+  // 休暇の日（打刻なし、シフト申請由来で未保存の場合も）: 申請の状況を表示（以前は「未申請」）
+  if (!hasActualNow && LEAVE_KUBUN.includes(kubunNow)) {
+    const ls = String(window.state?.leaveStatus || '');
+    if (ls === 'approved') return { text: `${kubunNow}・承認済み`, cls: 'ok' };
+    if (ls === 'rejected') return { text: `${kubunNow}・差戻し`, cls: 'danger' };
+    return { text: `${kubunNow}・申請中`, cls: 'none' };
+  }
+  // 今日・これからの出勤予定日でまだ打刻なし → 未申請 ではなく 出勤予定（不安にさせない）
+  if (isPlanned && !hasActualNow) {
+    return dateNow >= todayNow ? { text: '出勤予定', cls: 'none' } : { text: '未申請', cls: 'warn' };
+  }
+
   if (hasActualNow) {
     // 簡易登録画面: 出勤・退勤の両方が揃っていれば自動で確認済み
     const hasBothNow = !!(effectiveHm($('#startTime')) && effectiveHm($('#endTime')));
@@ -736,9 +750,14 @@ const getSimpleStatusMeta = () => {
     if (window.state && window.state.lastGoOutRecord && window.state.lastGoOutRecord.return_time) {
       return { text: '戻り済み', cls: 'warn' };
     }
+    // 出勤済み・退勤前: 今日なら「勤務中」（半休の日は「半休(有給)・勤務中」）
+    if (dateNow === todayNow) {
+      const half = kubunNow === '半休' || kubunNow === '半休(有給)';
+      return { text: half ? `${kubunNow}・勤務中` : '勤務中', cls: 'none' };
+    }
     return { text: isAdminView ? '承認待ち' : '未確認', cls: 'warn' };
   }
-  return { text: '未申請', cls: 'warn' };
+  return dateNow >= todayNow ? { text: '出勤予定', cls: 'none' } : { text: '未申請', cls: 'warn' };
 };
 
 const renderSimpleStatus = () => {
@@ -1220,6 +1239,11 @@ const load = async (date, opts = {}) => {
     const reportTask = fetchJSONAuth(`/api/work-reports/my?date=${encodeURIComponent(date)}&_t=${Date.now()}`).catch(() => null);
 
     state.currentMonthStatus = await monthStatusTask;
+    // 休暇申請の状況（ステータス表示用・非同期）
+    state.leaveStatus = null;
+    fetchJSONAuth(`/api/leave/my/day-status?date=${encodeURIComponent(date)}`)
+      .then((r) => { if (state.date === date) { state.leaveStatus = r?.status || null; renderSimpleStatus(); } })
+      .catch(() => { /* 表示用 */ });
     const [isOff, shift, daily0, day] = await Promise.all([isOffTask, shiftTask, dailyTask, dayTask]);
     const shiftStart = String(shift?.start_time || FIXED_START).trim();
     const shiftEnd = String(shift?.end_time || FIXED_END).trim();

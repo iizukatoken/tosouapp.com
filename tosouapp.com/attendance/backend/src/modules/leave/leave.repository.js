@@ -517,6 +517,38 @@ module.exports = {
     result.reopened = Number(r?.affectedRows || 0);
     return result;
   },
+  // 休暇の日ごとの申請状況 { 'YYYY-MM-DD': { status, type } }（承認済み > 申請中 > 差戻し）。
+  // 画面の「状態」表示用。自動取消・自動照合・シフト再提出で外れた行は除く。
+  async listLeaveStatusByDate(userId, from, to, tenantId = null) {
+    const tid = _tid(tenantId);
+    const params = [userId, to, from];
+    let tenantSql = '';
+    if (tid != null) { tenantSql = ' AND tenant_id = ?'; params.push(tid); }
+    const [rows] = await db.query(
+      `SELECT id, startDate, endDate, type, status FROM leave_requests
+        WHERE userId = ? AND startDate <= ? AND endDate >= ?
+          AND status IN ('pending', 'approved', 'rejected')
+          AND COALESCE(reason, '') NOT LIKE '%[AUTO_CANCEL]%'
+          AND COALESCE(reason, '') NOT LIKE '%[AUTO_RECONCILE]%'
+          AND COALESCE(reason, '') NOT LIKE '%[SHIFT_CHANGED]%'${tenantSql}
+        ORDER BY id ASC`,
+      params
+    );
+    const rank = { approved: 3, pending: 2, rejected: 1 };
+    const out = {};
+    for (const r of rows || []) {
+      let d = String(r.startDate).slice(0, 10);
+      const end = String(r.endDate).slice(0, 10);
+      for (let guard = 0; d <= end && guard < 62; guard++) {
+        if (d >= from && d <= to) {
+          const cur = out[d];
+          if (!cur || rank[r.status] >= rank[cur.status]) out[d] = { status: r.status, type: r.type };
+        }
+        const t = new Date(`${d}T00:00:00Z`); t.setUTCDate(t.getUTCDate() + 1); d = t.toISOString().slice(0, 10);
+      }
+    }
+    return out;
+  },
   // Đơn tạo khi nhân viên chọn 区分 nghỉ (欠勤/無給/半休/半休(有給)/代替休日) trên bảng tháng.
   async ensureKubunRequest({ userId, date, type, tenantId = null }) {
     const existing = await this.findExactRequest({ userId, startDate: date, endDate: date, type, statuses: ['pending', 'approved'], tenantId });

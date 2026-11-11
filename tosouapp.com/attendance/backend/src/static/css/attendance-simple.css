@@ -295,6 +295,10 @@ body {
 .simple-status.danger {
   color: #ef4444;
 }
+/* 出勤予定・勤務中・申請中 など、正当な状態は中立の色（社員が不安にならないように） */
+.simple-status.none {
+  color: #e2e8f0;
+}
 
 /* Go Out Status Banner */
 .simple-goout-banner {

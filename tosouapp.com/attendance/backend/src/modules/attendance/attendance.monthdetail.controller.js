@@ -402,10 +402,18 @@ exports.getMonthDetail = async (req, res) => {
       paidLeaveGrantedTotalDays: Number(leaveSummary?.grantedDaysTotal || 0),
     } : null;
 
+    // 休暇の日ごとの申請状況（承認済み / 申請中 / 差戻し）— 画面の「状態」を
+    // 未確認 ではなく 申請中・承認済み と表示するため。自動生成・自動取消の行は除く。
+    let leaveStatusByDate = {};
+    try {
+      leaveStatusByDate = await leaveRepo.listLeaveStatusByDate(userId, from, to, tid || null);
+    } catch (e) { /* 表示用。取れなければ従来どおり */ }
+
     // Trả kết quả
     res.status(200).json({
       year: y, month: m, from, to,
       user,
+      leaveStatusByDate,
       monthStatus: {
         status:      monthStatus,
         approved_by: monthStatusObj?.approved_by || null,
