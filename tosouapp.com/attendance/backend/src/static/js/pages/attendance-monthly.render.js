@@ -170,6 +170,16 @@
              } else if (lType === 'special') {
                plannedKubun = '無給休暇';
                plannedLabel = '【無給休暇】';
+             } else if (lType === 'paid_half') {
+               // シフト申請の 半休(有給)・半休・代替休日 も月次表に出す（以前は何も表示されなかった）
+               plannedKubun = '半休(有給)';
+               plannedLabel = '【半休(有給)】';
+             } else if (lType === 'half') {
+               plannedKubun = '半休';
+               plannedLabel = '【半休】';
+             } else if (lType === 'substitute') {
+               plannedKubun = '代替休日';
+               plannedLabel = '【代替休日】';
              }
              
              // Nếu chưa có lý do được lưu, lấy lý do từ shift_request

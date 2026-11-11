@@ -1063,6 +1063,17 @@ const renderGoOutBanner = (currentGoOut) => {
   goOutTimerInterval = setInterval(updateTimer, 10000); // Cập nhật mỗi 10 giây
 };
 
+// シフト申請の休暇種別 → 勤務区分
+const SHIFT_LEAVE_KUBUN = {
+  paid: '有給休暇',
+  paid_half: '半休(有給)',
+  half: '半休',
+  unpaid: '欠勤',
+  substitute: '代替休日',
+  special: '無給休暇'
+};
+const shiftLeaveKubunByDate = new Map();
+
 const getCalendarOff = async (date) => {
   // Ưu tiên trạng thái nghỉ từ API vì đã áp dụng policy theo phòng ban (ví dụ: 工事部).
   const cal = await fetchJSONAuth(`/api/attendance/calendar/day/${encodeURIComponent(date)}`).catch(() => null);
@@ -1075,8 +1086,13 @@ const getCalendarOff = async (date) => {
     const shiftData = await fetchJSONAuth(`/api/attendance/shifts/monthly/${encodeURIComponent(month)}`).catch(() => null);
     const schedule = shiftData?.data?.schedule || shiftData?.schedule || {};
     const dayShift = schedule[date] || null;
-    if (dayShift && (dayShift.status === 'OFF' || dayShift.status === 'LEAVE')) {
+    if (dayShift && dayShift.status === 'OFF') {
       return true;
+    }
+    // 休暇（有給・半休(有給) など）は「休日」ではなく、その区分を表示する（半休は出勤日のまま）
+    if (dayShift && dayShift.status === 'LEAVE') {
+      shiftLeaveKubunByDate.set(date, SHIFT_LEAVE_KUBUN[String(dayShift.leaveType || '')] || '');
+      return false;
     }
   } catch (e) { /* bỏ qua lỗi shift */ }
 
@@ -1228,7 +1244,12 @@ const load = async (date, opts = {}) => {
     const defaultKubun = isOffEffective ? '休日' : '出勤';
     // "休日予定"/"出勤予定" là kubun dạng dự kiến → map sang kubun thực
     const kubunMapped = kubunSaved === '休日予定' ? '休日' : (kubunSaved === '出勤予定' ? '出勤' : kubunSaved);
-    const kubunInit = kubunMapped || defaultKubun;
+    // 区分が未保存なら、シフト申請の休暇（有給・半休(有給) など）を初期値にする
+    const isPartTimeProfile = String(window.appConfig?.profile?.employment_type || '').toLowerCase() === 'part_time';
+    const shiftLeaveKubun = shiftLeaveKubunByDate.get(date) || '';
+    const shiftLeaveAllowed = !isOff && shiftLeaveKubun
+      && (isPartTimeProfile ? ['欠勤', '有給休暇'] : ['半休', '半休(有給)', '欠勤', '有給休暇', '無給休暇', '代替休日']).includes(shiftLeaveKubun);
+    const kubunInit = kubunMapped || (shiftLeaveAllowed ? shiftLeaveKubun : '') || defaultKubun;
     
     // Cập nhật state trước khi gọi applyHolidayRestMode
     state.isOff = !!isOffEffective;
