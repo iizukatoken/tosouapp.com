@@ -3543,10 +3543,9 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 /* 当月サマリ: 1行の表・色付きの見出しはそのまま。見出しは折り返さず、文字を少し小さくして幅に収める。
    収まらない画面ではパネル内で横スクロール（右端が切れないように） */
 #monthSummaryTable.se-summary { overflow-x: auto; }
-#monthSummary .se-section-body { padding-left: 8px; padding-right: 8px; }
 #monthSummaryTable.se-summary table { table-layout: auto; width: 100%; min-width: max-content; }
-#monthSummaryTable.se-summary thead th { white-space: nowrap; font-size: 11px; padding: 5px 2px; }
-#monthSummaryTable.se-summary tbody td { white-space: nowrap; font-size: 12px; font-weight: 700; padding: 6px 2px; }
+#monthSummaryTable.se-summary thead th { white-space: nowrap; font-size: 14px; padding: 4px 8px; }
+#monthSummaryTable.se-summary tbody td { white-space: nowrap; font-size: 13px; padding: 4px 8px; }
 /* 対象年月: ラベルと入力を1つの部品のようにつなげ、社員情報バーの右端に置く */
 #workingStart .se-employee-bar.se-employee-bar-sample { display: flex; align-items: center; }
 #workingStart .se-target-month.se-target-month-sample {
@@ -3616,3 +3615,19 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
 }
 #workingStart .se-mp-today:hover { background: #0b2c66; color: #fff; }
+
+/* 日次実績: ≪前月 / 翌月≫ を小さく、1つのペアにまとめる */
+#btnPrevMonth, #btnNextMonth {
+  min-width: 0 !important;
+  width: auto !important;
+  height: 28px !important;
+  padding: 0 12px !important;
+  font-size: 12px !important;
+}
+#btnPrevMonth { border-radius: 4px 0 0 4px !important; }
+.se-month-pair { display: inline-flex; flex: 0 0 auto; }
+#btnNextMonth {
+  border-radius: 0 4px 4px 0 !important;
+  margin-left: 0 !important;
+  border-left: 1px solid rgba(255, 255, 255, .35) !important;
+}
