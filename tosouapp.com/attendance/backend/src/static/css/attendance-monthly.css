@@ -3699,3 +3699,5 @@ body.embed .se-month-table-wrap #monthTableReal thead th {
   #monthTable .se-sticky-month-head { background: #eef2f7 !important; }
   #monthTable .se-sticky-month-head th { background: #eef2f7 !important; color: #1f2d3d !important; border-color: #dbe1e8 !important; }
 }
+/* 簡易登録画面へ: 文字に合わせた幅（se-btn-wide の最小幅をやめる） */
+#workingStart .se-page-head .se-shortcuts .se-btn { min-width: 0 !important; width: auto !important; padding: 0 12px !important; gap: 6px !important; }
