@@ -3587,3 +3587,49 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   border-radius: 0 4px 4px 0;
   box-sizing: border-box;
 }
+/* 対象年月: 独自の月選択（attendance-monthly.month-picker.js） */
+#workingStart .se-mp-native {
+  position: absolute !important; width: 1px !important; height: 1px !important; opacity: 0 !important;
+  pointer-events: none !important; border: 0 !important; padding: 0 !important; margin: 0 !important;
+}
+#workingStart .se-mp {
+  position: relative; display: inline-flex; align-items: stretch; height: 32px; box-sizing: border-box;
+  border: 1px solid #0b2c66; border-left: 0; border-radius: 0 4px 4px 0; background: #fff;
+}
+#workingStart .se-mp > button {
+  border: 0; background: transparent; cursor: pointer; font-family: inherit; color: #0b2c66; padding: 0;
+}
+#workingStart .se-mp-step { width: 28px; font-size: 16px; font-weight: 700; line-height: 1; }
+#workingStart .se-mp-step:hover { background: #eef2f8; }
+#workingStart .se-mp-current {
+  min-width: 112px; padding: 0 10px !important; font-size: 13.5px; font-weight: 700; letter-spacing: .02em;
+  border-left: 1px solid #e1e6ee !important; border-right: 1px solid #e1e6ee !important;
+}
+#workingStart .se-mp-current:hover { background: #f5f7fb; }
+#workingStart .se-mp-pop {
+  position: absolute; top: calc(100% + 6px); right: -1px; z-index: 50; width: 236px;
+  background: #fff; border: 1px solid #cfd8e3; border-radius: 6px; box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
+  padding: 8px;
+}
+#workingStart .se-mp-pop[hidden] { display: none; }
+#workingStart .se-mp-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 8px; border-bottom: 1px solid #eef1f5; margin-bottom: 8px; }
+#workingStart .se-mp-ytext { font-size: 14px; font-weight: 700; color: #1f2937; }
+#workingStart .se-mp-year {
+  width: 28px; height: 26px; border: 1px solid #d5dce6; border-radius: 4px; background: #fff; color: #0b2c66;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+}
+#workingStart .se-mp-year:hover { background: #eef2f8; }
+#workingStart .se-mp-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+#workingStart .se-mp-month {
+  height: 32px; border: 1px solid #e3e8ef; border-radius: 4px; background: #fff; color: #374151;
+  font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit;
+}
+#workingStart .se-mp-month:hover { background: #eef2f8; border-color: #b9c6d8; }
+#workingStart .se-mp-month.is-today { border-color: #0b2c66; color: #0b2c66; }
+#workingStart .se-mp-month.is-selected { background: #0b2c66; border-color: #0b2c66; color: #fff; }
+#workingStart .se-mp-foot { display: flex; justify-content: flex-end; margin-top: 8px; padding-top: 8px; border-top: 1px solid #eef1f5; }
+#workingStart .se-mp-today {
+  height: 26px; padding: 0 12px; border: 1px solid #0b2c66; border-radius: 4px; background: #fff; color: #0b2c66;
+  font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+}
+#workingStart .se-mp-today:hover { background: #0b2c66; color: #fff; }
