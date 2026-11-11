@@ -63,8 +63,23 @@
     return null;
   };
 
+  // シフト申請の終日休暇（leaveType → 勤務区分）。半休は半日勤務があるので含めない
+  const SHIFT_FULL_DAY_LEAVE_KUBUN = { paid: '有給休暇', unpaid: '欠勤', special: '無給休暇', substitute: '代替休日' };
+
   const renderTableFull = (host, detail, profile) => {
     if (!host) return;
+    // シフトが承認済みの月: シフトで申請した終日休暇は承認済み（休暇申請の行が無い 代替休日 なども）
+    try {
+      if (detail && String(detail.shiftMonthStatus || '').toUpperCase() === 'APPROVED' && Array.isArray(detail.days)) {
+        const lsMap = (detail.leaveStatusByDate = detail.leaveStatusByDate || {});
+        for (const d of detail.days) {
+          const ds = String(d?.date || '').slice(0, 10);
+          const sr = d?.shiftRequest;
+          if (!ds || lsMap[ds] || sr?.status !== 'LEAVE' || !SHIFT_FULL_DAY_LEAVE_KUBUN[String(sr?.leaveType || '')]) continue;
+          lsMap[ds] = { status: 'approved', fromShift: true };
+        }
+      }
+    } catch (e) { /* 表示用 */ }
     // フレックス勤務の社員: 名前の横に「フレックス」（表示中の社員の設定。管理者が見る場合も同じ）
     try {
       const flexBadge = document.getElementById('empFlexBadge');
@@ -265,6 +280,18 @@
         kubunInit = '休日';
         plannedKubun = '休日';
       }
+      // シフトで申請した終日休暇（代替休日・有給休暇・欠勤・無給休暇）: その日が終わり、打刻なし・区分なし
+      // → その区分を表示（社員が選び直さなくてよい。表示のみ、DBは変更しない）。承認の状況はステータス列
+      // （申請中 → 承認済み）で分かる。差戻しの月・今日以降は 【代替休日】 などの予定表示のまま。
+      const shiftLeaveKubunAuto = SHIFT_FULL_DAY_LEAVE_KUBUN[String(shiftRequest?.leaveType || '')] || '';
+      const isAutoShiftLeaveDay = !isAutoHolidayDay && !kubunInit && !hasActual
+        && String(detail?.shiftMonthStatus || '').toUpperCase() !== 'REJECTED'
+        && shiftRequest?.status === 'LEAVE' && !!shiftLeaveKubunAuto
+        && String(dateStr) < autoOffTodayStr && kubunOptions.includes(shiftLeaveKubunAuto);
+      if (isAutoShiftLeaveDay) {
+        kubunInit = shiftLeaveKubunAuto;
+        plannedKubun = shiftLeaveKubunAuto;
+      }
 
       // Nếu là ngày nghỉ nhưng đã có check-in/out thực tế mà kubun chưa đặt thì suy ra 休日出勤 để hiển thị
       // Part-time: đi làm ngày nghỉ vẫn tính cùng mức lương nên coi là 出勤 (không phải 休日出勤)
@@ -290,11 +317,12 @@
       // Logic cũ ẩn kubun làm việc (ví dụ 出勤) trừ khi có chấm công thực tế,
       // khiến sau khi reload trông như "chưa lưu".
       // Không reset kubunInit của ngày auto-休日 (nó là 休日 do hệ thống tự đặt, không phải chưa lưu)
-      const allowDailyAsActual = hasActual || kubunConfirmed || isAutoHolidayDay;
+      // 承認済みシフトの休暇を自動で表示する日も同じ（システムが確定として表示する区分）
+      const allowDailyAsActual = hasActual || kubunConfirmed || isAutoHolidayDay || isAutoShiftLeaveDay;
       if (!allowDailyAsActual) kubunInit = '';
 
       // Ngày auto-休日 coi như đã xác định: không phải "予定/未申請" và không làm mờ dòng.
-      const isPlanned = !isAutoHolidayDay && !kubunInit && !hasActual && !kubunConfirmed;
+      const isPlanned = !isAutoHolidayDay && !isAutoShiftLeaveDay && !kubunInit && !hasActual && !kubunConfirmed;
       const canEditWorkRow = !!state.editableMonth && ((isWorkDay || hasActual) && !!kubunInit || !isEmployee);
       // 勤務区分が未選択の出勤日（今日まで・休日やシフトの休暇は除く）は 出社/在宅/現場 を押せる。押すと 出勤 を自動選択
       const canAutoKubunByWorkType = !!state.editableMonth && isEmployee && !kubunInit && !isOff

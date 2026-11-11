@@ -871,7 +871,8 @@ const applyWorkTypeGate = () => {
   const st = window.state || {};
   const kubun = String($('#kubun')?.value || '').trim();
   const workType = String($('#workType')?.value || '').trim();
-  const nonWorking = !!st.restHoliday || ['欠勤', '有給休暇', '無給休暇'].includes(kubun);
+  // 終日の休み（代替休日 を含む）は 出社/在宅/現場 の欄が隠れるので、選ばなくても 登録・確定 できる
+  const nonWorking = !!st.restHoliday || ['欠勤', '有給休暇', '無給休暇', '代替休日'].includes(kubun);
   const locked = !nonWorking && !workType;
   const setDisabled = (selector, disabled) => {
     const el = $(selector);
@@ -2246,8 +2247,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault(); // Chặn hành vi submit mặc định của form (tránh trắng trang)
     if (!confirm('保存しますか？')) return;
     showErr('');
-    if (!String($('#workType')?.value || '').trim() && !state.restHoliday) {
-      showErr('先に勤務区分を選択してください');
+    // 出勤の日だけ 出社/在宅/現場 が必要。終日の休み（休日・代替休日・欠勤・有給休暇・無給休暇）は不要
+    const kubunForSave = String($('#kubun')?.value || '').trim();
+    const fullDayOff = !!state.restHoliday || ['休日', '欠勤', '有給休暇', '無給休暇', '代替休日'].includes(kubunForSave);
+    if (!String($('#workType')?.value || '').trim() && !fullDayOff) {
+      showErr('先に 出社・在宅・現場 のどれかを選択してください');
       return;
     }
     await persistSimpleEntry(e.currentTarget);
@@ -2256,8 +2260,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     e.preventDefault(); // Chặn hành vi submit mặc định của form (tránh trắng trang)
     if (!confirm('保存しますか？')) return;
     showErr('');
-    if (!String($('#workType')?.value || '').trim() && !state.restHoliday) {
-      showErr('先に勤務区分を選択してください');
+    // 出勤の日だけ 出社/在宅/現場 が必要。終日の休み（休日・代替休日・欠勤・有給休暇・無給休暇）は不要
+    const kubunForSave = String($('#kubun')?.value || '').trim();
+    const fullDayOff = !!state.restHoliday || ['休日', '欠勤', '有給休暇', '無給休暇', '代替休日'].includes(kubunForSave);
+    if (!String($('#workType')?.value || '').trim() && !fullDayOff) {
+      showErr('先に 出社・在宅・現場 のどれかを選択してください');
       return;
     }
     await persistSimpleEntry(e.currentTarget);

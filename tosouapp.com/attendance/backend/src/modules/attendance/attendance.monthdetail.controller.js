@@ -95,9 +95,11 @@ exports.getMonthDetail = async (req, res) => {
 
     // シフトが差戻しされた月は、その休暇（LEAVE）を休みとして表示しない（承認されていないため）
     let shiftMonthRejected = false;
+    let shiftMonthStatus = ''; // PENDING / APPROVED / REJECTED（画面: 承認済みのシフトの休暇は確定として表示）
     try {
       const [[sms] = []] = await db.query('SELECT status FROM shift_month_status WHERE userId = ? AND month = ? LIMIT 1', [userId, `${y}-${pad(m)}`]);
-      shiftMonthRejected = String(sms?.status || '') === 'REJECTED';
+      shiftMonthStatus = String(sms?.status || '');
+      shiftMonthRejected = shiftMonthStatus === 'REJECTED';
     } catch (e) { /* 表示用 */ }
 
     // Dựng map shift request (date → {status, leaveType, reason, detail})
@@ -431,6 +433,7 @@ exports.getMonthDetail = async (req, res) => {
       year: y, month: m, from, to,
       user,
       leaveStatusByDate,
+      shiftMonthStatus,
       monthStatus: {
         status:      monthStatus,
         approved_by: monthStatusObj?.approved_by || null,
