@@ -742,10 +742,19 @@ const getSimpleStatusMeta = () => {
   }
 
   if (hasActualNow) {
-    // 簡易登録画面: 出勤・退勤の両方が揃っていれば自動で確認済み
+    // 終日の休暇なのに打刻がある → 区分の確認を促す
+    if (['有給休暇', '無給休暇', '欠勤', '代替休日'].includes(kubunNow)) {
+      return { text: '区分を確認してください', cls: 'warn' };
+    }
+    // 出勤・退勤が揃っていて作業内容もあれば確認済み（月次勤怠・Excel と同じ条件）
     const hasBothNow = !!(effectiveHm($('#startTime')) && effectiveHm($('#endTime')));
     if (hasBothNow || (window.state && window.state.hasEndedToday)) {
-      return { text: '確認済み', cls: 'ok' };
+      const hasWork = !!String($('#workContent')?.value || '').trim();
+      return hasWork ? { text: '確認済み', cls: 'ok' } : { text: '作業内容未入力', cls: 'warn' };
+    }
+    // 過去の日で退勤の打刻がない → 調整申請へ
+    if (dateNow && dateNow < todayNow) {
+      return { text: '退勤未打刻（調整申請）', cls: 'warn' };
     }
     if (window.state && window.state.lastGoOutRecord && window.state.lastGoOutRecord.return_time) {
       return { text: '戻り済み', cls: 'warn' };
@@ -1117,11 +1126,14 @@ const getCalendarOff = async (date) => {
     const shiftData = await fetchJSONAuth(`/api/attendance/shifts/monthly/${encodeURIComponent(month)}`).catch(() => null);
     const schedule = shiftData?.data?.schedule || shiftData?.schedule || {};
     const dayShift = schedule[date] || null;
+    shiftLeaveKubunByDate.delete(date);
     if (dayShift && dayShift.status === 'OFF') {
       return true;
     }
-    // 休暇（有給・半休(有給) など）は「休日」ではなく、その区分を表示する（半休は出勤日のまま）
-    if (dayShift && dayShift.status === 'LEAVE') {
+    // 休暇（有給・半休(有給) など）は「休日」ではなく、その区分を表示する（半休は出勤日のまま）。
+    // シフトが差戻しされた月の休暇は承認されていないので表示しない。
+    const shiftRejected = String(shiftData?.data?.submission_status || shiftData?.submission_status || '') === 'REJECTED';
+    if (dayShift && dayShift.status === 'LEAVE' && !shiftRejected) {
       shiftLeaveKubunByDate.set(date, SHIFT_LEAVE_KUBUN[String(dayShift.leaveType || '')] || '');
       return false;
     }

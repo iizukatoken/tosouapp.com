@@ -60,6 +60,9 @@ exports.exportMonthXlsx = async (req, res) => {
     const monthStatusObj = await repo.getMonthStatus(userId, y, m).catch(() => null);
     const monthStatus = String(monthStatusObj?.status || '').trim() || 'draft';
     const monthApproverName = monthStatus === 'approved' ? String(monthStatusObj?.approved_by_name || '') : '';
+    // 休暇の申請状況（承認ステータス列を画面と同じ 承認済み / 差戻し にするため）
+    let leaveStatusByDate = {};
+    try { leaveStatusByDate = await leaveRepo.listLeaveStatusByDate(userId, from, to, req.tenantId || null); } catch (e) { /* 表示用 */ }
     const role = String(req.user?.role || '').toLowerCase();
     if (role === 'payroll' && monthStatus !== 'approved') {
       return res.status(403).json({ message: 'Forbidden: month is not closed' });
@@ -544,6 +547,13 @@ exports.exportMonthXlsx = async (req, res) => {
       const approveStatus = (() => {
         if (monthStatus === 'approved') return '承認済み';
         if (isConfirmedRow || isAutoConfirmedNoWork) return '確認済み';
+        // 休暇の日（打刻なし）: 申請が承認済み / 差戻し ならそのとおり（画面と同じ）
+        if (!hasTime && !isRegularOffRow && (leaveKubunSet.has(dailyKubun) || dailyKubun === '半休' || dailyKubun === '半休(有給)')) {
+          const ls = leaveStatusByDate[ds]?.status;
+          if (ls === 'approved') return '承認済み';
+          if (ls === 'rejected') return '差戻し';
+          return '承認待ち';
+        }
         if (!dailyKubun && !hasTime) return '未申請';
         if (isLeaveApplied || hasTime) return '承認待ち';
         return '';

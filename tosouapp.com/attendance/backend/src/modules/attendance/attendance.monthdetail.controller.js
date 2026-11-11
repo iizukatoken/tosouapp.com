@@ -92,9 +92,17 @@ exports.getMonthDetail = async (req, res) => {
       repo.getGoOutRecordsByMonth(userId, y, m).catch(() => []),
     ]);
 
+    // シフトが差戻しされた月は、その休暇（LEAVE）を休みとして表示しない（承認されていないため）
+    let shiftMonthRejected = false;
+    try {
+      const [[sms] = []] = await db.query('SELECT status FROM shift_month_status WHERE userId = ? AND month = ? LIMIT 1', [userId, `${y}-${pad(m)}`]);
+      shiftMonthRejected = String(sms?.status || '') === 'REJECTED';
+    } catch (e) { /* 表示用 */ }
+
     // Dựng map shift request (date → {status, leaveType, reason, detail})
     const shiftReqMap = new Map();
     for (const r of shiftReqRows || []) {
+      if (shiftMonthRejected && r.status === 'LEAVE') continue;
       const dStr = String(r.date || '');
       const d = dStr.includes('T')
         ? dStr.slice(0, 10)

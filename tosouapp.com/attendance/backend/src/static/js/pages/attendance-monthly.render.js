@@ -35,10 +35,16 @@
   // 社員が不安にならない状態表示（正当な状態は中立の文言・灰色）。
   // null を返したら従来の判定を使う（退勤忘れ・作業内容未入力などは従来どおり）。
   const LEAVE_STATUS_KUBUN = new Set(['有給休暇', '無給休暇', '欠勤', '代替休日', '半休', '半休(有給)']);
-  const friendlyDayStatus = ({ dateStr, kubun, hasActualIn, hasActualOut, isPlanned, isRegularOff, isAdminView, leaveStatus }) => {
+  // 終日の休暇（打刻があれば区分の確認が必要）
+  const FULL_DAY_LEAVE_KUBUN = new Set(['有給休暇', '無給休暇', '欠勤', '代替休日']);
+  const friendlyDayStatus = ({ dateStr, kubun, hasActualIn, hasActualOut, isPlanned, isRegularOff, isAdminView, leaveStatus, hasMemo = true }) => {
     const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
     const hasActual = !!(hasActualIn || hasActualOut);
     const k = String(kubun || '').trim();
+    // 終日の休暇なのに打刻がある → 区分の確認を促す（管理者には要確認）
+    if (hasActual && FULL_DAY_LEAVE_KUBUN.has(k)) {
+      return isAdminView ? { text: '区分要確認', cls: 'danger' } : { text: '区分を確認', cls: 'warn' };
+    }
     // 休暇の日（打刻なし）: 申請の状況をそのまま出す
     if (!hasActual && !isRegularOff && LEAVE_STATUS_KUBUN.has(k)) {
       const st = String(leaveStatus?.status || '');
@@ -50,6 +56,10 @@
     if (isPlanned && !hasActual && String(dateStr || '') >= todayStr) return { text: '出勤予定', cls: 'none' };
     // 今日 出勤済み・まだ退勤前: 勤務中
     if (hasActualIn && !hasActualOut && String(dateStr || '') === todayStr) return { text: '勤務中', cls: 'none' };
+    // 過去の日で退勤の打刻がない → 調整申請へ
+    if (hasActualIn && !hasActualOut && String(dateStr || '') < todayStr) return { text: '退勤未打刻（調整申請）', cls: 'warn' };
+    // 出勤・退勤はあるが作業内容がまだ → 入力を促す（Excel の承認ステータスと同じ条件）
+    if (hasActualIn && hasActualOut && !hasMemo) return { text: '作業内容未入力', cls: 'warn' };
     return null;
   };
 
@@ -285,7 +295,7 @@
       // 半休: chỉ hiện giờ nếu có actual data (không auto-fill giờ mặc định)
       const isLeaveKubun = effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '欠勤';
       const kubunConflict = (isHolidayKubun || isLeaveKubun) && hasActual;
-      const kubunWarning = kubunConflict ? `${effectiveKubun}なのに打刻あり` : ((kubunInferred && !kubunConfirmed) ? '区分未確認' : '');
+      const kubunWarning = kubunConflict ? `${effectiveKubun}なのに打刻あり` : ((kubunInferred && !kubunConfirmed) ? '区分を選んでください' : '');
       const shouldShowDefaultShift = (isHolidayKubun || isLeaveKubun) ? kubunConflict : (isHankyuu ? hasActual : (isWorkDay || hasActual || isPartTimeNoPlanOnWorkDay));
 
       // ĐỐI VỚI CA PHỤ (!primary): Không tự động điền giờ dự kiến, để trống cho người dùng tự nhập.
@@ -383,7 +393,8 @@
       let cls = 'warn';
       const friendly = friendlyDayStatus({
         dateStr, kubun: effectiveKubun, hasActualIn, hasActualOut, isPlanned, isRegularOff: isRegularOffRow, isAdminView,
-        leaveStatus: (detail?.leaveStatusByDate || {})[dateStr] || null
+        leaveStatus: (detail?.leaveStatusByDate || {})[dateStr] || null,
+        hasMemo: !!String(daily?.memo || '').trim()
       });
       if (approved) {
         text = '承認済み';
@@ -554,7 +565,7 @@
       <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckOnsite_${dateStr}_${rowId}" name="ckOnsite_${dateStr}_${rowId}" class="se-check" data-field="ckOnsite" type="checkbox" ${wtVal === 'onsite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
       <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckRemote_${dateStr}_${rowId}" name="ckRemote_${dateStr}_${rowId}" class="se-check" data-field="ckRemote" type="checkbox" ${wtVal === 'remote' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
       <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckSatellite_${dateStr}_${rowId}" name="ckSatellite_${dateStr}_${rowId}" class="se-check" data-field="ckSatellite" type="checkbox" ${wtVal === 'satellite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
-      <td><input id="location_${dateStr}_${rowId}" name="location_${dateStr}_${rowId}" class="se-input" data-field="location" type="text" value="${esc(finalLoc)}" style="${hideCheckboxStyle}${wtVal !== 'satellite' ? 'visibility:hidden;' : ''}" ${!canEditWorkRow ? 'disabled' : ''}></td>
+      <td><input id="location_${dateStr}_${rowId}" name="location_${dateStr}_${rowId}" class="se-input" data-field="location" type="text" value="${esc(finalLoc)}" style="${hideCheckboxStyle}${!wtVal ? 'visibility:hidden;' : ''}" ${!canEditWorkRow ? 'disabled' : ''}></td>
       <td><textarea id="memo_${dateStr}_${rowId}" name="memo_${dateStr}_${rowId}" class="se-input" data-field="memo" rows="1" style="resize:vertical; min-height:28px; ${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}>${esc(finalMemo)}</textarea></td>
       <td class="se-time-cell">
         <div class="se-time-wrap">
@@ -898,10 +909,10 @@
         if (!el) return;
         if (canEditWorkInputs) {
           el.removeAttribute('disabled');
-          // 現場(任意): only show when 現場 checkbox is checked
+          // 現場(任意): 出社・在宅・現場 のどれかを選んだら表示（任意入力）
           if (el === locEl) {
-            const isSatellite = ckSa && ckSa.checked;
-            el.style.visibility = isSatellite ? 'visible' : 'hidden';
+            const anyWorkType = !!((ckOn && ckOn.checked) || (ckRe && ckRe.checked) || (ckSa && ckSa.checked));
+            el.style.visibility = anyWorkType ? 'visible' : 'hidden';
           } else {
             el.style.visibility = 'visible';
           }
@@ -910,8 +921,8 @@
           if (isHolidayKubun || isLeaveKubun) {
             el.style.visibility = 'hidden';
           } else if (el === locEl) {
-            const isSatellite = ckSa && ckSa.checked;
-            el.style.visibility = isSatellite ? 'visible' : 'hidden';
+            const anyWorkType = !!((ckOn && ckOn.checked) || (ckRe && ckRe.checked) || (ckSa && ckSa.checked));
+            el.style.visibility = anyWorkType ? 'visible' : 'hidden';
           }
         }
       });
@@ -938,7 +949,8 @@
         const friendlyNow = friendlyDayStatus({
           dateStr, kubun: cls || rowEl.dataset.plannedLeaveKubun || '', hasActualIn: hasActualInNow, hasActualOut: hasActualOutNow, isPlanned,
           isRegularOff: isRegularOffRowNow, isAdminView,
-          leaveStatus: (state.currentMonthDetail?.leaveStatusByDate || {})[dateStr] || null
+          leaveStatus: (state.currentMonthDetail?.leaveStatusByDate || {})[dateStr] || null,
+          hasMemo: !!memoValNow
         });
         if (monthApproved) {
           stText = '承認済み';

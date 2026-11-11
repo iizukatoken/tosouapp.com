@@ -111,6 +111,7 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         END AS has_approved_leave,
         sr.status AS shift_status,
         sr.leaveType AS shift_leave_type,
+        sms.status AS shift_month_status,
         a.id AS attendanceId,
         a.checkIn AS checkIn,
         a.checkOut AS checkOut,
@@ -134,6 +135,9 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
       LEFT JOIN shift_requests sr
         ON sr.userId = u.id
        AND sr.date = ?
+      LEFT JOIN shift_month_status sms
+        ON sms.userId = u.id
+       AND sms.month = ?
       LEFT JOIN (
         SELECT
           userId,
@@ -169,7 +173,7 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         COALESCE(u.employee_code, '') ASC,
         u.id ASC,
         a.checkIn ASC
-    `, [date, date, date, date, date]);
+    `, [date, date, date, date.slice(0, 7), date, date]);
 
     // Per-department off-day logic — tra department_holidays thật của từng công ty,
     // không hardcode tên bộ phận "工事部" nữa (đã thay bằng cấu hình 休日設定 theo tenant).
@@ -188,7 +192,8 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
       if (kubun === '休み') kubun = '休日';
       if (kubun === '半休（有給）') kubun = '半休(有給)';
       // 区分が未保存なら、シフト申請の休暇（有給・半休(有給) など）を使う
-      if (!kubun && r.shift_status === 'LEAVE') kubun = SHIFT_LEAVE_KUBUN[String(r.shift_leave_type || '')] || '';
+      // （シフトが差戻しされた月の休暇は承認されていないので使わない）
+      if (!kubun && r.shift_status === 'LEAVE' && r.shift_month_status !== 'REJECTED') kubun = SHIFT_LEAVE_KUBUN[String(r.shift_leave_type || '')] || '';
       const offKubun = new Set(['休日', '代替休日']);
       const leaveKubun = new Set(['有給休暇', '無給休暇', '欠勤']);
       const workKubun = new Set(['出勤', '休日出勤', '代替出勤', '半休', '半休(有給)']);
@@ -263,6 +268,8 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         },
         status,
         dailyKubun: kubunOut || null,
+        // 終日の休暇（有給・無給・欠勤）なのに打刻がある → 管理画面で要確認
+        kubunConflict: leaveKubun.has(kubun) && (hasIn || hasOut),
         lateMinutes: (isHolidayWork || isHalfDay) ? 0 : (r.late_minutes || 0),
         earlyMinutes: (isHolidayWork || isHalfDay) ? 0 : (r.early_minutes || 0),
         reason: r.reason || null,

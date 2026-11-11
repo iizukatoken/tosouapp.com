@@ -477,6 +477,25 @@ exports.approveShiftMonth = async (req, res) => {
       reportSwallowed('shift.approve.syncPaidLeave', e);
     }
 
+    // 差戻し: 社員に再提出を促す（以前は承認時しか通知されず、差戻しに気づけなかった）
+    if (status === 'REJECTED') {
+      try {
+        await noticesRepo.createNotice({
+          targetUserId: userId,
+          targetDate: null,
+          targetMonth: month,
+          message: `${month.replace('-', '年')}月のシフトが差戻しされました。内容を確認して再提出してください。`,
+          createdBy: req.user?.id || null,
+          kind: 'shift_rejected',
+          title: 'シフト差戻し',
+          audience: 'all',
+          tenantId: req.tenantId || null,
+        });
+      } catch (e) {
+        log.warn('shift_reject_notice_failed', { userId, month, error_message: e.message });
+      }
+    }
+
     // ⚠️ QUY TẮC CỨNG: Hành động APPROVED シフト CHỈ cập nhật trạng thái lịch (shift_month_status / shift_requests)
     //                     Tuyệt đối KHÔNG được tác động gì vào bảng attendance_daily (bảng tháng nhân viên).
     //                     Dữ liệu bảng tháng nhân viên chỉ được sửa trực tiếp tại màn hình bảng tháng (putMonthBulk / putDay).
