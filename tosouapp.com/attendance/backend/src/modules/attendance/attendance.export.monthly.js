@@ -379,6 +379,8 @@ exports.exportMonthXlsx = async (req, res) => {
             return { display: dailyKubun, effective: dailyKubun };
           }
           if (hasTime) return { display: '休日出勤', effective: '休日出勤' };
+          // 終わった休みの日（打刻なし）は 予定 ではなく 休日（月次画面と同じ。社員が選ばなくてよい）
+          if (ds < new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10)) return { display: '休日', effective: '休日' };
           return { display: plannedLabel, effective: '休日' };
         }
         const allowed = new Set(['', '出勤', '半休', '半休(有給)', '欠勤', '有給休暇', '無給休暇', '代替休日', '振替出勤', '休日']);

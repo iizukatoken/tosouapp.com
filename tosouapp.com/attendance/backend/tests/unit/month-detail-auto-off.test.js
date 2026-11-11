@@ -53,6 +53,24 @@ describe('getMonthDetail autoOff（休日予定 → 休日）', () => {
     expect(byDate['2026-11-10'].autoOff).toBe(0); // 平日（休みではない）
   });
 
+  it('シフトが LEAVE でも休暇の種類が無ければただの休み（autoOff=1）、有給の LEAVE は自動にしない', async () => {
+    const db = require('../../src/core/database/mysql');
+    db.query.mockImplementation(async (sql) => {
+      if (/FROM shift_requests WHERE userId = \? AND date BETWEEN/.test(sql)) {
+        return [[
+          { date: '2026-11-01', status: 'LEAVE', leaveType: null },
+          { date: '2026-11-08', status: 'LEAVE', leaveType: 'paid' }
+        ]];
+      }
+      return [[]];
+    });
+    const res = await call();
+    db.query.mockImplementation(async () => [[]]);
+    const byDate = Object.fromEntries(res.body.days.map(d => [d.date, d]));
+    expect(byDate['2026-11-01'].autoOff).toBe(1);
+    expect(byDate['2026-11-08'].autoOff).toBe(0);
+  });
+
   it('今日が休みの日なら、今日はまだ 休日予定（autoOff=0）', async () => {
     const utils = require('../../src/modules/attendance/attendance.utils');
     utils.getUserOffDaySet.mockResolvedValueOnce(new Set(['2026-11-11']));

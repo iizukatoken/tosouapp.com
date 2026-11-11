@@ -369,7 +369,10 @@ exports.getMonthDetail = async (req, res) => {
       const isDatePassed = ds < todayStr;                  // hết ngày rồi mới tự 休日 (không gồm hôm nay)
       const hasExplicitKubun = explicitKubunSet.has(kubun0);
       const isWorkingReq = reqStatus === 'WORKING';
-      const isLeaveReq = reqStatus === 'LEAVE';
+      // LEAVE は休暇の種類（有給・半休・欠勤 など）がある時だけ休暇扱い。種類の無い LEAVE はただの休み（OFF と同じ）
+      const SHIFT_LEAVE_TYPES = ['paid', 'paid_half', 'half', 'unpaid', 'substitute', 'special'];
+      const isLeaveReq = reqStatus === 'LEAVE' && SHIFT_LEAVE_TYPES.includes(String(shiftReqForDay?.leaveType || ''));
+      const isPlainOffReq = reqStatus === 'OFF' || (reqStatus === 'LEAVE' && !isLeaveReq);
 
       if (isDatePassed && !hasPunch && !hasExplicitKubun && !isWorkingReq && !isLeaveReq) {
         if (isPartTime) {
@@ -378,7 +381,7 @@ exports.getMonthDetail = async (req, res) => {
           autoOff = 1;
         } else {
           // 正社員: chỉ tự 休日 cho ngày nghỉ (lịch đỏ/CN/công ty) hoặc đã đăng ký OFF
-          if (off.has(ds) || reqStatus === 'OFF') autoOff = 1;
+          if (off.has(ds) || isPlainOffReq) autoOff = 1;
         }
       }
 

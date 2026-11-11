@@ -254,9 +254,12 @@
       // 打刻なし・区分なし・出勤/休暇のシフトなし → 休日。今日・これからは 休日予定 のまま。
       const autoOffTodayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
       const autoOffReq = String(shiftRequest?.status || '');
+      // LEAVE は休暇の種類（有給・半休・欠勤 など）がある時だけ休暇。種類の無い LEAVE はただの休み
+      const autoOffRealLeave = autoOffReq === 'LEAVE'
+        && ['paid', 'paid_half', 'half', 'unpaid', 'substitute', 'special'].includes(String(shiftRequest?.leaveType || ''));
       const autoOffLocal = String(dateStr) < autoOffTodayStr && !hasActual && !kubunInit
-        && autoOffReq !== 'WORKING' && autoOffReq !== 'LEAVE'
-        && (isPartTime || !!offDay || autoOffReq === 'OFF');
+        && autoOffReq !== 'WORKING' && !autoOffRealLeave
+        && (isPartTime || !!offDay || autoOffReq === 'OFF' || autoOffReq === 'LEAVE');
       const isAutoHolidayDay = (!!autoOff || autoOffLocal) && !hasActualIn && !hasActualOut && !kubunInit;
       if (isAutoHolidayDay) {
         kubunInit = '休日';
