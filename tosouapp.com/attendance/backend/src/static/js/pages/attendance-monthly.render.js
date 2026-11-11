@@ -279,6 +279,10 @@
       // Ngày auto-休日 coi như đã xác định: không phải "予定/未申請" và không làm mờ dòng.
       const isPlanned = !isAutoHolidayDay && !kubunInit && !hasActual && !kubunConfirmed;
       const canEditWorkRow = !!state.editableMonth && ((isWorkDay || hasActual) && !!kubunInit || !isEmployee);
+      // 勤務区分が未選択の出勤日（今日まで・休日やシフトの休暇は除く）は 出社/在宅/現場 を押せる。押すと 出勤 を自動選択
+      const canAutoKubunByWorkType = !!state.editableMonth && isEmployee && !kubunInit && !isOff
+        && !LEAVE_STATUS_KUBUN.has(plannedKubun) && String(dateStr) <= new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      const canTickWorkType = canEditWorkRow || canAutoKubunByWorkType;
       
       // Coi các dòng ngày làm việc mà không có checkin/checkout thật là dạng theo kế hoạch để làm mờ.
       const isPlannedLikeWork = !hasActual && isWorkDay;
@@ -562,9 +566,9 @@
           <input id="furikaeDate_${dateStr}_${rowId}" name="furikaeDate_${dateStr}_${rowId}" class="se-input se-furikae-date" data-field="furikaeHolidayDate" type="date" value="${esc(daily?.furikae_holiday_date ? String(daily.furikae_holiday_date).slice(0, 10) : '')}" title="振替休日の日付" placeholder="振替休日" style="width:110px;font-size:11px;margin-top:2px;${kubunInit === '振替出勤' ? '' : 'display:none;'}" ${state.editableMonth ? '' : 'disabled'}>
         </div>
       </td>
-      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckOnsite_${dateStr}_${rowId}" name="ckOnsite_${dateStr}_${rowId}" class="se-check" data-field="ckOnsite" type="checkbox" ${wtVal === 'onsite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
-      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckRemote_${dateStr}_${rowId}" name="ckRemote_${dateStr}_${rowId}" class="se-check" data-field="ckRemote" type="checkbox" ${wtVal === 'remote' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
-      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckSatellite_${dateStr}_${rowId}" name="ckSatellite_${dateStr}_${rowId}" class="se-check" data-field="ckSatellite" type="checkbox" ${wtVal === 'satellite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}></td>
+      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckOnsite_${dateStr}_${rowId}" name="ckOnsite_${dateStr}_${rowId}" class="se-check" data-field="ckOnsite" type="checkbox" ${wtVal === 'onsite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canTickWorkType ? 'disabled' : ''}></td>
+      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckRemote_${dateStr}_${rowId}" name="ckRemote_${dateStr}_${rowId}" class="se-check" data-field="ckRemote" type="checkbox" ${wtVal === 'remote' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canTickWorkType ? 'disabled' : ''}></td>
+      <td style="width:40px;min-width:40px;max-width:40px;text-align:center;box-sizing:border-box;"><input id="ckSatellite_${dateStr}_${rowId}" name="ckSatellite_${dateStr}_${rowId}" class="se-check" data-field="ckSatellite" type="checkbox" ${wtVal === 'satellite' ? 'checked' : ''} style="${hideCheckboxStyle}" ${!canTickWorkType ? 'disabled' : ''}></td>
       <td><input id="location_${dateStr}_${rowId}" name="location_${dateStr}_${rowId}" class="se-input" data-field="location" type="text" value="${esc(finalLoc)}" style="${hideCheckboxStyle}${!wtVal ? 'visibility:hidden;' : ''}" ${!canEditWorkRow ? 'disabled' : ''}></td>
       <td><textarea id="memo_${dateStr}_${rowId}" name="memo_${dateStr}_${rowId}" class="se-input" data-field="memo" rows="1" style="resize:vertical; min-height:28px; ${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}>${esc(finalMemo)}</textarea></td>
       <td class="se-time-cell">
@@ -885,10 +889,15 @@
         else el.setAttribute('disabled', '');
       });
       
-      // 押せないチェック（出社/在宅/現場）に理由を出す: 社員は先に勤務区分を選ぶ必要がある
+      // 勤務区分が未選択の出勤日（今日まで・休日やシフトの休暇は除く）は 出社/在宅/現場 を押せる。押すと 出勤 を自動選択
+      const rowDateStr = String(rowEl.dataset.date || '').slice(0, 10);
+      const canAutoKubunByWorkType = !!state.editableMonth && isEmployee && !cls && !offDay && !rowEl.dataset.plannedLeaveKubun
+        && !!rowDateStr && rowDateStr <= new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+      // 押せないチェックには理由を出す（これからの日は先に勤務区分を選ぶ）
       [ckOn, ckRe, ckSa].forEach((el) => {
         if (!el) return;
-        el.title = (!canEditWorkInputs && !cls && state.editableMonth) ? '先に勤務区分を選んでください' : '';
+        el.title = canAutoKubunByWorkType ? 'チェックすると勤務区分が「出勤」になります'
+          : ((!canEditWorkInputs && !cls && state.editableMonth) ? '先に勤務区分を選んでください' : '');
       });
       [brSel, nbSel, ckOn, ckRe, ckSa].forEach((el) => {
         if (!el) return;
@@ -910,6 +919,13 @@
         }
       });
       
+      if (canAutoKubunByWorkType && !canEditWorkInputs) {
+        [ckOn, ckRe, ckSa].forEach((el) => {
+          if (!el) return;
+          el.removeAttribute('disabled');
+          el.style.visibility = 'visible';
+        });
+      }
       [locEl, memoEl].forEach((el) => {
         if (!el) return;
         if (canEditWorkInputs) {

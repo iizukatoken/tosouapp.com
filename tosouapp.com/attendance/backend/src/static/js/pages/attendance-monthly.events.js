@@ -1222,6 +1222,15 @@
         if (ck.hasAttribute('disabled')) return;
         try { tr.dataset.dirty = '1'; } catch (e) { /* silently ignored */ }
         const field = String(ck.getAttribute('data-field') || '');
+        // 勤務区分が未選択の行（今日までの出勤日）: チェックしたら 出勤 を自動選択
+        if (ck.checked) {
+          const clsSelAuto = tr.querySelector('select[data-field="classification"]');
+          if (clsSelAuto && !String(clsSelAuto.value || '').trim() && Array.from(clsSelAuto.options || []).some((o) => o.value === '出勤')) {
+            clsSelAuto.value = '出勤';
+            clsSelAuto.classList.remove('is-planned');
+            try { tr.dataset.kubunConfirmed = '1'; } catch (err) { /* silently ignored */ }
+          }
+        }
         const ckOn = tr.querySelector('input[data-field="ckOnsite"]');
         const ckRe = tr.querySelector('input[data-field="ckRemote"]');
         const ckSa = tr.querySelector('input[data-field="ckSatellite"]');
