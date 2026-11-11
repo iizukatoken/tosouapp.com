@@ -2127,8 +2127,10 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 .se-check:checked:after {
   transform: scale(1);
 }
+/* 勤務区分が未選択の行などで押せないチェックは、押せないと分かる見た目にする */
 .se-check:disabled {
-  opacity: 1;
+  opacity: .35;
+  cursor: not-allowed;
 }
 #monthTable tbody td.is-checked {
   background: #fff;

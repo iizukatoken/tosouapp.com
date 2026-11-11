@@ -1230,13 +1230,13 @@
           if (field !== 'ckRemote' && ckRe) ckRe.checked = false;
           if (field !== 'ckSatellite' && ckSa) ckSa.checked = false;
         }
-        // Hide/show 現場(任意) field: only visible when 現場 is checked.
+        // 現場(任意): 出社・在宅・現場 のどれかを選んだら表示（任意入力）
         // 入力済みの値はここで消さない — 出社/在宅と切り替えてから再度「現場」を
         // 選び直したときに、前に入力した現場名が消えてしまう不具合があったため。
         const locInput = tr.querySelector('input[data-field="location"]');
         if (locInput) {
-          const isSatellite = ckSa && ckSa.checked;
-          locInput.style.visibility = isSatellite ? 'visible' : 'hidden';
+          const anyWorkType = !!((ckOn && ckOn.checked) || (ckRe && ckRe.checked) || (ckSa && ckSa.checked));
+          locInput.style.visibility = anyWorkType ? 'visible' : 'hidden';
         }
           if (e.target.dataset.field === 'classification') {
             const val = e.target.value;

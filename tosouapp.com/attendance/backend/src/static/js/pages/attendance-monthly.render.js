@@ -885,6 +885,11 @@
         else el.setAttribute('disabled', '');
       });
       
+      // 押せないチェック（出社/在宅/現場）に理由を出す: 社員は先に勤務区分を選ぶ必要がある
+      [ckOn, ckRe, ckSa].forEach((el) => {
+        if (!el) return;
+        el.title = (!canEditWorkInputs && !cls && state.editableMonth) ? '先に勤務区分を選んでください' : '';
+      });
       [brSel, nbSel, ckOn, ckRe, ckSa].forEach((el) => {
         if (!el) return;
         if (canEditWorkInputs) {
