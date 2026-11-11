@@ -3643,3 +3643,59 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 }
 #dailySection .se-daily-head .se-month-pair #btnPrevMonth { border-radius: 4px 0 0 4px !important; }
 #dailySection .se-daily-head .se-month-pair #btnNextMonth { border-radius: 0 4px 4px 0 !important; }
+
+/* ===== 2026-11 月次勤怠入力: 落ち着いた配色 =====
+   濃い紺の塗りは主要な操作（保存・選択中のタブ）だけ。その他のボタンは白地＋紺の枠線、
+   当月サマリの色付き見出しは淡い色、日次実績の表見出しは薄いグレーに。 */
+:root {
+  --se-calm-border: #c3cedc;
+  --se-calm-text: #0b2c66;
+  --se-calm-hover: #f1f5fb;
+}
+/* 枠線ボタン（簡易登録画面へ・前月/翌月・出力・外出履歴・戻る・入力用Excel） */
+#workingStart .se-shortcuts .se-btn,
+#dailySection .se-daily-head .common-buttons .se-btn,
+#btnBackBottom, #btnExportMonthBottom, #btnImportMonthBottom {
+  background: #fff !important;
+  color: var(--se-calm-text) !important;
+  border: 1px solid var(--se-calm-border) !important;
+  box-shadow: none !important;
+}
+#workingStart .se-shortcuts .se-btn:hover,
+#dailySection .se-daily-head .common-buttons .se-btn:hover:not(:disabled),
+#btnBackBottom:hover, #btnExportMonthBottom:hover:not(:disabled), #btnImportMonthBottom:hover:not(:disabled) {
+  background: var(--se-calm-hover) !important;
+  border-color: #8fa3bf !important;
+}
+#dailySection .se-daily-head .common-buttons .se-btn:disabled,
+#btnExportMonthBottom:disabled, #btnImportMonthBottom:disabled {
+  background: #f7f8fa !important; color: #9aa5b5 !important; border-color: #e0e5ec !important; opacity: 1 !important;
+}
+/* 前月/翌月ペア: 枠線を1本に */
+#dailySection .se-daily-head .se-month-pair #btnNextMonth { margin-left: -1px !important; border-left: 1px solid var(--se-calm-border) !important; }
+/* 外出履歴: 緑の塗りをやめ、緑の文字＋枠線（JS が inline で色を変えても上書き） */
+#dailySection .se-daily-head .common-buttons #btnToggleGoOutHistory {
+  background: #fff !important; color: #0f766e !important; border: 1px solid #9fd3c5 !important;
+}
+#dailySection .se-daily-head .common-buttons #btnToggleGoOutHistory:hover { background: #effaf6 !important; }
+
+/* 当月サマリ: 色付き見出し（濃い塗り）→ 淡い色＋色文字 */
+#monthSummaryTable th[style*="#1d4ed8"], #monthSummaryTable th[style*="#1e40af"] { background: #d9e4f8 !important; color: #1e3a8a !important; }
+#monthSummaryTable th[style*="#ea580c"] { background: #fadfc7 !important; color: #9a3412 !important; }
+#monthSummaryTable th[style*="#dc2626"] { background: #f8d7d7 !important; color: #991b1b !important; }
+#monthSummaryTable td[style*="#dbeafe"] { background: #f4f7fd !important; color: #1e3a8a !important; }
+#monthSummaryTable td[style*="#fff7ed"] { background: #fffaf4 !important; color: #b45309 !important; }
+#monthSummaryTable td[style*="#fef2f2"] { background: #fff8f8 !important; color: #b91c1c !important; }
+
+/* 日次実績の表見出し: 濃紺 → 薄いグレー（紺の文字） */
+body:not(.embed) #monthTable.se-table #monthTableReal thead th,
+body.embed .se-month-table-wrap #monthTableReal thead th {
+  background: #eef2f7 !important;
+  color: #1f2d3d !important;
+  box-shadow: inset 0 -1px 0 #d5dce6 !important;
+}
+#monthTable #monthTableReal thead th { border-color: #dbe1e8 !important; }
+@media (max-width: 900px) {
+  #monthTable .se-sticky-month-head { background: #eef2f7 !important; }
+  #monthTable .se-sticky-month-head th { background: #eef2f7 !important; color: #1f2d3d !important; border-color: #dbe1e8 !important; }
+}
