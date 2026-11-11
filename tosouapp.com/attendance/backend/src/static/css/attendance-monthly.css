@@ -3509,3 +3509,58 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
     background-position: -200% 0;
   }
 }
+
+/* ===== 2026-11 月次勤怠入力: 元のデザインのまま、上部の各ブロックをつながりよく整える ===== */
+/* ヘッダー（タイトル・社員情報・対象年月）を1枚の白いカードに */
+#workingStart {
+  background: #fff;
+  border: 1px solid #dbe1e8;
+  border-radius: 6px;
+  padding: 10px 14px 4px;
+  margin-bottom: 8px;
+}
+#workingStart .se-page-head { margin-bottom: 4px; }
+#workingStart .se-employee-bar.se-employee-bar-sample { padding: 0 0 6px; margin-bottom: 0; border-bottom: 0; }
+/* 簡易登録画面へ: 上下の余白を詰める */
+#contractList .se-shortcuts { margin: 0 0 8px; padding: 0; }
+/* 契約先一覧・当月サマリ・日次実績: 同じ幅・同じ見出し帯の白いパネル */
+#contractList .se-section, #monthSummary .se-section, #attendance > .se-section {
+  background: #fff;
+  border: 1px solid #dbe1e8;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+#contractList .se-section-head, #monthSummary .se-section-head, #attendance > .se-section > .se-section-head {
+  padding: 6px 12px;
+  background: #f5f7fa;
+  border-bottom: 1px solid #e3e8ee;
+}
+#contractList .se-section-body, #monthSummary .se-section-body { padding: 10px 12px; }
+/* 契約先一覧の表をパネル幅いっぱいに */
+#contractSection .se-table table { width: 100%; }
+/* 当月サマリ: 1行の表・色付きの見出しはそのまま、パネル幅に収めて横スクロールをなくす */
+#monthSummaryTable.se-summary table {
+  table-layout: fixed;
+  width: 100%;
+}
+#monthSummaryTable.se-summary thead th {
+  white-space: normal;
+  font-size: 11.5px;
+  line-height: 1.25;
+  padding: 5px 2px;
+  height: 34px;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+#monthSummaryTable.se-summary tbody td {
+  font-size: 12.5px;
+  font-weight: 700;
+  padding: 7px 2px;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  /* 狭い画面は従来どおり横スクロール */
+  #monthSummaryTable.se-summary table { table-layout: auto; width: max-content; }
+  #monthSummaryTable.se-summary thead th { white-space: nowrap; height: auto; }
+}
