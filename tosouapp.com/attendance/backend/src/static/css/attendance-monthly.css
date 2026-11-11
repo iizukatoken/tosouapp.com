@@ -3564,3 +3564,26 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   #monthSummaryTable.se-summary table { table-layout: auto; width: max-content; }
   #monthSummaryTable.se-summary thead th { white-space: nowrap; height: auto; }
 }
+/* 対象年月: ラベルと入力を1つの部品のようにつなげ、社員情報バーの右端に置く */
+#workingStart .se-employee-bar.se-employee-bar-sample { display: flex; align-items: center; }
+#workingStart .se-target-month.se-target-month-sample {
+  margin-left: auto;
+  gap: 0;
+  align-items: stretch;
+}
+#workingStart .se-target-label-sample {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid #0b2c66;
+  border-right: 0;
+  border-radius: 4px 0 0 4px;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+#workingStart .se-target-input-sample {
+  height: 32px;
+  margin: 0;
+  border: 1px solid #0b2c66;
+  border-radius: 0 4px 4px 0;
+  box-sizing: border-box;
+}
