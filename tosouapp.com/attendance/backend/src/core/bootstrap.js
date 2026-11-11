@@ -429,6 +429,13 @@ async function runMigrations() {
           try { await conn.query(`ALTER TABLE branches DROP INDEX code`); } catch (e) { /* already dropped */ }
           try { await conn.query(`ALTER TABLE branches ADD UNIQUE KEY uniq_tenant_branch_code (tenant_id, code)`); } catch (e) { /* already exists */ }
         }
+      },
+      {
+        id: '20261111_01_users_is_flex',
+        up: async () => {
+          // フレックス勤務の社員（社員管理で設定）: 遅刻・早退を表示しない
+          try { await conn.query(`ALTER TABLE users ADD COLUMN is_flex TINYINT(1) NOT NULL DEFAULT 0`); } catch (e) { /* already exists */ }
+        }
       }
     ];
     for (const m of migrations) {

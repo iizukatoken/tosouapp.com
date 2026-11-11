@@ -35,6 +35,7 @@ const { resolveEmploymentStartDate }     = require('../../utils/employmentDate')
 const {
   resolveTargetUserId, // Kiểm tra RBAC: ai được xem của ai
   getUserOffDaySet,    // Set ngày nghỉ theo năm + bộ phận (工事部 có rule riêng)
+  resolveDefaultApproverName, // 承認者の既定名（設定されたマネージャー）
 } = require('./attendance.utils');
 
 // ─── API: Lấy toàn bộ chi tiết tháng ─────────────────────────────────────────
@@ -356,16 +357,16 @@ exports.getMonthDetail = async (req, res) => {
       const segsForDay = segMap.get(ds) || [];
 
       // ── Suy diễn "tự động 休日" ─────────────────────────────────────────────
-      // Khi đã đến ngày (hôm nay hoặc quá khứ) mà nhân viên KHÔNG chấm công và
+      // Khi ngày đó đã KẾT THÚC (từ hôm sau trở đi) mà nhân viên KHÔNG chấm công và
       // KHÔNG có kubun cụ thể, hệ thống tự hiển thị 休日 (không bắt nhập tay).
       //   - 正社員: ngày nghỉ theo lịch (CN/ngày đỏ/công ty) hoặc đã đăng ký OFF.
       //   - パート: ngày đăng ký OFF, hoặc 予定なし (không đăng ký), hoặc ngày nghỉ lịch.
-      // Ngày tương lai vẫn giữ 休日予定 / 出勤予定 / 予定なし như cũ.
+      // Hôm nay và ngày tương lai vẫn giữ 休日予定 / 出勤予定 / 予定なし (hôm nay còn có thể đi làm).
       let autoOff = 0;
       const kubun0 = String(dailyForDay?.kubun || '').trim();
       const hasPunch = segsForDay.some(s => !!s?.checkIn || !!s?.checkOut);
       const reqStatus = shiftReqForDay?.status || null;
-      const isDatePassed = ds <= todayStr;                 // gồm cả hôm nay
+      const isDatePassed = ds < todayStr;                  // hết ngày rồi mới tự 休日 (không gồm hôm nay)
       const hasExplicitKubun = explicitKubunSet.has(kubun0);
       const isWorkingReq = reqStatus === 'WORKING';
       const isLeaveReq = reqStatus === 'LEAVE';
@@ -405,6 +406,7 @@ exports.getMonthDetail = async (req, res) => {
       office_code:      u.office_code    || null,
       officeCode:       u.office_code    || null,
       employment_type:  u.employment_type || null,
+      is_flex:          Number(u.is_flex || 0) === 1 ? 1 : 0, // フレックス: 遅刻・早退を表示しない
       paidLeaveEntitlement,
       paidLeaveGrantedDays:      Number(leaveSummary?.grantedDays      || 0),
       paidLeaveGrantedTotalDays: Number(leaveSummary?.grantedDaysTotal || 0),
@@ -417,6 +419,10 @@ exports.getMonthDetail = async (req, res) => {
       leaveStatusByDate = await leaveRepo.listLeaveStatusByDate(userId, from, to, tid || null);
     } catch (e) { /* 表示用。取れなければ従来どおり */ }
 
+    // 確認済みの日の 承認者 に出す名前（月次Excel と同じ: 設定されたマネージャー）
+    let defaultApproverName = '';
+    try { defaultApproverName = await resolveDefaultApproverName(u, userId, tid); } catch (e) { /* 表示用 */ }
+
     // Trả kết quả
     res.status(200).json({
       year: y, month: m, from, to,
@@ -427,6 +433,7 @@ exports.getMonthDetail = async (req, res) => {
         approved_by: monthStatusObj?.approved_by || null,
         approved_at: monthStatusObj?.approved_at || null,
         approverName,
+        defaultApproverName,
       },
       shiftAssignments,
       workDetails,

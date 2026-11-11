@@ -18,14 +18,14 @@
     showErr
   } = core;
 
-  // 出勤しない日を自動で「確認済み」とするか (今日までの日のみ、実績が無い日):
+  // 出勤しない日を自動で「確認済み」とするか (その日が終わってから＝昨日までの日のみ、実績が無い日):
   // - 会社/部署カレンダーの休日 (土日祝・工事部の第4土曜など) で区分が 未設定/休日 → 正社員・パート共通で確認済み
   // - パートはシフトが不定期なので、出勤予定 (シフト登録 WORKING) の無い日で区分が 未設定/休日 → 確認済み
   // 有給休暇・無給休暇・欠勤・代替休日、正社員が平日に 休日 を選んだ日は 承認待ち のまま。
   const isAutoConfirmedNoWorkDay = ({ dateStr, hasActual, isOff, isPartTime, kubun, shiftWorking }) => {
     if (hasActual) return false;
     const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
-    if (!dateStr || String(dateStr) > todayStr) return false;
+    if (!dateStr || String(dateStr) >= todayStr) return false;
     const k = String(kubun || '').trim();
     if (k !== '' && k !== '休日') return false;
     if (isOff) return true;
@@ -37,7 +37,7 @@
   const LEAVE_STATUS_KUBUN = new Set(['有給休暇', '無給休暇', '欠勤', '代替休日', '半休', '半休(有給)']);
   // 終日の休暇（打刻があれば区分の確認が必要）
   const FULL_DAY_LEAVE_KUBUN = new Set(['有給休暇', '無給休暇', '欠勤', '代替休日']);
-  const friendlyDayStatus = ({ dateStr, kubun, hasActualIn, hasActualOut, isPlanned, isRegularOff, isAdminView, leaveStatus, hasMemo = true }) => {
+  const friendlyDayStatus = ({ dateStr, kubun, hasActualIn, hasActualOut, isPlanned, isRegularOff, isAdminView, leaveStatus, hasMemo = true, isOffDay = false }) => {
     const todayStr = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
     const hasActual = !!(hasActualIn || hasActualOut);
     const k = String(kubun || '').trim();
@@ -52,8 +52,8 @@
       if (st === 'rejected') return { text: '差戻し', cls: 'danger' };
       return isAdminView ? { text: '承認待ち', cls: 'warn' } : { text: '申請中', cls: 'none' };
     }
-    // 今日・これからの出勤予定日（まだ打刻なし）: 未申請 ではなく 出勤予定
-    if (isPlanned && !hasActual && String(dateStr || '') >= todayStr) return { text: '出勤予定', cls: 'none' };
+    // 今日・これからの予定日（まだ打刻なし）: 未申請 ではなく 出勤予定（休みの日は 休日予定）
+    if (isPlanned && !hasActual && String(dateStr || '') >= todayStr) return { text: isOffDay ? '休日予定' : '出勤予定', cls: 'none' };
     // 今日 出勤済み・まだ退勤前: 勤務中
     if (hasActualIn && !hasActualOut && String(dateStr || '') === todayStr) return { text: '勤務中', cls: 'none' };
     // 過去の日で退勤の打刻がない → 調整申請へ
@@ -65,6 +65,11 @@
 
   const renderTableFull = (host, detail, profile) => {
     if (!host) return;
+    // フレックス勤務の社員: 名前の横に「フレックス」（表示中の社員の設定。管理者が見る場合も同じ）
+    try {
+      const flexBadge = document.getElementById('empFlexBadge');
+      if (flexBadge) flexBadge.hidden = Number(detail?.user?.is_flex || 0) !== 1;
+    } catch (e) { /* 表示用 */ }
     const days = Array.isArray(detail?.days) ? detail.days : [];
     const table = document.createElement('table');
     table.id = 'monthTableReal';
@@ -265,6 +270,7 @@
       // 正社員が休日 (部署の休日設定で休みの日) に出勤、または 休日出勤: 定時が無いので遅刻・早退は付けない。
       // 6時間以下の勤務なら休憩の既定値は 0 (労基法: 6時間以下は休憩不要)。
       const isHolidayWork = !isPartTime && isWorkDay && (!!offDay || effectiveKubun === '休日出勤');
+      const isFlexUser = Number(detail?.user?.is_flex || 0) === 1;
 
       // Chỉ coi dòng là "thực tế" khi có giờ chấm công hiển thị (không phải placeholder).
       // Với các phân loại ngày làm việc, chỉ chấm công thật mới làm dòng thành "thực tế".
@@ -386,6 +392,8 @@
       const statusStr = String(state.currentMonthStatus || '');
       const approved = statusStr === 'approved';
       const approverName = String(detail?.monthStatus?.approverName || '').trim();
+      // 確認済みの日は、社員に設定されたマネージャーを 承認者 に出す（月次Excel と同じ）
+      const defaultApproverName = String(detail?.monthStatus?.defaultApproverName || '').trim();
       const isAdminView = String(profile?.role || '').toLowerCase() === 'admin' || String(profile?.role || '').toLowerCase() === 'manager';
       const hasAny = !!(finalIn || finalOut);
       const leaveKubunSet = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
@@ -398,7 +406,9 @@
       const friendly = friendlyDayStatus({
         dateStr, kubun: effectiveKubun, hasActualIn, hasActualOut, isPlanned, isRegularOff: isRegularOffRow, isAdminView,
         leaveStatus: (detail?.leaveStatusByDate || {})[dateStr] || null,
-        hasMemo: !!String(daily?.memo || '').trim()
+        hasMemo: !!String(daily?.memo || '').trim(),
+        // 休みの日: 正社員はカレンダーの休日、パートは出勤のシフトが無い日
+        isOffDay: !!isOff || (!!isPartTime && shiftRequest?.status !== 'WORKING')
       });
       if (approved) {
         text = '承認済み';
@@ -428,7 +438,7 @@
       const st = {
         text,
         cls,
-        approver: approved ? (approverName || '—') : '—'
+        approver: approved ? (approverName || '—') : (text === '確認済み' ? (defaultApproverName || '—') : '—')
       };
 
       const tr = document.createElement('tr');
@@ -605,6 +615,8 @@
       <td data-field="excess" class="${otAutoCls}" style="text-align:center;color:#0f172a;font-weight:900; font-size:12px; letter-spacing:-0.5px;">${esc(otHm)}</td>
       <td data-field="lateEarly" style="text-align:center;color:#64748b;">${(() => {
         if (!isWorkDay) return '—';
+        // フレックス勤務の社員は 遅刻・早退 を出さない（保存済みの値も表示しない）
+        if (isFlexUser) return '—';
         // 半休/半休(有給) は半日休みが正規のため遅刻・早退を計上しない
         if (isHankyuu) return '—';
         // Không tính đi muộn / về sớm cho các ca làm thêm (dòng phụ)
@@ -644,7 +656,7 @@
       })()}</td>
       <td>
         <div style="${!showDateDow ? 'visibility:hidden;' : ''}">
-          <select id="reason_${dateStr}_${rowId}" name="reason_${dateStr}_${rowId}" class="se-select" data-field="reason" ${state.editableMonth ? '' : 'disabled'} style="width:100%;box-sizing:border-box;${(effectiveKubun === '欠勤' || effectiveKubun === '遅刻' || effectiveKubun === '早退' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || Number(daily?.lateMinutes || daily?.late_minutes || 0) > 0 || Number(daily?.earlyMinutes || daily?.early_minutes || 0) > 0 || (isWorkDay && finalIn && shiftStartOk && parseHm(finalIn) != null && parseHm(shiftStart) != null && parseHm(finalIn) > parseHm(shiftStart))) ? '' : 'visibility:hidden;'}">
+          <select id="reason_${dateStr}_${rowId}" name="reason_${dateStr}_${rowId}" class="se-select" data-field="reason" ${state.editableMonth ? '' : 'disabled'} style="width:100%;box-sizing:border-box;${(effectiveKubun === '欠勤' || effectiveKubun === '半休' || effectiveKubun === '半休(有給)' || effectiveKubun === '遅刻' || effectiveKubun === '早退' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || (!isFlexUser && (Number(daily?.lateMinutes || daily?.late_minutes || 0) > 0 || Number(daily?.earlyMinutes || daily?.early_minutes || 0) > 0 || (isWorkDay && finalIn && shiftStartOk && parseHm(finalIn) != null && parseHm(shiftStart) != null && parseHm(finalIn) > parseHm(shiftStart))))) ? '' : 'visibility:hidden;'}">
             <option value=""></option>
             <option value="私用" ${dReason === '私用' || dReason === 'private' || dReason === '私用のため' ? 'selected' : ''}>私用</option>
             <option value="私用（詳細）" ${dReason === '私用（詳細）' ? 'selected' : ''}>私用（詳細）</option>
@@ -671,7 +683,7 @@
           <span class="se-status ${esc(st.cls)}">${esc(st.text)}</span>
         </div>
       </td>
-      <td style="text-align:center;color:#0f172a;font-weight:800;">${showDateDow ? esc(st.approver) : '—'}</td>
+      <td ${showDateDow ? 'data-field="approver"' : ''} style="text-align:center;color:#0f172a;font-weight:800;">${showDateDow ? esc(st.approver) : '—'}</td>
       <td style="text-align:center;">
          <div style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
            ${showDateDow ? `<button type="button" class="se-icon-btn primary" data-action="add" ${(state.editableMonth && canAddMore) ? '' : 'disabled'} title="${canAddMore ? '行追加' : '1日は最大3件まで'}" style="font-weight:bold; font-size:14px; padding:0; width:22px; height:22px;">+</button>` : ''}
@@ -740,8 +752,8 @@
         }
         
         const defaultWidths = [
-          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 70, 80, 100, 150, 90, 80, 50, 50
-        ]; // 20 columns (出社/在宅/現場・休憩/深夜休憩/勤務時間 は狭く。表の min-width も同じ比率で縮めている — CSS #monthTable.se-table table)
+          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 45, 80, 100, 150, 62, 80, 50, 50
+        ]; // 20 columns (出社/在宅/現場・休憩/深夜休憩/勤務時間/超過時間/ステータス は狭く。表の min-width も同じ比率で縮めている — CSS #monthTable.se-table table)
         
         const cg = document.createElement('colgroup');
         for (const w of defaultWidths) {
@@ -971,7 +983,8 @@
           dateStr, kubun: cls || rowEl.dataset.plannedLeaveKubun || '', hasActualIn: hasActualInNow, hasActualOut: hasActualOutNow, isPlanned,
           isRegularOff: isRegularOffRowNow, isAdminView,
           leaveStatus: (state.currentMonthDetail?.leaveStatusByDate || {})[dateStr] || null,
-          hasMemo: !!memoValNow
+          hasMemo: !!memoValNow,
+          isOffDay: !!offDay || (rowEl.dataset.partTime === '1' && rowEl.dataset.shiftWorking !== '1')
         });
         if (monthApproved) {
           stText = '承認済み';
@@ -999,6 +1012,14 @@
           if (stSpan.textContent !== stText) stSpan.textContent = stText;
           stSpan.classList.remove('ok','warn','danger','none');
           stSpan.classList.add(stCls);
+        }
+        // 承認者: 承認済み → 承認した人、確認済み → 設定されたマネージャー
+        const approverCell = rowEl.querySelector('td[data-field="approver"]');
+        if (approverCell) {
+          const ms = state.currentMonthDetail?.monthStatus || {};
+          const apText = monthApproved ? (String(ms.approverName || '').trim() || '—')
+            : stText === '確認済み' ? (String(ms.defaultApproverName || '').trim() || '—') : '—';
+          if (approverCell.textContent !== apText) approverCell.textContent = apText;
         }
       }
 
@@ -1269,8 +1290,9 @@
       if (lateEarly) {
         let text = '—';
         // Chỉ tính toán đi muộn/về sớm cho dòng chính (primary row)
-        // 半休/半休(有給) は半日休みが正規のため遅刻・早退を計上しない
-        if (isPrimaryRow && !isHankyuu) {
+        // 半休/半休(有給) は半日休みが正規のため遅刻・早退を計上しない。フレックスの社員も出さない
+        const isFlexNow = Number(state.currentMonthDetail?.user?.is_flex || 0) === 1;
+        if (isPrimaryRow && !isHankyuu && !isFlexNow) {
           const a = parseHm(inVal);
           const b2 = parseHm(outVal);
           if (isWorkDay && a != null && b2 != null) {
@@ -1295,7 +1317,8 @@
       // Update reason visibility/disability based on kubun and updated lateEarlyText
       if (reasonSel) {
         const lateEarlyText = lateEarly ? lateEarly.textContent : '—';
-        const showReason = effectiveKubun === '欠勤' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || (lateEarlyText && lateEarlyText !== '—');
+        // 半休/半休(有給) も理由を選べるようにする（午前・午後どちらを休むか等）
+        const showReason = effectiveKubun === '欠勤' || effectiveKubun === '半休' || effectiveKubun === '半休(有給)' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || (lateEarlyText && lateEarlyText !== '—');
         if (showReason) {
           reasonSel.style.visibility = 'visible';
           reasonSel.disabled = !state.editableMonth;

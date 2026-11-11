@@ -20,7 +20,9 @@ const log = require('../../core/logger');
 const {
   resolveTargetUserId, parseMonth, isEditableMonth, getMonthStatusValue,
   assertMonthWritable,
-  getUserOffDaySet
+  getUserOffDaySet,
+  resolveDefaultApproverName,
+  isFlexUser
 } = require('./attendance.utils');
 const { timesheetMaxDays } = require('../../config/env');
 const { classifyDay } = require('./attendance.dayCount');
@@ -89,37 +91,8 @@ exports.exportMonthXlsx = async (req, res) => {
     const displayName = (u) => String(u?.full_name || u?.fullName || u?.display_name || u?.username || '').trim();
     const approverDisplayName = await (async () => {
       if (monthApproverName) return monthApproverName;
-      const mid = user?.manager_id || user?.managerId;
-      if (mid) {
-        // マネージャーは users.tenant_id が別会社でも tenant_users でこの会社に所属していることがある
-        const tidM = user?.tenant_id ?? req.tenantId ?? null;
-        const [mrows] = await db.query(
-          `SELECT u.full_name, u.username FROM users u
-             LEFT JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = ?
-            WHERE u.id = ? AND (? IS NULL OR u.tenant_id = ? OR tu.tenant_id = ?) LIMIT 1`,
-          [tidM, mid, tidM, tidM, tidM]
-        ).catch(() => [[]]);
-        const nmM = displayName(Array.isArray(mrows) ? mrows[0] : null);
-        if (nmM) return nmM;
-        // tenant_users がない環境: 同じ会社の users だけで照合
-        const mgr = await userRepo.getUserById(mid, tidM).catch(() => null);
-        if (displayName(mgr)) return displayName(mgr);
-      }
-      const deptId = user?.departmentId ?? user?.department_id ?? null;
-      const tid = user?.tenant_id ?? req.tenantId ?? null;
-      if (deptId != null && tid != null) {
-        for (const r of ['manager', 'admin']) {
-          const [found] = await db.query(
-            `SELECT full_name, username FROM users
-              WHERE tenant_id = ? AND departmentId = ? AND role = ? AND id <> ?
-                AND (employment_status IS NULL OR employment_status = 'active')
-              ORDER BY id LIMIT 1`,
-            [tid, deptId, r, userId]
-          ).catch(() => [[]]);
-          const nm = displayName(Array.isArray(found) ? found[0] : null);
-          if (nm) return nm;
-        }
-      }
+      const dflt = await resolveDefaultApproverName(user, userId, req.tenantId || null).catch(() => '');
+      if (dflt) return dflt;
       if (role === 'manager' || role === 'admin') {
         const me = await userRepo.getUserById(req.user?.id, req.tenantId || null).catch(() => null);
         return displayName(me);
@@ -502,7 +475,8 @@ exports.exportMonthXlsx = async (req, res) => {
         const se = shiftForDate(ds);
         const startBase = se?.startMin ?? (8 * 60);
         const endBase = se?.endMin ?? (17 * 60);
-        return lateEarlyLabel(a, b, startBase, endBase, isHolidayWork);
+        // フレックスの社員は 遅刻・早退 を出さない（画面と同じ）
+        return lateEarlyLabel(a, b, startBase, endBase, isHolidayWork || isFlexUser(user));
       })();
 
       const workLocation = (() => {

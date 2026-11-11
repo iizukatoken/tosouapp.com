@@ -15,10 +15,10 @@
     }
   </style>
   <link rel="stylesheet" href="/static/css/base.css?v=navy-20260421-empcache3">
-  <link rel="stylesheet" href="/static/css/attendance-simple.css?v=20261111-status1">
+  <link rel="stylesheet" href="/static/css/attendance-simple.css?v=20261111-flex1">
   <link rel="icon" href="data:,">
   <script src="/static/js/pages/session-idle.js?v=navy-20260421-empcache3" defer></script>
-  <script type="module" src="/static/js/pages/attendance-simple.page.js?v=20261111-status2"></script>
+  <script type="module" src="/static/js/pages/attendance-simple.page.js?v=20261111-flex2"></script>
 </head>
 <body class="is-loading">
   <div id="pageSpinner" class="simple-spinner">
@@ -35,7 +35,7 @@
       <div id="topDate" class="simple-date" style="cursor:pointer;" title="クリックして日付を選択"></div>
       <input id="datePickerInput" type="date" style="position:absolute;opacity:0;pointer-events:none;width:1px;height:1px;left:50%;transform:translateX(-50%);" aria-hidden="true">
       <div class="simple-sub">
-        <span>ステータス：</span><span id="topStatus" class="simple-status"></span>
+        <span>ステータス：</span><span id="topStatus" class="simple-status"></span><span id="flexBadge" class="simple-flex-badge" hidden title="フレックス勤務: 出勤・退勤の時刻は自由です（遅刻・早退は付きません）">フレックス</span>
       </div>
     </div>
     <button id="btnNext" class="simple-nav-btn" type="button" aria-label="next">›</button>

@@ -86,7 +86,7 @@ const { validatePassword } = require('../../core/middleware/passwordPolicy');
 // API: Tạo mới một tài khoản nhân viên
 exports.create = async (req, res) => {
   try {
-    const { employeeCode, username, email, password, role, departmentId, branchId, employmentType, hireDate, level, managerId, phone, birthDate, gender, avatarUrl, probationDate, officialDate, contractEnd, baseSalary, shiftId } = req.body || {};
+    const { employeeCode, username, email, password, role, departmentId, branchId, employmentType, hireDate, level, managerId, phone, birthDate, gender, avatarUrl, probationDate, officialDate, contractEnd, baseSalary, shiftId, isFlex } = req.body || {};
     if (!username || !email || !password || !(role || departmentId !== undefined)) {
       return res.status(400).json({ message: 'Missing username/email/password' });
     }
@@ -116,7 +116,7 @@ exports.create = async (req, res) => {
       } catch (e) { /* limit check failure should not block user creation */ }
     }
     const hashed = bcrypt.hashSync(password, bcryptRounds);
-    const id = await repo.createUser({ employeeCode, username, email, password: hashed, role, departmentId, branchId, employmentType, hireDate, level, managerId, phone, birthDate, gender, avatarUrl, probationDate, officialDate, contractEnd, baseSalary, shiftId, tenantId: req.tenantId || null });
+    const id = await repo.createUser({ employeeCode, username, email, password: hashed, role, departmentId, branchId, employmentType, hireDate, level, managerId, phone, birthDate, gender, avatarUrl, probationDate, officialDate, contractEnd, baseSalary, shiftId, isFlex, tenantId: req.tenantId || null });
 
     // Auto-add to tenant_users mapping so the user appears in tenant's user list
     if (req.tenantId) {
@@ -205,6 +205,7 @@ exports.update = async (req, res) => {
       qualificationAllowance: body.qualificationAllowance,
       commuteMethod: body.commuteMethod,
       commuteDistanceKm: body.commuteDistanceKm,
+      isFlex: body.isFlex,
       tenantId: req.tenantId || null
     })
     });

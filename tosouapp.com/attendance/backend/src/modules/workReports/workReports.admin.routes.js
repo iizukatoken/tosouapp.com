@@ -98,6 +98,7 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         br.name AS branchName,
         u.role AS role,
         u.employment_type AS employment_type,
+        u.is_flex AS is_flex,
         CASE
           WHEN EXISTS (
             SELECT 1
@@ -199,6 +200,8 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
       const workKubun = new Set(['出勤', '休日出勤', '代替出勤', '半休', '半休(有給)']);
       // 半休: 午前・午後どちらに出勤してもよいので 遅刻・早退 にしない
       const isHalfDay = kubun === '半休' || kubun === '半休(有給)';
+      // フレックス勤務の社員は 遅刻・早退 にしない（社員管理で設定）
+      const isFlex = Number(r.is_flex || 0) === 1;
       const isOff = isOffForUser(r.departmentName);
       // 休日出勤日の遅刻・早退は出さない (月次勤怠入力画面と同じ。DBは変更しない)
       const isHolidayWork = isHolidayWorkDay({ kubun, isOffDay: isOff, employmentType: r.employment_type });
@@ -270,8 +273,9 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         dailyKubun: kubunOut || null,
         // 終日の休暇（有給・無給・欠勤）なのに打刻がある → 管理画面で要確認
         kubunConflict: leaveKubun.has(kubun) && (hasIn || hasOut),
-        lateMinutes: (isHolidayWork || isHalfDay) ? 0 : (r.late_minutes || 0),
-        earlyMinutes: (isHolidayWork || isHalfDay) ? 0 : (r.early_minutes || 0),
+        lateMinutes: (isHolidayWork || isHalfDay || isFlex) ? 0 : (r.late_minutes || 0),
+        earlyMinutes: (isHolidayWork || isHalfDay || isFlex) ? 0 : (r.early_minutes || 0),
+        isFlex,
         reason: r.reason || null,
         notes: r.notes || null,
         workType: wt,

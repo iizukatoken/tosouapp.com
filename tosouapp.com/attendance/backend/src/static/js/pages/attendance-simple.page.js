@@ -683,7 +683,9 @@ const calculateLateEarly = () => {
   // 半休 / 半休(有給): 午前・午後どちらに出勤してもよいので 遅刻・早退 は計上しない
   // （月次勤怠・Excel出力と同じ規則。保存済みの値も表示せず、登録すると空で保存される）
   const kubunNow = String($('#kubun')?.value || '').trim();
-  if (kubunNow === '半休' || kubunNow === '半休(有給)') {
+  // フレックス勤務の社員（社員管理で設定）も 遅刻・早退 なし
+  const isFlexProfile = Number(window.appConfig?.profile?.is_flex || 0) === 1;
+  if (kubunNow === '半休' || kubunNow === '半休(有給)' || isFlexProfile) {
     for (const el of [lateEl, earlyEl]) {
       if (!el) continue;
       el.value = '';
@@ -736,6 +738,11 @@ const getSimpleStatusMeta = () => {
     if (ls === 'rejected') return { text: `${kubunNow}・差戻し`, cls: 'danger' };
     return { text: `${kubunNow}・申請中`, cls: 'none' };
   }
+  // 休みの日（打刻なし）: 終わった日は自動で 休日（確認済み）、今日・これからは 休日予定
+  if (!hasActualNow && kubunNow === '休日') {
+    if (window.state?.autoOffDay) return { text: '確認済み', cls: 'ok' };
+    if (window.state?.isOff && dateNow >= todayNow) return { text: '休日予定', cls: 'none' };
+  }
   // 今日・これからの出勤予定日でまだ打刻なし → 未申請 ではなく 出勤予定（不安にさせない）
   if (isPlanned && !hasActualNow) {
     return dateNow >= todayNow ? { text: '出勤予定', cls: 'none' } : { text: '未申請', cls: 'warn' };
@@ -775,7 +782,7 @@ const renderSimpleStatus = () => {
     const el = $(selector);
     if (!el) return;
     el.textContent = meta.text;
-    el.classList.remove('ok', 'warn', 'danger');
+    el.classList.remove('ok', 'warn', 'danger', 'none');
     el.classList.add(meta.cls);
   });
 };
@@ -1316,15 +1323,18 @@ const load = async (date, opts = {}) => {
       localDefaultKubun = '';
     }
 
-    // Part-time, ngày ĐÃ QUA (< hôm nay), chưa lưu kubun và KHÔNG chấm công
-    // → tự hiển thị 休日 (đồng bộ với bảng tháng). Hôm nay/tương lai giữ mặc định cũ.
+    // Ngày ĐÃ QUA (< hôm nay), chưa lưu kubun và KHÔNG chấm công → tự hiển thị 休日 (đồng bộ với bảng tháng):
+    //   - パート: ngày không đi làm   - 正社員: ngày nghỉ theo lịch (CN/ngày đỏ/công ty)
+    // Hôm nay/tương lai giữ 休日予定 (hôm nay vẫn có thể đi làm). Ngày nghỉ theo ca (有給 v.v.) không đổi.
     const hasPunchToday = Array.isArray(day?.segments) && day.segments.some(s => !!s?.checkIn || !!s?.checkOut);
     const isPastDay = date < todayJST();
     let autoOffSimple = false;
-    if (isPartTime && isPastDay && !kubunSaved && !hasPunchToday) {
+    if ((isPartTime || isOff) && isPastDay && !kubunSaved && !hasPunchToday && !shiftLeaveKubun) {
       autoOffSimple = true;
       localDefaultKubun = '休日';
     }
+
+    state.autoOffDay = autoOffSimple;
 
     // fallback cho defaultKubun nếu kubunInit rỗng
     const fallbackKubun = autoOffSimple ? '休日' : (kubunInit || defaultKubun || localDefaultKubun);
@@ -1904,6 +1914,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Store profile globally so kubun logic can access employment_type
   window.appConfig = window.appConfig || {};
   window.appConfig.profile = profile;
+  // フレックス勤務の社員: ステータスの横に「フレックス」
+  try {
+    const flexBadge = document.getElementById('flexBadge');
+    if (flexBadge) flexBadge.hidden = Number(profile?.is_flex || 0) !== 1;
+  } catch (e) { /* 表示用 */ }
   try {
     const panels = [
       { key: 'attendanceSimple.notice.open', toggleId: 'toggleNotice', bodyId: 'noticeBox', def: true },

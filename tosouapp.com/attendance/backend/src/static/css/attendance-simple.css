@@ -282,23 +282,51 @@ body {
   align-items: center;
   justify-content: center;
 }
+/* ステータス: 紺の帯の上でも目立つよう、色付きのラベルにする（月次画面のラベルと同じ考え方） */
 .simple-status {
-  color: #f59e0b;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid #fcd34d;
+  background: #fef3c7;
+  color: #92400e;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.simple-status:empty {
+  display: none;
 }
 .simple-status.ok {
-  color: #22c55e;
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #166534;
 }
 .simple-status.warn {
-  color: #f59e0b;
+  border-color: #fcd34d;
+  background: #fef3c7;
+  color: #92400e;
 }
 .simple-status.danger {
-  color: #ef4444;
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #b91c1c;
 }
-/* 出勤予定・勤務中・申請中 など、正当な状態は中立の色（社員が不安にならないように） */
+/* 出勤予定・勤務中・申請中 など、正当な状態は落ち着いた青（社員が不安にならないように） */
 .simple-status.none {
-  color: #e2e8f0;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1e3a8a;
 }
+
+/* フレックス勤務の社員: ステータスの横のラベル */
+.simple-flex-badge {
+  display: inline-flex; align-items: center; margin-left: 8px; padding: 2px 10px;
+  border: 1px solid #c4b5fd; border-radius: 999px; background: #f5f3ff; color: #6d28d9;
+  font-weight: 700; line-height: 1.5; white-space: nowrap; cursor: help;
+}
+.simple-flex-badge[hidden] { display: none !important; }
 
 /* Go Out Status Banner */
 .simple-goout-banner {

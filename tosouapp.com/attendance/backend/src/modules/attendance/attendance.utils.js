@@ -257,6 +257,11 @@ function isHolidayWorkDay({ kubun, isOffDay, employmentType }) {
  * 以前 日次画面が休日出勤日にも自動保存していた遅刻・早退分を、集計・帳票で数えないため。
  * DB は一切更新しない (履歴データはそのまま)。rows は userId, date, kubun を含むこと。
  */
+/** フレックス勤務の社員か（社員管理の フレックス）。遅刻・早退を表示しない。 */
+function isFlexUser(u) {
+  return Number(u?.is_flex ?? u?.isFlex ?? 0) === 1;
+}
+
 async function suppressHolidayWorkLateEarly(rows, tenantId = 0) {
   const list = (rows || []).filter(r => Number(r?.late_minutes || 0) > 0 || Number(r?.early_minutes || 0) > 0);
   if (!list.length) return rows;
@@ -264,7 +269,7 @@ async function suppressHolidayWorkLateEarly(rows, tenantId = 0) {
   const userIds = Array.from(new Set(list.map(r => Number(r.userId)).filter(Boolean)));
   if (!userIds.length) return rows;
   const [users] = await db.query(
-    `SELECT id, departmentId, employment_type FROM users WHERE id IN (${userIds.map(() => '?').join(',')})`,
+    `SELECT id, departmentId, employment_type, is_flex FROM users WHERE id IN (${userIds.map(() => '?').join(',')})`,
     userIds
   ).catch(() => [[]]);
   const userById = new Map((users || []).map(u => [Number(u.id), u]));
@@ -279,6 +284,12 @@ async function suppressHolidayWorkLateEarly(rows, tenantId = 0) {
     const u = userById.get(Number(r.userId));
     const ds = toDateStr(r.date);
     if (!u || !/^\d{4}-\d{2}-\d{2}$/.test(ds)) continue;
+    // フレックスの社員は 遅刻・早退 を出さない（DBは変更しない）
+    if (isFlexUser(u)) {
+      r.late_minutes = 0;
+      r.early_minutes = 0;
+      continue;
+    }
     const off = await offSetFor(u.departmentId, parseInt(ds.slice(0, 4), 10));
     if (isHolidayWorkDay({ kubun: r.kubun, isOffDay: off.has(ds), employmentType: u.employment_type })) {
       r.late_minutes = 0;
@@ -288,7 +299,57 @@ async function suppressHolidayWorkLateEarly(rows, tenantId = 0) {
   return rows;
 }
 
+// ─── 承認者の既定名 ──────────────────────────────────────────────────────────
+
+/**
+ * 社員に設定されたマネージャー（社員管理 users.manager_id）の表示名。
+ * 未設定なら 同じ部署の manager → admin（在職中）。見つからなければ ''。
+ * 月次画面の 承認者 列と 月次Excel の 承認者 で同じ名前を出すために共通化。
+ * @param {object} user - users の行（manager_id / departmentId / tenant_id）
+ * @param {number|string} userId
+ * @param {number|null} tenantId - リクエストのテナント
+ * @returns {Promise<string>}
+ */
+async function resolveDefaultApproverName(user, userId, tenantId) {
+  const db = require('../../core/database/mysql');
+  const displayName = (u) => String(u?.full_name || u?.fullName || u?.display_name || u?.username || '').trim();
+  const mid = user?.manager_id || user?.managerId;
+  if (mid) {
+    // マネージャーは users.tenant_id が別会社でも tenant_users でこの会社に所属していることがある
+    const tidM = user?.tenant_id ?? tenantId ?? null;
+    const [mrows] = await db.query(
+      `SELECT u.full_name, u.username FROM users u
+         LEFT JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = ?
+        WHERE u.id = ? AND (? IS NULL OR u.tenant_id = ? OR tu.tenant_id = ?) LIMIT 1`,
+      [tidM, mid, tidM, tidM, tidM]
+    ).catch(() => [[]]);
+    const nmM = displayName(Array.isArray(mrows) ? mrows[0] : null);
+    if (nmM) return nmM;
+    // tenant_users がない環境: 同じ会社の users だけで照合
+    const mgr = await userRepo.getUserById(mid, tidM).catch(() => null);
+    if (displayName(mgr)) return displayName(mgr);
+  }
+  const deptId = user?.departmentId ?? user?.department_id ?? null;
+  const tid = user?.tenant_id ?? tenantId ?? null;
+  if (deptId != null && tid != null) {
+    for (const r of ['manager', 'admin']) {
+      const [found] = await db.query(
+        `SELECT full_name, username FROM users
+          WHERE tenant_id = ? AND departmentId = ? AND role = ? AND id <> ?
+            AND (employment_status IS NULL OR employment_status = 'active')
+          ORDER BY id LIMIT 1`,
+        [tid, deptId, r, userId]
+      ).catch(() => [[]]);
+      const nm = displayName(Array.isArray(found) ? found[0] : null);
+      if (nm) return nm;
+    }
+  }
+  return '';
+}
+
 module.exports = {
+  isFlexUser,
+  resolveDefaultApproverName,
   isHolidayWorkDay,
   suppressHolidayWorkLateEarly,
   recordEndpointPerf,

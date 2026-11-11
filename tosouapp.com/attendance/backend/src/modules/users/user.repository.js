@@ -25,6 +25,11 @@ const { scopedTid } = require('../../core/database/tenantContext');
 function _tid(tenantId) {
   return scopedTid(tenantId);
 }
+// フレックスのフラグ: true/1/"1"/"true" → 1、false/0/"0"/"false" → 0、未指定 → null（更新しない）
+function toFlexFlag(v) {
+  if (v === undefined || v === null || v === '') return null;
+  return (v === true || v === 1 || v === '1' || v === 'true' || v === 'on') ? 1 : 0;
+}
 
 // これらの関数は SELECT * FROM users の結果をそのまま API レスポンスとして返す
 // 呼び出し元が多数存在するため、ここで一度だけ加工しておけば全箇所を守れる。
@@ -174,7 +179,7 @@ module.exports = {
     const [rows] = await db.query(`SELECT * FROM users WHERE id = ? LIMIT 1`, [id]);
     return _sanitizeUserRow(rows[0]);
   },
-  async createUser({ employeeCode = null, username, email, password, role = 'employee', departmentId = null, branchId = null, employmentType = 'full_time', hireDate = null, level = null, managerId = null, phone = null, birthDate = null, gender = null, avatarUrl = null, probationDate = null, officialDate = null, contractEnd = null, baseSalary = null, shiftId = null, employmentStatus = null, joinDate = null, tenantId = null }) {
+  async createUser({ employeeCode = null, username, email, password, role = 'employee', departmentId = null, branchId = null, employmentType = 'full_time', hireDate = null, level = null, managerId = null, phone = null, birthDate = null, gender = null, avatarUrl = null, probationDate = null, officialDate = null, contractEnd = null, baseSalary = null, shiftId = null, employmentStatus = null, joinDate = null, isFlex, tenantId = null }) {
     const today = nowJSTMySQL().slice(0, 10); // ngày hôm nay theo giờ Nhật (server chạy UTC)
     const tid = _tid(tenantId);
     const cols = [
@@ -237,9 +242,11 @@ module.exports = {
       const gen = 'EMP' + String(id).padStart(3, '0');
       await db.query(`UPDATE users SET employee_code = ? WHERE id = ?`, [gen, id]);
     }
+    const flex = toFlexFlag(isFlex);
+    if (flex !== null) await db.query(`UPDATE users SET is_flex = ? WHERE id = ?`, [flex, id]);
     return id;
   },
-  async updateUser(id, { employeeCode, username, email, role, branchId, departmentId, level, managerId, employmentType, hireDate, birthDate, gender, phone, avatarUrl, probationDate, officialDate, lang, region, timezone, address, contractType, visaNumber, visaExpiry, insuranceNumber, employmentStatus, contractEnd, baseSalary, shiftId, joinDate, lastLogin, allowanceTransport, dependentsCount, taxCategory, qualificationAllowance, commuteMethod, commuteDistanceKm, tenantId = null }) {
+  async updateUser(id, { employeeCode, username, email, role, branchId, departmentId, level, managerId, employmentType, hireDate, birthDate, gender, phone, avatarUrl, probationDate, officialDate, lang, region, timezone, address, contractType, visaNumber, visaExpiry, insuranceNumber, employmentStatus, contractEnd, baseSalary, shiftId, joinDate, lastLogin, allowanceTransport, dependentsCount, taxCategory, qualificationAllowance, commuteMethod, commuteDistanceKm, isFlex, tenantId = null }) {
     const tid = _tid(tenantId);
     const whereClause = tid != null ? `WHERE id = ? AND tenant_id = ?` : `WHERE id = ?`;
     const whereParams = tid != null ? [id, tid] : [id];
@@ -325,6 +332,9 @@ module.exports = {
       commuteDistanceKm !== undefined && commuteDistanceKm !== null && commuteDistanceKm !== '' ? commuteDistanceKm : null,
       ...whereParams
     ]);
+    // フレックス: 画面から送られてきた時だけ更新（送られない更新では今の値のまま）
+    const flex = toFlexFlag(isFlex);
+    if (flex !== null) await db.query(`UPDATE users SET is_flex = ? ${whereClause}`, [flex, ...whereParams]);
   },
   async deleteUser(id, tenantId = null) {
     const tid = _tid(tenantId);
