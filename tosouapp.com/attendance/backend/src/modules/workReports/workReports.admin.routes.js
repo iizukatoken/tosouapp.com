@@ -14,6 +14,15 @@ const { getDepartmentOffDaySet, isHolidayWorkDay, suppressHolidayWorkLateEarly }
 const s3Service = require('../../core/services/s3.service');
 const { buildXlsx, buildXlsxBook } = require('../attendance/attendance.controller');
 
+// シフト申請の休暇種別 → 勤務区分（簡易登録・月次勤怠と同じ対応）
+const SHIFT_LEAVE_KUBUN = {
+  paid: '有給休暇',
+  paid_half: '半休(有給)',
+  half: '半休',
+  unpaid: '欠勤',
+  substitute: '代替休日',
+  special: '無給休暇'
+};
 const isISODate = (s) => /^\d{4}-\d{2}-\d{2}$/.test(String(s || ''));
 const isYM = (s) => /^\d{4}-\d{2}$/.test(String(s || ''));
 const todayJST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
@@ -95,9 +104,13 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
             FROM leave_requests lr
             WHERE lr.userId = u.id
               AND lr.status = 'approved'
+              -- 半休 (paid_half / half) は終日の休暇ではない（半日は出勤する）
+              AND lr.type NOT IN ('paid_half', 'half')
               AND ? BETWEEN lr.startDate AND lr.endDate
           ) THEN 1 ELSE 0
         END AS has_approved_leave,
+        sr.status AS shift_status,
+        sr.leaveType AS shift_leave_type,
         a.id AS attendanceId,
         a.checkIn AS checkIn,
         a.checkOut AS checkOut,
@@ -118,6 +131,9 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
       LEFT JOIN attendance_daily ad
         ON ad.userId = u.id
        AND ad.date = ?
+      LEFT JOIN shift_requests sr
+        ON sr.userId = u.id
+       AND sr.date = ?
       LEFT JOIN (
         SELECT
           userId,
@@ -153,7 +169,7 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         COALESCE(u.employee_code, '') ASC,
         u.id ASC,
         a.checkIn ASC
-    `, [date, date, date, date]);
+    `, [date, date, date, date, date]);
 
     // Per-department off-day logic — tra department_holidays thật của từng công ty,
     // không hardcode tên bộ phận "工事部" nữa (đã thay bằng cấu hình 休日設定 theo tenant).
@@ -170,9 +186,14 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
       const hasOut = !!r.checkOut;
       let kubun = String(r.daily_kubun || '').trim();
       if (kubun === '休み') kubun = '休日';
+      if (kubun === '半休（有給）') kubun = '半休(有給)';
+      // 区分が未保存なら、シフト申請の休暇（有給・半休(有給) など）を使う
+      if (!kubun && r.shift_status === 'LEAVE') kubun = SHIFT_LEAVE_KUBUN[String(r.shift_leave_type || '')] || '';
       const offKubun = new Set(['休日', '代替休日']);
       const leaveKubun = new Set(['有給休暇', '無給休暇', '欠勤']);
-      const workKubun = new Set(['出勤', '休日出勤', '代替出勤', '半休']);
+      const workKubun = new Set(['出勤', '休日出勤', '代替出勤', '半休', '半休(有給)']);
+      // 半休: 午前・午後どちらに出勤してもよいので 遅刻・早退 にしない
+      const isHalfDay = kubun === '半休' || kubun === '半休(有給)';
       const isOff = isOffForUser(r.departmentName);
       // 休日出勤日の遅刻・早退は出さない (月次勤怠入力画面と同じ。DBは変更しない)
       const isHolidayWork = isHolidayWorkDay({ kubun, isOffDay: isOff, employmentType: r.employment_type });
@@ -193,6 +214,9 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         status = 'leave';
       } else if (hasIn || hasOut) {
         status = hasOut ? (dayIsOff ? 'holiday_work' : 'checked_out') : (dayIsOff ? 'holiday_working' : 'working');
+      } else if (isHalfDay) {
+        // 半休でまだ打刻なし → 未出勤 ではなく 半休 として表示（午後から出勤することもある）
+        status = 'leave';
       } else if (dayIsOff && !forceLeave && kubun === '休日' && r.employment_type === 'part_time') {
         status = 'leave'; // explicitly 休日
       } else if (dayIsOff && r.employment_type !== 'part_time') {
@@ -239,8 +263,8 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         },
         status,
         dailyKubun: kubunOut || null,
-        lateMinutes: isHolidayWork ? 0 : (r.late_minutes || 0),
-        earlyMinutes: isHolidayWork ? 0 : (r.early_minutes || 0),
+        lateMinutes: (isHolidayWork || isHalfDay) ? 0 : (r.late_minutes || 0),
+        earlyMinutes: (isHolidayWork || isHalfDay) ? 0 : (r.early_minutes || 0),
         reason: r.reason || null,
         notes: r.notes || null,
         workType: wt,
