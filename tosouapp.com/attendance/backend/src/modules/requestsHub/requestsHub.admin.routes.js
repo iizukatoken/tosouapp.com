@@ -66,6 +66,15 @@ function userFilters({ tenantId, dept, userId, q }, userCol) {
   return { sql: where.map(w => ` AND ${w}`).join(''), params };
 }
 
+// 出勤/退勤 が別の日（夜勤・申請日と違う日）なら日付も出す
+function adjustContent(r) {
+  const din = r.requestedCheckIn ? String(r.requestedCheckIn).slice(0, 10) : '';
+  const dout = r.requestedCheckOut ? String(r.requestedCheckOut).slice(0, 10) : '';
+  const md = (d) => (d ? `${d.slice(5).replace('-', '/')} ` : '');
+  if (din && dout && din !== dout) return `出勤 ${md(din)}${fmtHm(r.requestedCheckIn)} / 退勤 ${md(dout)}${fmtHm(r.requestedCheckOut)}`;
+  return `出勤 ${fmtHm(r.requestedCheckIn)} / 退勤 ${fmtHm(r.requestedCheckOut)}`;
+}
+
 function nextDay(ymd) {
   const t = new Date(`${ymd}T00:00:00Z`);
   t.setUTCDate(t.getUTCDate() + 1);
@@ -75,7 +84,8 @@ function nextDay(ymd) {
 // 種別/部署/社員/ステータス/検索 でフィルタしつつ、社員の申請をすべて 1本のリストに正規化してまとめる:
 // 有給・休暇 (leave_requests) / 打刻修正 (time_adjust_requests) / シフト提出 (shift_month_status) /
 // プロフィール変更 (user_change_requests) / その他 (employee_requests: 残業申請・休日申請・通勤交通費)。
-async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
+// allMonths: bỏ lọc theo tháng (dùng cho 「承認待ち」: hiện mọi đơn chờ dù thuộc tháng nào)
+async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths = false }) {
   const { start, end } = monthRange(month);
 
   // attendance.utils.js の syncPaidLeaveByKubun / leave.repository.js の
@@ -91,13 +101,14 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
     "COALESCE(lr.reason, '') NOT LIKE '%[SHIFT_CHANGED]%'"
   ];
   const leaveParams = [end, start];
+  if (allMonths) { leaveWhere[0] = '1 = 1'; leaveParams.length = 0; }
   if (tenantId) { leaveWhere.push('u.tenant_id = ?'); leaveParams.push(tenantId); }
   if (dept) { leaveWhere.push('d.name = ?'); leaveParams.push(dept); }
   if (userId) { leaveWhere.push('lr.userId = ?'); leaveParams.push(userId); }
   if (status) { leaveWhere.push('lr.status = ?'); leaveParams.push(status); }
   if (q) { leaveWhere.push('(u.employee_code LIKE ? OR u.username LIKE ?)'); leaveParams.push(`%${q}%`, `%${q}%`); }
   const [leaveRows] = await db.query(`
-    SELECT lr.id, lr.userId, lr.startDate, lr.endDate, lr.type, lr.reason, lr.status,
+    SELECT lr.id, lr.userId, lr.startDate, lr.endDate, lr.type, lr.reason, lr.status, lr.created_at,
            lr.processed_by, lr.processed_at,
            u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName,
            pu.username AS processedByName
@@ -108,8 +119,9 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
     WHERE ${leaveWhere.join(' AND ')}
   `, leaveParams);
 
-  const adjWhere = ['DATE(COALESCE(tar.requestedCheckIn, tar.requestedCheckOut, tar.created_at)) BETWEEN ? AND ?'];
-  const adjParams = [start, end];
+  // 調整申請 は作成日の月で数える（従来の 調整申請一覧・Excel出力 と同じ）
+  const adjWhere = allMonths ? ['1 = 1'] : ['DATE(tar.created_at) BETWEEN ? AND ?'];
+  const adjParams = allMonths ? [] : [start, end];
   if (tenantId) { adjWhere.push('u.tenant_id = ?'); adjParams.push(tenantId); }
   if (dept) { adjWhere.push('d.name = ?'); adjParams.push(dept); }
   if (userId) { adjWhere.push('tar.userId = ?'); adjParams.push(userId); }
@@ -131,27 +143,29 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
 
   const sf = userFilters(filt, 's.userId');
   const shiftRows = await queryOptional(`
-    SELECT s.id, s.userId, s.month, s.status, s.updated_at,
+    SELECT s.id, s.userId, s.month, s.status, s.created_at, s.updated_at,
            u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName
     FROM shift_month_status s
     JOIN users u ON u.id = s.userId
     LEFT JOIN departments d ON d.id = u.departmentId
-    WHERE s.month = ? AND s.status IN ('PENDING', 'APPROVED', 'REJECTED')${sf.sql}
-  `, [month, ...sf.params]);
+    WHERE ${allMonths ? '1 = 1' : 's.month = ?'} AND s.status IN ('PENDING', 'APPROVED', 'REJECTED')${sf.sql}
+  `, [...(allMonths ? [] : [month]), ...sf.params]);
   const shiftCounts = new Map();
   if (shiftRows.length) {
     const ids = [...new Set(shiftRows.map(r => r.userId))];
+    const months = [...new Set(shiftRows.map(r => r.month))];
     const counts = await queryOptional(`
-      SELECT userId,
+      SELECT userId, DATE_FORMAT(date, '%Y-%m') AS ym,
              SUM(status = 'OFF') AS offDays,
              SUM(status = 'LEAVE' AND leaveType = 'paid') AS paidDays,
              SUM(status = 'LEAVE' AND leaveType = 'paid_half') AS paidHalfDays,
              SUM(status = 'LEAVE' AND COALESCE(leaveType, '') NOT IN ('paid', 'paid_half')) AS otherLeaveDays
       FROM shift_requests
-      WHERE userId IN (${ids.map(() => '?').join(',')}) AND date LIKE ?
-      GROUP BY userId
-    `, [...ids, `${month}-%`]);
-    for (const c of counts) shiftCounts.set(c.userId, c);
+      WHERE userId IN (${ids.map(() => '?').join(',')})
+        AND DATE_FORMAT(date, '%Y-%m') IN (${months.map(() => '?').join(',')})
+      GROUP BY userId, DATE_FORMAT(date, '%Y-%m')
+    `, [...ids, ...months]);
+    for (const c of counts) shiftCounts.set(`${c.userId}|${c.ym}`, c);
   }
 
   const pf = userFilters(filt, 'ucr.user_id');
@@ -163,8 +177,8 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
     JOIN users u ON u.id = ucr.user_id
     LEFT JOIN departments d ON d.id = u.departmentId
     LEFT JOIN users pu ON pu.id = ucr.approved_by
-    WHERE DATE(ucr.created_at) BETWEEN ? AND ?${pf.sql}
-  `, [start, end, ...pf.params]);
+    WHERE ${allMonths ? '1 = 1' : 'DATE(ucr.created_at) BETWEEN ? AND ?'}${pf.sql}
+  `, [...(allMonths ? [] : [start, end]), ...pf.params]);
 
   const of = userFilters(filt, 'er.user_id');
   const otherRows = await queryOptional(`
@@ -174,8 +188,8 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
     FROM employee_requests er
     JOIN users u ON u.id = er.user_id
     LEFT JOIN departments d ON d.id = u.departmentId
-    WHERE DATE(er.created_at) BETWEEN ? AND ?${of.sql}
-  `, [start, end, ...of.params]);
+    WHERE ${allMonths ? '1 = 1' : 'DATE(er.created_at) BETWEEN ? AND ?'}${of.sql}
+  `, [...(allMonths ? [] : [start, end]), ...of.params]);
 
   // 却下した有給なのに月次表の区分が有給のまま → 有給残数から引かれ続けるので警告を出す。
   const stillPaid = new Set();
@@ -186,11 +200,19 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
       SELECT userId, date FROM attendance_daily
       WHERE userId IN (${ids.map(() => '?').join(',')}) AND date BETWEEN ? AND ?
         AND REPLACE(TRIM(COALESCE(kubun, '')), '　', '') IN ('有給休暇', '半休(有給)')
-    `, [...ids, start, end]);
+    `, [...ids,
+      rejectedPaid.reduce((m, r) => (String(r.startDate).slice(0, 10) < m ? String(r.startDate).slice(0, 10) : m), '9999-12-31'),
+      rejectedPaid.reduce((m, r) => (String(r.endDate).slice(0, 10) > m ? String(r.endDate).slice(0, 10) : m), '0000-01-01')]);
     for (const k of kubunRows) stillPaid.add(`${k.userId}|${String(k.date).slice(0, 10)}`);
   }
 
+  const ymd = (v) => {
+    if (!v) return null;
+    if (v instanceof Date) return new Date(v.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+    return String(v).slice(0, 10);
+  };
   const base = (r) => ({
+    createdAt: ymd(r.created_at),
     userId: r.userId,
     applicantName: r.username || '',
     employeeCode: r.employeeCode || null,
@@ -239,7 +261,7 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
       requestId: r.id,
       ...base(r),
       targetDate: d,
-      content: `出勤 ${fmtHm(r.requestedCheckIn)} / 退勤 ${fmtHm(r.requestedCheckOut)}`,
+      content: adjustContent(r),
       reason: r.reason || '',
       status: r.status,
       processedByName: r.processedByName || null,
@@ -250,7 +272,7 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q }) {
   });
 
   const normShift = shiftRows.map(r => {
-    const c = shiftCounts.get(r.userId) || {};
+    const c = shiftCounts.get(`${r.userId}|${r.month}`) || {};
     const parts = [];
     if (Number(c.offDays)) parts.push(`休日 ${Number(c.offDays)}日`);
     if (Number(c.paidDays)) parts.push(`有給 ${Number(c.paidDays)}日`);
@@ -340,7 +362,8 @@ router.get('/list', authorize('admin', 'manager'), async (req, res) => {
     const page = Math.max(1, parseInt(req.query?.page, 10) || 1);
     const pageSize = Math.min(200, Math.max(1, parseInt(req.query?.pageSize, 10) || 50));
 
-    const allRows = await fetchMerged({ tenantId: req.tenantId, month, dept, userId, q, status: '' });
+    const allMonths = String(req.query?.allMonths || '') === '1';
+    const allRows = await fetchMerged({ tenantId: req.tenantId, month, dept, userId, q, status: '', allMonths });
     const summary = {
       pending: allRows.filter(r => r.status === 'pending').length,
       approved: allRows.filter(r => r.status === 'approved').length,

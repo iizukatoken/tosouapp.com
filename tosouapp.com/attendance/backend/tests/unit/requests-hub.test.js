@@ -95,7 +95,7 @@ describe('fetchMerged', () => {
       .mockResolvedValueOnce([[]]) // leave
       .mockResolvedValueOnce([[]]) // adjust
       .mockResolvedValueOnce([[{ id: 7, userId: 20, month: '2026-09', status: 'PENDING', updated_at: null, employeeCode: 'E20', username: '高橋', departmentName: '工事部' }]])
-      .mockResolvedValueOnce([[{ userId: 20, offDays: 8, paidDays: 2, otherLeaveDays: 0 }]])
+      .mockResolvedValueOnce([[{ userId: 20, ym: '2026-09', offDays: 8, paidDays: 2, otherLeaveDays: 0 }]])
       .mockResolvedValueOnce([[{ id: 3, userId: 21, fields_json: JSON.stringify({ phone: '090', role: 'admin' }), status: 'pending', created_at: '2026-09-03 10:00:00', approved_at: null, username: '伊藤' }]])
       .mockResolvedValueOnce([[{ id: 9, userId: 22, request_no: 'R-1', record_type: '残業申請', detail: '9/10 2時間', office: '', status: '申請済み', created_at: '2026-09-10 09:00:00', updated_at: null, username: '渡辺' }]]);
 
@@ -148,5 +148,26 @@ describe('fetchMerged', () => {
       .mockRejectedValueOnce(noTable)
       .mockRejectedValueOnce(noTable);
     await expect(fetchMerged({ tenantId: 1, month: '2026-09', dept: '', userId: null, status: '', q: '' })).resolves.toEqual([]);
+  });
+
+  it("allMonths: 承認待ちは月で絞らない（SQLに日付条件を付けない）", async () => {
+    await fetchMerged({ tenantId: 1, month: "2026-11", dept: "", userId: null, status: "", q: "", allMonths: true });
+    const [leaveSql, leaveParams] = db.query.mock.calls[0];
+    const [adjSql, adjParams] = db.query.mock.calls[1];
+    expect(leaveParams).not.toContain("2026-11-01");
+    expect(adjSql).not.toContain('created_at) BETWEEN');
+    expect(adjParams).toEqual([1]);
+  });
+
+  it("調整申請は作成日の月で数え、出勤/退勤が別の日なら日付も表示する", async () => {
+    db.query
+      .mockResolvedValueOnce([[]])
+      .mockResolvedValueOnce([[{ id: 9, userId: 23, requestedCheckIn: "2026-10-07 08:00:00", requestedCheckOut: "2026-10-08 17:00:00", reason: "打刻し忘れ", status: "pending", created_at: "2026-11-06 10:04:00", username: "employee" }]]);
+    const rows = await fetchMerged({ tenantId: 1, month: "2026-11", dept: "", userId: null, status: "", q: "" });
+    const [adjSql, adjParams] = db.query.mock.calls[1];
+    expect(adjSql).toContain('DATE(tar.created_at) BETWEEN');
+    expect(adjParams.slice(0, 2)).toEqual(["2026-11-01", "2026-11-30"]);
+    expect(rows[0].content).toBe("出勤 10/07 08:00 / 退勤 10/08 17:00");
+    expect(rows[0].createdAt).toBe("2026-11-06");
   });
 });
