@@ -225,6 +225,21 @@ router.put('/month/bulk',
   authenticate, authorize('employee', 'manager', 'admin'),
   controller.putMonthBulk);
 
+// 入力用Excel取込: apply なし = 変更内容の確認だけ / apply=1 = 保存
+const importUpload = require('multer')({
+  storage: require('multer').memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024, files: 1 },
+  fileFilter: (req, file, cb) => cb(null, /\.xlsx$/i.test(String(file.originalname || '')))
+});
+router.post('/month/import',
+  rateLimitNamed('attendance_month_import', { windowMs: 60_000, max: 20 }),
+  authenticate, authorize('employee', 'manager', 'admin'),
+  (req, res, next) => importUpload.single('file')(req, res, (err) => {
+    if (err) return res.status(400).json({ message: err.code === 'LIMIT_FILE_SIZE' ? '入力用Excelのファイルサイズが10MBを超過しているため取り込めません。' : 'ファイルを読み込めませんでした。' });
+    next();
+  }),
+  require('./attendance.import.monthly').importMonthXlsx);
+
 router.post('/month/sync-salary',
   rateLimitNamed('attendance_sync_salary', { windowMs: 60_000, max: 5 }),
   authenticate, authorize('manager', 'admin'),

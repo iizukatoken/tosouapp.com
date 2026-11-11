@@ -506,11 +506,10 @@
       btn.addEventListener('click', (e) => {
         e.preventDefault();
         if (!state.editableMonth) { alert('この月は入力できません。'); return; }
-        clearDirty();
         showErr('');
-        if (!controller.checkImportFile()) return;
-        if (!confirm('ファイルを取込します。よろしいですか？')) return;
-        alert('取込処理は未実装です。');
+        // 入力用Excel取込ダイアログ（attendance-monthly.import.js）
+        if (globalThis.MonthlyImport?.open) { globalThis.MonthlyImport.open(); return; }
+        alert('取込画面を読み込めませんでした。画面を再読み込みしてください。');
       });
     });
     document.querySelector('#btnBackBottom')?.addEventListener('click', (e) => {
