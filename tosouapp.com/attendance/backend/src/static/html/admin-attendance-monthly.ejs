@@ -6,7 +6,7 @@
   <title>月次勤怠入力管理</title>
   <link rel="stylesheet" href="/static/css/base.css?v=navy-20260331-1">
   <link rel="stylesheet" href="/static/css/attendance.css?v=20261016-navytop1">
-  <link rel="stylesheet" href="/static/css/attendance-monthly.css?v=20261111-btn1">
+  <link rel="stylesheet" href="/static/css/attendance-monthly.css?v=20261111-btn2">
   <link rel="stylesheet" href="/static/css/attendance-pdf-modal.css?v=navy-20260903-shukkinbo-fit30">
   <link rel="icon" href="data:,">
   <script src="/static/js/pages/session-idle.js?v=navy-20260403-1" defer></script>
@@ -145,15 +145,7 @@
                     <button type="button" class="se-daily-switch" id="dailyToggle" aria-label="日次実績を折りたたむ" aria-pressed="false"></button>
                     <span class="se-daily-text">日次実績</span>
                   </div>
-                  <div class="se-daily-actions" style="display: flex; gap: 4px; margin-left: auto; align-items: center;">
-                      <div class="se-tabs se-tabs-seg" role="tablist" aria-label="表示モード">
-                        <button type="button" class="se-tab active" data-tab="actual">実績</button>
-                        <button type="button" class="se-tab" data-tab="round">丸め</button>
-                        <button type="button" class="se-tab" data-tab="plan">予定</button>
-                      </div>
-                    </div>
-                </div>
-                <div class="se-section-body">
+                  <!-- 前月/翌月・出力ボタン: 日次実績 の見出しの横 -->
                   <div class="common-buttons">
                     <div class="se-toolbar">
                       <span class="se-month-pair">
@@ -164,6 +156,15 @@
                       <button type="button" class="se-btn primary se-btn-wide" id="btnExportSites" disabled>現場・作業内容出力</button>
                     </div>
                   </div>
+                  <div class="se-daily-actions" style="display: flex; gap: 4px; margin-left: auto; align-items: center;">
+                      <div class="se-tabs se-tabs-seg" role="tablist" aria-label="表示モード">
+                        <button type="button" class="se-tab active" data-tab="actual">実績</button>
+                        <button type="button" class="se-tab" data-tab="round">丸め</button>
+                        <button type="button" class="se-tab" data-tab="plan">予定</button>
+                      </div>
+                    </div>
+                </div>
+                <div class="se-section-body">
                   <div id="monthTable" class="se-table"></div>
                   
                 </div>

@@ -3631,3 +3631,15 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   margin-left: 0 !important;
   border-left: 1px solid rgba(255, 255, 255, .35) !important;
 }
+/* 日次実績: 前月/翌月・出力ボタンを見出し（日次実績）の横に並べる */
+#dailySection .se-section-head.se-daily-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
+#dailySection .se-daily-head .common-buttons { display: flex; align-items: center; min-width: 0; }
+#dailySection .se-daily-head .common-buttons .se-toolbar {
+  padding: 0 !important; margin: 0; gap: 6px; flex-wrap: wrap; overflow: visible; background: transparent; border: 0; box-shadow: none;
+}
+#dailySection .se-daily-head .common-buttons .se-btn {
+  min-width: 0 !important; width: auto !important; height: 28px !important; padding: 0 12px !important;
+  font-size: 12px !important; border-radius: 4px; margin-right: 0 !important;
+}
+#dailySection .se-daily-head .se-month-pair #btnPrevMonth { border-radius: 4px 0 0 4px !important; }
+#dailySection .se-daily-head .se-month-pair #btnNextMonth { border-radius: 0 4px 4px 0 !important; }
