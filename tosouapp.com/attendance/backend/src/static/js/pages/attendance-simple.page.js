@@ -679,7 +679,19 @@ const calculateLateEarly = () => {
   
   const lateEl = $('#lateMin');
   const earlyEl = $('#earlyMin');
-  
+
+  // 半休 / 半休(有給): 午前・午後どちらに出勤してもよいので 遅刻・早退 は計上しない
+  // （月次勤怠・Excel出力と同じ規則。保存済みの値も表示せず、登録すると空で保存される）
+  const kubunNow = String($('#kubun')?.value || '').trim();
+  if (kubunNow === '半休' || kubunNow === '半休(有給)') {
+    for (const el of [lateEl, earlyEl]) {
+      if (!el) continue;
+      el.value = '';
+      try { delete el.dataset.manual; } catch (e) { /* silently ignored */ }
+    }
+    return;
+  }
+
   // Không tự động tính đi trễ nếu không có giờ check-in thực tế
   if (lateEl && String(lateEl.dataset?.manual || '') !== '1') {
     if (s && st.hasStartedToday && shiftStart && !isHolidayWorkNow() && s.total > shiftStart.total) {
@@ -2059,6 +2071,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     $('#kubun')?.classList.toggle('is-planned', !String($('#kubun')?.value || '').trim());
     ensureDefaultWorkTypeForToday(state.date);
     applyHolidayRestMode();
+    // 半休 に変えたら 遅刻・早退 を消してから保存する
+    try { calculateLateEarly(); } catch (e) { /* silently ignored */ }
     renderSimpleStatus();
     try { await persistDaily(state.date); } catch (e) { /* silently ignored */ }
   });

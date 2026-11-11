@@ -773,6 +773,11 @@ module.exports = {
               }
             } catch (e) { /* giữ nguyên 遅刻 đã lưu */ }
           }
+          // 半休 / 半休(有給) の日は 遅刻・早退 を持たない（午前・午後どちらの出勤でもよい）
+          if (['半休', '半休(有給)', '半休（有給）'].includes(String(kubun || '').trim())) {
+            late_minutes = null;
+            early_minutes = null;
+          }
 
           // Skip INSERT/UPDATE nếu existing tồn tại và KHÔNG có field nào thay đổi (performance)
           if (existing) {

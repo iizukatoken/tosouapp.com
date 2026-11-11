@@ -340,6 +340,11 @@ module.exports = {
     } else if (Object.prototype.hasOwnProperty.call(incoming, 'earlyMinutes')) {
       early_minutes = incoming.earlyMinutes == null ? null : Number(incoming.earlyMinutes);
     }
+    // 半休 / 半休(有給) の日は 遅刻・早退 を持たない（午前・午後どちらの出勤でもよい。月次勤怠・Excelと同じ規則）
+    if (['半休', '半休(有給)', '半休（有給）'].includes(String(kubun || '').trim())) {
+      late_minutes = null;
+      early_minutes = null;
+    }
     
     let breakMin = existing?.break_minutes ?? null;
     if (Object.prototype.hasOwnProperty.call(incoming, 'break_minutes')) {
