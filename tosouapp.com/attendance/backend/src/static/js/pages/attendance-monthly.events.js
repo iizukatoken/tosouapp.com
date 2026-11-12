@@ -1219,8 +1219,13 @@
         const tr = ck.closest?.('[data-row="1"][data-date]');
         if (!tr) return;
         if (ck.hasAttribute('disabled')) return;
-        try { tr.dataset.dirty = '1'; } catch (e) { /* silently ignored */ }
         const field = String(ck.getAttribute('data-field') || '');
+        // 出社/在宅/現場 は必ずどれか1つ: 選択中のものを押して「なし」にはできない（ラジオボタンと同じ）
+        if (!ck.checked && ['ckOnsite', 'ckRemote', 'ckSatellite'].includes(field)) {
+          ck.checked = true;
+          return;
+        }
+        try { tr.dataset.dirty = '1'; } catch (e) { /* silently ignored */ }
         // 勤務区分が未選択の行（今日までの出勤日）: チェックしたら 出勤 を自動選択
         if (ck.checked) {
           const clsSelAuto = tr.querySelector('select[data-field="classification"]');
@@ -1254,7 +1259,13 @@
           }
           recomputeRow(tr);
         try { draft?.schedule?.(controller.ctx, controller.ctx?.picker?.value || controller.ctx?.initialYM); } catch (e) { /* silently ignored */ }
-        try { controller.scheduleAutoSave(); } catch (e) { /* silently ignored */ }
+        // 出社/在宅/現場 を切り替えたら、その行をすぐ保存（保存ボタンを押さなくてよい）
+        if (['ckOnsite', 'ckRemote', 'ckSatellite'].includes(field)) {
+          try { tr.dataset.workType = field === 'ckOnsite' ? 'onsite' : field === 'ckRemote' ? 'remote' : 'satellite'; } catch (e) { /* silently ignored */ }
+          try { await controller.saveRowTimesNow(tr); } catch (e) { /* 失敗時は 未保存 のまま残り、保存ボタンで再保存できる */ }
+        } else {
+          try { controller.scheduleAutoSave(); } catch (e) { /* silently ignored */ }
+        }
         return;
       }
       const btn = e.target?.closest?.('button[data-action]');

@@ -518,6 +518,8 @@
 
       const wtVal = (() => {
         if (isHolidayKubun || effectiveKubun === '欠勤') return '';
+        // 出社/在宅/現場 は必ずどれか: 時刻のある出勤日で未選択なら 出社（Excel も同じ扱い）。表示だけで、保存は社員の操作時
+        if (!wtValRaw && hasActual) return 'onsite';
         return wtValRaw;
       })();
       tr.dataset.workType = wtVal;
