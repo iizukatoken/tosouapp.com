@@ -725,9 +725,13 @@ const getSimpleStatusMeta = () => {
   const monthApproved = String(window.state?.currentMonthStatus || '').trim() === 'approved';
   const kubunEl = $('#kubun');
   const isPlanned = !!kubunEl?.classList?.contains('is-planned');
-  const hasActualNow = !!(effectiveHm($('#startTime')) || effectiveHm($('#endTime')));
   const dateNow = String(window.state?.date || '');
   const todayNow = todayJST();
+  // 今日は 打刻ボタンでサーバーに記録された状態で判断する（画面の時刻欄には予定の 08:00〜17:00 が薄く入っているため、欄の値では判断しない）
+  const isTodayView = dateNow === todayNow;
+  const hasActualNow = isTodayView
+    ? !!(window.state?.hasStartedToday || window.state?.hasEndedToday)
+    : !!(effectiveHm($('#startTime')) || effectiveHm($('#endTime')));
   const kubunNow = String(kubunEl?.value || '').trim();
   const LEAVE_KUBUN = ['有給休暇', '無給休暇', '欠勤', '代替休日', '半休', '半休(有給)'];
   if (monthApproved) return { text: '承認済み', cls: 'ok' };
@@ -754,7 +758,7 @@ const getSimpleStatusMeta = () => {
       return { text: '区分を確認してください', cls: 'warn' };
     }
     // 出勤・退勤が揃っていて作業内容もあれば確認済み（月次勤怠・Excel と同じ条件）
-    const hasBothNow = !!(effectiveHm($('#startTime')) && effectiveHm($('#endTime')));
+    const hasBothNow = isTodayView ? !!window.state?.hasEndedToday : !!(effectiveHm($('#startTime')) && effectiveHm($('#endTime')));
     if (hasBothNow || (window.state && window.state.hasEndedToday)) {
       // 作業内容は「現場」の日だけ必須（月次勤怠・Excel と同じ条件）
       const hasWork = String($('#workType')?.value || '').trim() !== 'satellite' || !!String($('#workContent')?.value || '').trim();
