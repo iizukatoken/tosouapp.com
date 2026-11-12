@@ -152,7 +152,11 @@ async function buildLedgerRows({ tenantId, month, departmentId }) {
           // 理由(遅刻/早退)→.reason、備考→.notes。勤怠記録の備考は同画面の「備考」列
           // (.notes)とだけ揃える — .memoは実は「作業内容」の中身なので出さない
           // (これを備考に出していたせいで作業内容が混ざって見えていた)。
-          memo: daily?.notes || null
+          memo: daily?.notes || null,
+          // 列を分けて出す: 作業内容 / 理由 / 備考
+          work: String(daily?.memo || computed?.memo || '').trim() || null,
+          reason: String(daily?.reason || '').trim() || null,
+          notes: String(daily?.notes || '').trim() || null
         });
         // 2行目以降（追加勤務。例: 退勤後の社内会議）はすぐ下に別の行で出す
         const extras = (itemsByUserDate.get(`${u.id}|${dateStr}`) || []).slice(1);
@@ -184,8 +188,10 @@ async function buildLedgerRows({ tenantId, month, departmentId }) {
             overtimeMinutes: ex.overtimeMinutes || 0,
             nightMinutes: ex.nightMinutes || 0,
             isHolidayWork,
-            // 追加勤務の 作業内容（例: 社内会議）
-            memo: ex.memo || null
+            memo: ex.notes || null,
+            work: String(ex.memo || '').trim() || null,
+            reason: ex.extraReason || null,
+            notes: String(ex.notes || '').trim() || null
           });
         }
       }
@@ -287,7 +293,9 @@ exports.exportXlsx = async (req, res) => {
       { header: '法定外残業', width: 13 },
       { header: '深夜', width: 9 },
       { header: '休日', width: 9 },
-      { header: '備考', width: 26 }
+      { header: '作業内容', width: 26 },
+      { header: '理由', width: 14 },
+      { header: '備考', width: 22 }
     ];
     const xlsxRows = rows.map(r => {
       const workedMinutes = isActual ? (r.actualWorkedMinutes || 0) : (r.regularMinutes || 0) + (r.overtimeMinutes || 0);
@@ -306,7 +314,9 @@ exports.exportXlsx = async (req, res) => {
         hm(overtimeMinutes),
         hm(r.nightMinutes),
         hm(holidayMinutes),
-        r.memo || ''
+        r.work || '',
+        r.reason || '',
+        r.notes || ''
       ];
     });
 
@@ -345,7 +355,7 @@ exports.exportXlsx = async (req, res) => {
         cell.font = { name: 'MS Pゴシック', size: 11, color: { argb: 'FF000000' } };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROW_FILL } };
         cell.border = thinBorder;
-        cell.alignment = { vertical: 'middle', horizontal: ci === 12 ? 'left' : 'center' };
+        cell.alignment = { vertical: 'middle', horizontal: ci >= 12 ? 'left' : 'center' };
       });
     });
 

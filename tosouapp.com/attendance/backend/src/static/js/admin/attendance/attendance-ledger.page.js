@@ -116,7 +116,7 @@ export async function mount({ content } = {}) {
 
   async function loadLedger() {
     const body = root.querySelector('#ledgerTableBody');
-    if (body) body.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:24px;color:#94a3b8;">読み込み中...</td></tr>';
+    if (body) body.innerHTML = '<tr><td colspan="14" style="text-align:center;padding:24px;color:#94a3b8;">読み込み中...</td></tr>';
     try {
       const qs = new URLSearchParams({ month, page: String(page), pageSize: String(pageSize) });
       if (departmentId) qs.set('departmentId', departmentId);
@@ -124,7 +124,7 @@ export async function mount({ content } = {}) {
       lastData = data;
       renderLedger(data);
     } catch (err) {
-      if (body) body.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:24px;color:#ef4444;">エラー: ${escapeHtml(err.message)}</td></tr>`;
+      if (body) body.innerHTML = `<tr><td colspan="14" style="text-align:center;padding:24px;color:#ef4444;">エラー: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
@@ -176,7 +176,7 @@ export async function mount({ content } = {}) {
             ${td(r, '', r.isExtra ? '<span style="color:#94a3b8;">↳</span>' : escapeHtml(r.date.slice(5)))}
             ${td(r, '', r.isExtra ? '' : escapeHtml(r.employeeCode || r.userId))}
             ${td(r, '', r.isExtra ? '' : escapeHtml(r.username || ''))}
-            ${td(r, '', r.isExtra ? `<span class="ui-tag" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">追加勤務${r.extraReason ? '・' + escapeHtml(r.extraReason) : ''}</span>` : `<span class="ui-tag">${escapeHtml(KUBUN_LABEL[r.kubun] || r.kubun)}</span>`)}
+            ${td(r, '', r.isExtra ? `<span class="ui-tag" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">追加勤務</span>` : `<span class="ui-tag">${escapeHtml(KUBUN_LABEL[r.kubun] || r.kubun)}</span>`)}
             ${td(r, 'num', escapeHtml(inOf(r) || '—'))}
             ${td(r, 'num', escapeHtml(outOf(r) || '—'))}
             ${td(r, 'num', r.breakMinutes != null ? `${r.breakMinutes}分` : '—')}
@@ -184,9 +184,11 @@ export async function mount({ content } = {}) {
             ${td(r, 'num', overtimeOf(r) ? `<span style="color:#b45309;font-weight:700;">${hm(overtimeOf(r))}</span>` : '—')}
             ${td(r, 'num', r.nightMinutes ? hm(r.nightMinutes) : '—')}
             ${td(r, 'num', r.isHolidayWork ? hm(workedOf(r)) : '—')}
-            <td class="wrap muted" style="max-width:260px;font-size:12px;${r.isHolidayWork ? 'background:#fffbeb;' : ''}">${escapeHtml(r.memo || '')}</td>
+            <td class="wrap" style="max-width:260px;font-size:12px;${r.isHolidayWork ? 'background:#fffbeb;' : ''}">${escapeHtml(r.work || '')}</td>
+            <td style="white-space:nowrap;font-size:12px;${r.isHolidayWork ? 'background:#fffbeb;' : ''}">${escapeHtml(r.reason || '')}</td>
+            <td class="wrap muted" style="max-width:200px;font-size:12px;${r.isHolidayWork ? 'background:#fffbeb;' : ''}">${escapeHtml(r.notes || '')}</td>
           </tr>
-        `).join('') : '<tr><td colspan="12" class="empty">該当データがありません</td></tr>';
+        `).join('') : '<tr><td colspan="14" class="empty">該当データがありません</td></tr>';
       }
       if (pager) {
         const from = data.total ? (data.page - 1) * data.pageSize + 1 : 0;
@@ -235,12 +237,12 @@ export async function mount({ content } = {}) {
       <div class="ui-panel">
         <div class="ui-ptitle">勤怠一覧 <span class="ui-sub" id="ledgerCount"></span></div>
         <div class="ui-tablewrap">
-          <table class="ui-table" style="min-width:1100px;">
+          <table class="ui-table" style="min-width:1280px;">
             <thead>
               <tr>
                 <th>日付</th><th>社員番号</th><th>氏名</th><th>区分</th>
                 <th class="num">出勤</th><th class="num">退勤</th><th class="num">休憩</th><th class="num">実働</th>
-                <th class="num">法定外残業</th><th class="num">深夜</th><th class="num">休日</th><th>備考</th>
+                <th class="num">法定外残業</th><th class="num">深夜</th><th class="num">休日</th><th>作業内容</th><th>理由</th><th>備考</th>
               </tr>
             </thead>
             <tbody id="ledgerTableBody"></tbody>

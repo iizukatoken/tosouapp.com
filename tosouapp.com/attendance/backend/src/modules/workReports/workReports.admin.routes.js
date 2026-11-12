@@ -118,6 +118,7 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         a.checkOut AS checkOut,
         a.open_count AS open_count,
         ax.extra_times AS extra_times,
+        ax.extra_rows AS extra_rows,
         COALESCE(ad.work_type, wr.work_type, a.work_type) AS work_type,
         ad.kubun AS daily_kubun,
         COALESCE(NULLIF(TRIM(a.location), ''), NULLIF(TRIM(ad.location), ''), NULLIF(TRIM(wr.site), '')) AS site,
@@ -156,9 +157,12 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
       LEFT JOIN (
         SELECT userId,
                GROUP_CONCAT(CONCAT(COALESCE(DATE_FORMAT(checkIn, '%H:%i'), '—'), '〜', COALESCE(DATE_FORMAT(checkOut, '%H:%i'), ''), '|', COALESCE(extra_reason, ''))
-                            ORDER BY COALESCE(checkIn, checkOut) SEPARATOR ' / ') AS extra_times
+                            ORDER BY COALESCE(checkIn, checkOut) SEPARATOR ' / ') AS extra_times,
+               JSON_ARRAYAGG(JSON_OBJECT('sortKey', COALESCE(checkIn, checkOut),
+                 'in', DATE_FORMAT(checkIn, '%H:%i'), 'out', DATE_FORMAT(checkOut, '%H:%i'),
+                 'reason', extra_reason, 'work', memo, 'notes', notes)) AS extra_rows
         FROM (
-          SELECT userId, checkIn, checkOut, extra_reason,
+          SELECT userId, checkIn, checkOut, extra_reason, memo, notes,
                  ROW_NUMBER() OVER (PARTITION BY userId ORDER BY COALESCE(checkIn, checkOut) ASC, id ASC) AS rn
           FROM attendance
           WHERE DATE(COALESCE(checkIn, checkOut)) = ?
@@ -286,6 +290,14 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         },
         // 2行目以降（追加勤務）の時刻。例 "19:00〜22:00"（複数は " / " 区切り）
         extraTimes: r.extra_times || null,
+        // 追加勤務の行（出勤の早い順）: [{ in, out, reason, work, notes }]
+        extraRows: (() => {
+          try {
+            const arr = typeof r.extra_rows === 'string' ? JSON.parse(r.extra_rows) : (Array.isArray(r.extra_rows) ? r.extra_rows : []);
+            return arr.sort((a, b) => String(a.sortKey || '').localeCompare(String(b.sortKey || '')))
+              .map(x => ({ in: x.in || '', out: x.out || '', reason: x.reason || '', work: x.work || '', notes: x.notes || '' }));
+          } catch (e) { return []; }
+        })(),
         status,
         dailyKubun: kubunOut || null,
         // 終日の休暇（有給・無給・欠勤）なのに打刻がある → 管理画面で要確認
