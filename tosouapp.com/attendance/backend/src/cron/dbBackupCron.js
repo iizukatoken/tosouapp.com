@@ -59,7 +59,24 @@ function pruneOldBackups() {
     }
 }
 
-async function runAutoBackup() {
+// 毎日の実行と手動実行が重ならないように
+let backupRunning = false;
+
+// options.emailCopy: true なら添付メールも送る（2つ目の保管先）。毎日の実行では日曜だけ true。
+async function runAutoBackup(options = {}) {
+    if (backupRunning) {
+        console.warn('[Cron Job] Backup đang chạy, bỏ qua lần gọi trùng.');
+        return;
+    }
+    backupRunning = true;
+    try {
+        await runAutoBackupOnce(options);
+    } finally {
+        backupRunning = false;
+    }
+}
+
+async function runAutoBackupOnce({ emailCopy = true } = {}) {
     console.log('[Cron Job] Bắt đầu tự động backup Database...');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const backupFileName = `tosouapp_backup_${timestamp}.sql`;
@@ -114,7 +131,10 @@ async function runAutoBackup() {
         // 3. File đã được tạo thành công trên ổ đĩa — dùng cho bước email đính
         // kèm bên dưới, sau đó sẽ được dọn (xem pruneOldBackups).
         const sizeBytes = fs.statSync(backupFilePath).size;
-        if (sizeBytes > MAX_EMAIL_ATTACHMENT_BYTES) {
+        if (!emailCopy && uploadedToR2) {
+            // 毎日の実行: R2 に保存できたので添付メールは送らない（個人情報入りのメールを毎日増やさない）。
+            console.log(`[Cron Job] Backup hằng ngày OK (${(sizeBytes / 1024 / 1024).toFixed(1)}MB, R2). Không gửi email đính kèm hôm nay.`);
+        } else if (sizeBytes > MAX_EMAIL_ATTACHMENT_BYTES) {
             console.warn(`[Cron Job] Backup ${(sizeBytes / 1024 / 1024).toFixed(1)}MB vượt ngưỡng gửi email, bỏ qua bước email.`);
             await sendAlertEmail(
                 `[Cảnh báo] Backup TosouApp quá lớn để gửi email - ${new Date().toLocaleDateString('vi-VN')}`,
@@ -167,18 +187,18 @@ async function runAutoBackup() {
 
 // Khởi tạo Cron Job
 function initBackupCronJob() {
-    // Chạy vào 23:59 (11h59 đêm) mỗi ngày Chủ Nhật (Sunday = 0)
-    // Cú pháp cron: '59 23 * * 0'
-    // Để bạn dễ test ngay bây giờ, tôi để tạm lịch là mỗi đêm Chủ Nhật. 
-    // Nếu bạn muốn test luôn bây giờ, chúng ta có thể đổi thành chạy mỗi phút.
-    cron.schedule('59 23 * * 0', () => {
-        runAutoBackup();
+    // 毎日 03:00 JST（利用の少ない時間）に R2 へバックアップ。
+    // 日曜だけは従来どおり添付メールも送る（R2 とは別の2つ目の保管先）。
+    // R2 に保存できなかった日は、曜日に関係なく添付メール＋警告メールを送る。
+    cron.schedule('0 3 * * *', () => {
+        const dowJST = new Date(Date.now() + 9 * 3600 * 1000).getUTCDay();
+        runAutoBackup({ emailCopy: dowJST === 0 });
     }, {
         scheduled: true,
-        timezone: "Asia/Tokyo" // Chạy theo múi giờ Nhật Bản
+        timezone: "Asia/Tokyo"
     });
 
-    console.log('[Cron Job] Đã lên lịch tự động sao lưu dữ liệu vào 23:59 Chủ Nhật hàng tuần.');
+    console.log('[Cron Job] Đã lên lịch backup hằng ngày 03:00 JST (R2); email đính kèm vào Chủ Nhật.');
 }
 
 module.exports = {
