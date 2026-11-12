@@ -155,10 +155,10 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
       ) a ON a.userId = u.id
       LEFT JOIN (
         SELECT userId,
-               GROUP_CONCAT(CONCAT(COALESCE(DATE_FORMAT(checkIn, '%H:%i'), '—'), '〜', COALESCE(DATE_FORMAT(checkOut, '%H:%i'), ''))
+               GROUP_CONCAT(CONCAT(COALESCE(DATE_FORMAT(checkIn, '%H:%i'), '—'), '〜', COALESCE(DATE_FORMAT(checkOut, '%H:%i'), ''), '|', COALESCE(extra_reason, ''))
                             ORDER BY COALESCE(checkIn, checkOut) SEPARATOR ' / ') AS extra_times
         FROM (
-          SELECT userId, checkIn, checkOut,
+          SELECT userId, checkIn, checkOut, extra_reason,
                  ROW_NUMBER() OVER (PARTITION BY userId ORDER BY COALESCE(checkIn, checkOut) ASC, id ASC) AS rn
           FROM attendance
           WHERE DATE(COALESCE(checkIn, checkOut)) = ?

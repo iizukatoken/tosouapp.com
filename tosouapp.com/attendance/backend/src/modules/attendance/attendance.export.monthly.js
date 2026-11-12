@@ -581,7 +581,8 @@ exports.exportMonthXlsx = async (req, res) => {
         const extraWtRe = extraWt === 'remote' ? { v: '✓', s: 'checkOn' } : '';
         const extraWtSa = extraWt === 'satellite' ? { v: '✓', s: 'checkOn' } : '';
         const extraLoc = String(extraSeg?.location || '').trim();
-        const extraMemo = String(extraSeg?.memo || '').trim();
+        // 追加勤務の理由（社内会議 など）と 作業内容
+        const extraMemo = [String(extraSeg?.extra_reason || '').trim(), String(extraSeg?.memo || '').trim()].filter(Boolean).join(' / ');
         const extraNotes = String(extraSeg?.notes || '').trim();
         // 追加の行: 休憩は行ごと（未設定 0）。所定は1行目で使い切る扱いなので、実働は全部 残業（サーバー集計と同じ）
         const extraBr = holidayLock ? 0 : Math.max(0, Number(extraSeg?.break_minutes || 0));

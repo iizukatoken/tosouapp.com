@@ -454,6 +454,12 @@ module.exports = {
       const v = Number(u.breakMinutes);
       return Number.isFinite(v) && v >= 0 ? Math.min(Math.round(v), 1440) : null;
     };
+    // 追加勤務の行の理由（extra_reason 列があるときだけ書く）
+    const rowReason = (u) => {
+      if (!attCols.has('extra_reason') || u == null || u.extraReason === undefined) return undefined;
+      const v = String(u.extraReason || '').trim().slice(0, 32);
+      return v || null;
+    };
     const conn = await db.getConnection();
 
     // Đổi "HH:MM" thành số phút tính từ nửa đêm
@@ -572,6 +578,7 @@ module.exports = {
             if (u.memo !== undefined) { fields.push('memo = ?'); vals.push(u.memo || null); }
             if (u.notes !== undefined) { fields.push('notes = ?'); vals.push(u.notes || null); }
             if (rowBreak(u) !== undefined) { fields.push('break_minutes = ?'); vals.push(rowBreak(u)); }
+            if (rowReason(u) !== undefined) { fields.push('extra_reason = ?'); vals.push(rowReason(u)); }
             
             vals.push(u.id, userId);
             await conn.query(`UPDATE attendance SET ${fields.join(', ')} WHERE id = ? AND userId = ?`, vals);
@@ -583,6 +590,7 @@ module.exports = {
             const insertCols = ['userId', 'checkIn', 'checkOut', 'work_type', 'location', 'memo', 'notes'];
             const insertVals = [userId, u.checkIn, u.checkOut||null, u.workType||null, loc, mem, not];
             if (rowBreak(u) !== undefined) { insertCols.push('break_minutes'); insertVals.push(rowBreak(u)); }
+            if (rowReason(u) !== undefined) { insertCols.push('extra_reason'); insertVals.push(rowReason(u)); }
             if (tid != null) { insertCols.push('tenant_id'); insertVals.push(tid); }
             const ph = insertCols.map(() => '?').join(', ');
             const [res] = await conn.query(

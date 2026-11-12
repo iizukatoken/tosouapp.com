@@ -707,7 +707,10 @@
         return txt;
       })()}</td>
       <td style="position:relative;">
-        ${!showDateDow ? '<span class="se-extra-tag" title="退勤後の会議など、その日に追加した勤務の行です（全部 残業）" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:11px;font-weight:700;color:#64748b;white-space:nowrap;pointer-events:auto;">追加勤務</span>' : ''}
+        ${!showDateDow ? `<select class="se-select se-extra-reason" data-field="extraReason" title="追加勤務の理由（その日に追加した勤務。全部 残業）" ${(!state.editableMonth || (isEmployee && isSavedExtraRow)) ? 'disabled' : ''} style="position:absolute;left:4px;right:4px;top:50%;transform:translateY(-50%);width:calc(100% - 8px);box-sizing:border-box;">
+            <option value="">${(isEmployee && isSavedExtraRow) ? '追加勤務' : '追加勤務の理由'}</option>
+            ${["社内会議","研修・勉強会","顧客対応","緊急対応","業務の継続","その他"].map((o) => `<option value="${o}" ${String(seg?.extra_reason || '') === o ? 'selected' : ''}>${o}</option>`).join('')}
+          </select>` : ''}
         <div style="${!showDateDow ? 'visibility:hidden;' : ''}">
           <select id="reason_${dateStr}_${rowId}" name="reason_${dateStr}_${rowId}" class="se-select" data-field="reason" ${state.editableMonth ? '' : 'disabled'} style="width:100%;box-sizing:border-box;${(effectiveKubun === '欠勤' || effectiveKubun === '半休' || effectiveKubun === '半休(有給)' || effectiveKubun === '遅刻' || effectiveKubun === '早退' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || (!isFlexUser && (Number(daily?.lateMinutes || daily?.late_minutes || 0) > 0 || Number(daily?.earlyMinutes || daily?.early_minutes || 0) > 0 || (isWorkDay && finalIn && shiftStartOk && parseHm(finalIn) != null && parseHm(shiftStart) != null && parseHm(finalIn) > parseHm(shiftStart))))) ? '' : 'visibility:hidden;'}">
             <option value=""></option>

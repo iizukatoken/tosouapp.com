@@ -368,7 +368,8 @@ async function computeRecord(rec, ctx = null) {
     workType: rec.work_type || rec.workType || null,
     location: rec.location || null,
     memo: rec.memo || null,
-    notes: rec.notes || null
+    notes: rec.notes || null,
+    extraReason: rec.extra_reason || null
   };
 }
 

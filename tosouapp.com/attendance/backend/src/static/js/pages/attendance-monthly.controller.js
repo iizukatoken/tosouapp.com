@@ -941,13 +941,17 @@
           const others = rows.filter(o => o !== tr && String(o.dataset.date || '').slice(0, 10) === ds).map(span).filter(Boolean);
           if (others.some(([a, b]) => sp[0] < b && a < sp[1])) { problems.push(`${label}: 追加の行（${inV}〜${outV}）が同じ日の他の時間と重なっています`); continue; }
           const memo = String(tr.querySelector('[data-field="memo"]')?.value || '').trim();
-          if (!memo) { problems.push(`${label}: 追加の行（${inV}〜${outV}）は 作業内容（例: 社内会議）を入力してください`); continue; }
+          const exReason = String(tr.querySelector('select[data-field="extraReason"]')?.value || '').trim();
+          if (!exReason) { problems.push(`${label}: 追加の行（${inV}〜${outV}）の 理由 を選んでください`); continue; }
+          if (exReason === 'その他' && !memo) { problems.push(`${label}: 理由が「その他」のときは 作業内容 を入力してください`); continue; }
           const br = String(tr.querySelector('select[data-field="break"]')?.value || '0:00');
-          toConfirm.push(`${label}  ${inV}〜${outV}（休憩 ${br}）${memo}`);
+          toConfirm.push(`${label}  ${inV}〜${outV}（休憩 ${br}）${exReason}${memo ? ' / ' + memo : ''}`);
         }
         if (problems.length) {
+          // 1回だけ知らせる（throw すると呼び出し元でもう一度出るため）
           showErr(problems.join(' / '));
-          throw new Error(problems[0]);
+          try { alert(problems.join('\n')); } catch (e) { /* silently ignored */ }
+          return;
         }
         if (isEmp && toConfirm.length && !confirm(`次の時間を登録します。登録後は変更できません（修正は調整申請から）。\n\n${toConfirm.join('\n')}\n\nよろしいですか？`)) {
           return;
@@ -1415,11 +1419,11 @@
             }
           }
         } else if (inDt) {
-          updates.push({ id: xid, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes, ...(isExtraRowSave ? { breakMinutes } : {}) });
+          updates.push({ id: xid, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes, ...(isExtraRowSave ? { breakMinutes, extraReason: String(tr.querySelector('select[data-field="extraReason"]')?.value || '').trim() || null } : {}) });
         }
         // inDt なし・時間編集なし → updates は空のまま続行（現場・作業内容だけの保存を許可）
       } else if (inDt) {
-        updates.push({ clientId, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes, ...(isExtraRowSave ? { breakMinutes } : {}) });
+        updates.push({ clientId, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes, ...(isExtraRowSave ? { breakMinutes, extraReason: String(tr.querySelector('select[data-field="extraReason"]')?.value || '').trim() || null } : {}) });
       }
       
       try {

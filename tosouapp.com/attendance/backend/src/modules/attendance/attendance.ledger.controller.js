@@ -172,6 +172,7 @@ async function buildLedgerRows({ tenantId, month, departmentId }) {
             departmentId: u.departmentId,
             kubun: '追加勤務',
             isExtra: true,
+            extraReason: ex.extraReason || null,
             checkIn: fmtHm(ex.checkIn),
             checkOut: fmtHm(ex.checkOut),
             roundedIn: ex.roundedIn || '',

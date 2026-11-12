@@ -457,6 +457,13 @@ async function runMigrations() {
           // 調整申請の種類: NULL = 時刻の修正（従来）、'delete' = その行を削除
           try { await conn.query(`ALTER TABLE time_adjust_requests ADD COLUMN request_type VARCHAR(16) NULL`); } catch (e) { /* already exists / table not yet created */ }
         }
+      },
+      {
+        id: '20261112_04_attendance_extra_reason',
+        up: async () => {
+          // 追加勤務の行（2行目以降）の理由（社内会議・研修・顧客対応 など）
+          try { await conn.query(`ALTER TABLE attendance ADD COLUMN extra_reason VARCHAR(32) NULL`); } catch (e) { /* already exists */ }
+        }
       }
     ];
     for (const m of migrations) {
