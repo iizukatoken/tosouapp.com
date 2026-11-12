@@ -177,9 +177,10 @@ module.exports.listAll = async function(tenantId = null) {
   }
   const wsql = where.length ? 'WHERE ' + where.join(' AND ') : '';
   const sql = `
-    SELECT r.*, u.username, u.email
+    SELECT r.*, u.username, u.email, pu.username AS processed_by_name
     FROM time_adjust_requests r
     LEFT JOIN users u ON r.userId = u.id
+    LEFT JOIN users pu ON pu.id = r.processed_by
     ${wsql}
     ORDER BY r.created_at DESC
   `;
@@ -196,9 +197,10 @@ module.exports.listForManager = async function(tenantId = null) {
     params.push(tid);
   }
   const sql = `
-    SELECT r.*, u.username, u.email
+    SELECT r.*, u.username, u.email, pu.username AS processed_by_name
     FROM time_adjust_requests r
     INNER JOIN users u ON r.userId = u.id
+    LEFT JOIN users pu ON pu.id = r.processed_by
     WHERE ${where.join(' AND ')}
     ORDER BY r.created_at DESC
   `;

@@ -436,6 +436,13 @@ async function runMigrations() {
           // フレックス勤務の社員（社員管理で設定）: 遅刻・早退を表示しない
           try { await conn.query(`ALTER TABLE users ADD COLUMN is_flex TINYINT(1) NOT NULL DEFAULT 0`); } catch (e) { /* already exists */ }
         }
+      },
+      {
+        id: '20261112_01_shift_month_status_processed_by',
+        up: async () => {
+          // シフト提出を承認・差戻しした人（申請一覧の「処理者」）。これより前の承認は記録がないので空のまま
+          try { await conn.query(`ALTER TABLE shift_month_status ADD COLUMN processed_by BIGINT UNSIGNED NULL`); } catch (e) { /* already exists */ }
+        }
       }
     ];
     for (const m of migrations) {

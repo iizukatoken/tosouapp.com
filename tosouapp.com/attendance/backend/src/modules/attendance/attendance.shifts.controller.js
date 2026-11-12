@@ -309,7 +309,7 @@ exports.postShiftsBulk = async (req, res) => {
       }
       await conn.query(`
         INSERT INTO shift_month_status (userId, month, status, tenant_id) VALUES (?, ?, 'PENDING', ?)
-        ON DUPLICATE KEY UPDATE status = 'PENDING'
+        ON DUPLICATE KEY UPDATE status = 'PENDING', processed_by = NULL
       `, [userId, month, tid]);
       await conn.commit();
       res.status(200).json({ success: true, message: 'Shifts saved successfully', data: { submission_status: 'PENDING' } });
@@ -459,7 +459,9 @@ exports.approveShiftMonth = async (req, res) => {
       const [userRows] = await db.query('SELECT id FROM users WHERE id = ? AND tenant_id = ? LIMIT 1', [userId, tid]);
       if (!userRows || userRows.length === 0) return res.status(404).json({ message: 'User not found in tenant' });
     }
-    await db.query(`UPDATE shift_month_status SET status = ? WHERE userId = ? AND month = ?`, [status, userId, month]);
+    // 承認・差戻しは処理者を記録（申請一覧の「処理者」）。未処理に戻すときは消す
+    const decided = status === 'APPROVED' || status === 'REJECTED';
+    await db.query(`UPDATE shift_month_status SET status = ?, processed_by = ? WHERE userId = ? AND month = ?`, [status, decided ? (req.user?.id || null) : null, userId, month]);
 
     // シフト承認 = 有給承認: ngày 有給 trong ca thành đơn 有給 (hiện ở 申請一覧). Chỉ ghi leave_requests,
     // không ghi bảng tháng (xem quy tắc cứng bên dưới). Lỗi ở đây không chặn việc duyệt ca.

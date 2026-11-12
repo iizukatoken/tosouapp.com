@@ -145,7 +145,7 @@ async function exportShiftsPdf(req, res) {
       const pageLabel = chunks.length > 1 ? ` (${ci + 1}/${chunks.length})` : '';
       return `<div ${ci === 0 ? 'id="_sec0"' : ''} style="padding:8mm 8mm 6mm 8mm;${isLast ? '' : 'page-break-after:always;'}">
         <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:5px;padding-bottom:4px;border-bottom:2px solid #1e4d8c;">
-          <div style="font-size:12pt;font-weight:700;">シフト承認 ${escH(qMonth)}${pageLabel}</div>
+          <div style="font-size:12pt;font-weight:700;">シフト表 ${escH(qMonth)}${pageLabel}</div>
           <div style="font-size:7.5pt;color:#64748b;">${chunk.length}名　出力日時: ${escH(nowStr)}</div>
         </div>
         <table style="width:${USABLE_W}px;border-collapse:collapse;font-size:7.5pt;table-layout:fixed;">
@@ -208,7 +208,7 @@ ${sections}
     });
     await browser.close();
 
-    const fname = encodeURIComponent(`シフト承認_${qMonth}.pdf`);
+    const fname = encodeURIComponent(`シフト表_${qMonth}.pdf`);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${fname}"; filename*=UTF-8''${fname}`);
     res.send(pdfBuf);

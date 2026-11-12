@@ -32,36 +32,38 @@ function setTabInUrl(tab) {
 
 const STYLE = `
   .org-page, .org-page select, .org-page input, .org-page button, .org-page textarea {
-    font-family: 'Noto Sans JP','Noto Sans','Yu Gothic UI','Meiryo UI','Segoe UI',system-ui,sans-serif;
+    font-family: 'Meiryo UI','Yu Gothic UI',Meiryo,sans-serif;
   }
-  .org-page select, .org-page input { font-size: 13px; color: #0f172a; }
-  .org-body { padding: 16px 20px 24px; max-width: 1100px; }
-  .org-card { border: 1px solid #e2e8f0; border-radius: 8px; background: #fff; margin-bottom: 16px; }
-  .org-card-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px 8px 0 0; }
-  .org-card-h h4 { margin: 0; font-size: 14px; font-weight: 700; color: #0f172a; }
+  /* 共通UI（勤怠記録 と同じ）: 枠＝淡い罫線、枠の見出し＝淡い帯＋紺の左線 */
+  .org-page select, .org-page input { font-size: 12.5px; color: #1f2937; }
+  .org-body { padding: 12px 16px 24px; max-width: 1100px; }
+  .org-card { border: 1px solid #c3cdda; border-radius: 0; background: #fff; margin-bottom: 10px; }
+  .org-card-h { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 3px 10px; border-bottom: 1px solid #c3cdda; border-left: 3px solid #0b2c66; background: #eef2f7; border-radius: 0; }
+  .org-card-h h4 { margin: 0; font-size: 12.5px; font-weight: 700; color: #0b2c66; }
   .org-card-h .org-sub { font-size: 12px; color: #64748b; }
   .org-card-h .org-right { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-  .org-btn { height: 30px; padding: 0 12px; border: 1px solid #cbd5e1; background: #fff; color: #0f172a; border-radius: 4px; font-size: 13px; cursor: pointer; white-space: nowrap; }
-  .org-btn:hover { background: #f1f5f9; }
+  .org-btn { height: 24px; padding: 0 10px; border: 1px solid #c3cdda; background: #fff; color: #1f2937; border-radius: 2px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .org-btn:hover { background: #f6f8fb; }
   .org-btn.primary { background: #0b2c66; border-color: #0b2c66; color: #fff; font-weight: 600; }
   .org-btn.primary:hover { background: #0a285c; }
-  .org-btn.danger { color: #b91c1c; }
+  .org-btn.danger { color: #a11; border-color: #d79a9a; }
   .org-btn.link { border: none; background: none; color: #1d4ed8; padding: 0 4px; }
   .org-btn:disabled { opacity: .5; cursor: default; }
-  .org-in { height: 32px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 0 8px; box-sizing: border-box; background: #fff; }
-  .org-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .org-table th { text-align: left; font-weight: 600; color: #475569; font-size: 12px; padding: 8px 14px; border-bottom: 1px solid #e2e8f0; }
-  .org-table td { padding: 8px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  .org-in { height: 26px; border: 1px solid #c3cdda; border-radius: 0; padding: 0 6px; box-sizing: border-box; background: #fff; }
+  .org-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .org-table th { text-align: left; font-weight: 700; color: #0f172a; font-size: 12px; padding: 3px 8px; line-height: 1.3; background: #eef2f7; border: 1px solid #c3cdda; }
+  .org-table td { padding: 2px 8px; border-bottom: 1px solid #d3dae4; vertical-align: middle; }
+  .org-table tbody tr:hover td { background: #fff8db; }
   .org-table tr:last-child td { border-bottom: none; }
   .org-muted { color: #94a3b8; }
   .org-note { font-size: 12px; color: #64748b; margin: 0 0 12px; }
-  .org-tag { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+  .org-tag { display: inline-block; padding: 0 8px; border-radius: 0; border: 1px solid rgba(0,0,0,.1); font-size: 11.5px; font-weight: 700; line-height: 18px; }
   .org-tag.reg { background: #e0e7ff; color: #3730a3; }
   .org-tag.sup { background: #fef3c7; color: #92400e; }
   .org-tag.off { background: #f1f5f9; color: #64748b; }
   .org-tag.now { background: #dcfce7; color: #166534; }
-  .org-more { border: 1px solid #e2e8f0; border-radius: 8px; margin-bottom: 16px; background: #fff; }
-  .org-more > summary { cursor: pointer; padding: 10px 14px; font-size: 13px; color: #334155; font-weight: 600; list-style: none; }
+  .org-more { border: 1px solid #c3cdda; border-radius: 0; margin-bottom: 10px; background: #fff; }
+  .org-more > summary { cursor: pointer; padding: 4px 10px; font-size: 12.5px; color: #0b2c66; font-weight: 700; list-style: none; background: #eef2f7; border-left: 3px solid #0b2c66; }
   .org-more > summary::-webkit-details-marker { display: none; }
   .org-more > summary::before { content: '▸'; display: inline-block; width: 14px; color: #94a3b8; }
   .org-more[open] > summary::before { content: '▾'; }
@@ -79,7 +81,7 @@ export async function mount() {
     <style>${STYLE}</style>
     <div class="org-page">
       <div style="padding:16px 20px 0;">
-        <h2 style="margin:0 0 12px;font-size:18px;font-weight:700;">部門管理</h2>
+        <h2>部門管理</h2>
         <div id="orgTabBar" style="display:flex;gap:4px;border-bottom:2px solid #e2e8f0;"></div>
       </div>
       <div id="orgTabContent"></div>

@@ -38,41 +38,42 @@ function css() {
   const st = document.createElement('style');
   st.id = 'qaStyle';
   st.textContent = `
-    .qa { font-size: 14px; color: #1f2937; background: #fff; padding: 16px 20px 40px; min-height: 100%; }
+    .qa { font-size: 12.5px; color: #1f2937; background: #fff; padding: 12px 16px 24px; min-height: 100%; }
     .qa-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
     .qa-title { font-size: 18px; font-weight: 700; margin: 0 12px 0 0; }
     .qa-month { display: inline-flex; align-items: center; gap: 4px; }
     .qa-month input { height: 32px; border: 1px solid #9ca3af; border-radius: 3px; padding: 0 6px; font-size: 14px; }
     .qa-sp { flex: 1; }
-    .qa-btn { height: 32px; padding: 0 12px; font-size: 13px; border: 1px solid #9ca3af; background: #fff; color: #1f2937; border-radius: 3px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
-    .qa-btn:hover { background: #f3f4f6; }
+    .qa-btn { height: 24px; padding: 0 10px; font-size: 12px; font-weight: 600; border: 1px solid #c3cdda; background: #fff; color: #1f2937; border-radius: 2px; cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; }
+    .qa-btn:hover { background: #f6f8fb; }
     .qa-btn.primary { background: ${NAVY}; border-color: ${NAVY}; color: #fff; font-weight: 600; }
     .qa-btn.primary:hover { background: #092352; }
-    .qa-btn.danger { color: #b91c1c; border-color: #fca5a5; }
-    .qa-btn.small { height: 26px; padding: 0 8px; font-size: 12px; }
+    .qa-btn.danger { color: #a11; border-color: #d79a9a; }
+    .qa-btn.small { height: 20px; padding: 0 7px; font-size: 11.5px; }
     .qa-btn:disabled { opacity: .6; cursor: default; }
-    .qa-flow { font-size: 13px; color: #4b5563; margin: 0 0 12px; }
+    .qa-flow { font-size: 11.5px; color: #475569; margin: 0; }
     .qa-flow b { font-weight: 600; color: #1f2937; }
-    .qa-stages { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid #d1d5db; margin-bottom: 14px; }
-    .qa-stage { background: #fff; border: none; border-left: 1px solid #e5e7eb; border-bottom: 3px solid transparent; padding: 10px 12px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; font-family: inherit; color: #1f2937; }
+    .qa-stages { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid #c3cdda; margin-bottom: 10px; }
+    .qa-stage { background: #fff; border: none; border-left: 1px solid #d3dae4; border-bottom: 3px solid transparent; padding: 3px 10px; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 2px; font-family: inherit; color: #1f2937; }
     .qa-stage:first-child { border-left: none; }
     .qa-stage:hover { background: #f9fafb; }
-    .qa-stage .l { font-size: 12px; color: #4b5563; }
-    .qa-stage .n { font-size: 22px; font-weight: 700; line-height: 1.2; }
+    .qa-stage .l { font-size: 11px; color: #475569; }
+    .qa-stage .n { font-size: 14px; font-weight: 700; line-height: 1.2; color: #0b2c66; }
     .qa-stage .n small { font-size: 12px; font-weight: 400; margin-left: 2px; }
-    .qa-stage .a { font-size: 12px; color: #6b7280; }
+    .qa-stage .a { font-size: 11px; color: #64748b; }
     .qa-stage.todo .l { color: #b45309; font-weight: 700; }
     .qa-stage.todo .l::after { content: ' ●'; font-size: 9px; vertical-align: 2px; }
-    .qa-stage.on { background: #f3f4f6; border-bottom-color: ${NAVY}; }
+    .qa-stage.on { background: #eef2f7; border-bottom-color: ${NAVY}; }
     .qa-wait { font-size: 12px; color: #6b7280; }
     .qa-table tr.none td { color: #9ca3af; }
-    .qa table.qa-table tfoot td { background: #f9fafb !important; font-weight: 700; border-top: 2px solid #d1d5db; }
+    .qa table.qa-table tfoot td { background: #f1f4f8 !important; font-weight: 700; border-top: 1px solid #c3cdda; }
     .qa-table td.st { white-space: nowrap; font-weight: 600; }
     .qa-table td.name { white-space: nowrap; }
     .m-code { display: none; }
-    .qa-table { width: 100%; border-collapse: collapse; border: 1px solid #d1d5db; }
-    .qa-table th { background: #f3f4f6; font-weight: 600; font-size: 13px; text-align: left; padding: 8px 10px; border-bottom: 1px solid #d1d5db; white-space: nowrap; }
-    .qa-table td { padding: 8px 10px; border-top: 1px solid #e5e7eb; vertical-align: top; }
+    .qa-table { width: 100%; border-collapse: collapse; border: 0; }
+    .qa-table th { background: #eef2f7; font-weight: 700; font-size: 12px; color: #0f172a; text-align: left; padding: 3px 8px; line-height: 1.3; border: 1px solid #c3cdda; white-space: nowrap; }
+    .qa-table td { padding: 2px 8px; border-top: 1px solid #d3dae4; vertical-align: top; }
+    .qa-table tbody tr:hover td { background: #fff8db; }
     .qa-table .num { text-align: right; white-space: nowrap; }
     .qa-user[data-user]:not([data-user=""]) { cursor: pointer; }
     .qa-user:hover td { background: #f9fafb; }
@@ -365,21 +366,25 @@ async function monthlyClose(btn) {
 
 function frame() {
   root.innerHTML = `
-    <div class="qa">
-      <div class="qa-head">
-        <h2 class="qa-title">交通費管理</h2>
-        <div class="qa-month">
-          <button type="button" class="qa-btn small" id="qaPrev" aria-label="前の月">‹</button>
-          <input type="month" id="qaMonth" value="${month}">
-          <button type="button" class="qa-btn small" id="qaNext" aria-label="次の月">›</button>
-        </div>
-        <span class="qa-sp"></span>
-        <a class="qa-btn" id="qaExcel" href="#">Excel出力</a>
-        <button type="button" class="qa-btn" id="qaClose">月次締め</button>
+    <div class="qa ui-c" data-ui="expenses" style="max-width:none;">
+      <div class="ui-ph">
+        <h2>交通費管理</h2>
+        <span class="ui-sp"></span>
+        <span style="display:inline-flex;align-items:center;gap:4px;">
+          <button type="button" class="ui-btn sm" id="qaPrev" aria-label="前の月">‹</button>
+          <input type="month" id="qaMonth" class="ui-inp" value="${month}" title="対象月" aria-label="対象月">
+          <button type="button" class="ui-btn sm" id="qaNext" aria-label="次の月">›</button>
+        </span>
+        <span style="width:1px;height:18px;background:#c3cdda;margin:0 4px;"></span>
+        <button type="button" class="ui-btn" id="qaClose">月次締め</button>
+        <a class="ui-btn primary" id="qaExcel" href="#" style="text-decoration:none;">Excel出力</a>
       </div>
-      <p class="qa-flow">流れ：<b>① 社員が申請</b> → <b>② 承認</b> → <b>③ 支給</b>${isAdmin() ? '' : '　（支給済みにする操作は管理者が行います）'}</p>
+      <div class="ui-note" style="margin:0 0 8px;"><p class="qa-flow" style="margin:0;">流れ：<b>① 社員が申請</b> → <b>② 承認</b> → <b>③ 支給</b>${isAdmin() ? '' : '　（支給済みにする操作は管理者が行います）'}</p></div>
       <div class="qa-stages" id="qaStages"></div>
-      <div id="qaList"></div>
+      <div class="ui-panel">
+        <div class="ui-ptitle">社員別一覧</div>
+        <div id="qaList"></div>
+      </div>
     </div>`;
   const setMonth = (ym) => { if (!/^\d{4}-\d{2}$/.test(ym)) return; month = ym; root.querySelector('#qaMonth').value = ym; openUsers.clear(); filter = 'all'; load(); };
   root.querySelector('#qaPrev').addEventListener('click', () => setMonth(shiftMonth(month, -1)));

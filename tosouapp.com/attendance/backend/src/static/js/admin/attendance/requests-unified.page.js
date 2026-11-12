@@ -16,26 +16,31 @@ const STATUS_LABEL = { pending: '承認待ち', approved: '承認済み', reject
 // 業務システム風（クラシック）: Meiryo 12.5px・罫線ありの表・フォルダ型タブ・小さめのボタン。
 // 管理画面共通CSS（表見出しの青背景・中央寄せ等）に負けないよう !important。
 const CSS = `
-  #reqUnified.req-unified { font-family: 'Meiryo UI', 'Yu Gothic UI', Meiryo, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif !important; color: #333; background: #fff; padding: 12px 16px 0; box-sizing: border-box; font-size: 12px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+  #reqUnified.req-unified { font-family: 'Meiryo UI', 'Yu Gothic UI', Meiryo, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', sans-serif !important; color: #1f2937; background: #fff; padding: 12px 16px 0; box-sizing: border-box; font-size: 12.5px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
   #reqUnified.req-unified * { font-family: inherit !important; }
-  #reqUnified.req-unified .ru-title { font-size: 14px !important; font-weight: 700 !important; margin: 0 0 10px !important; padding: 1px 0 1px 8px; border-left: 3px solid #0b2c66; color: #1f2d3d; line-height: 1.3; }
+  /* 共通UI（案C）と同じ: タイトルの下に紺の線 */
+  #reqUnified.req-unified .ru-title { font-size: 16px !important; font-weight: 700 !important; margin: 0 0 8px !important; padding: 0 0 6px; border-bottom: 2px solid #0b2c66; color: #0b2c66; line-height: 1.3; }
 
   /* フォルダ型タブ */
-  #reqUnified.req-unified .ru-tabs { display: flex; gap: 2px; align-items: flex-end; border-bottom: 1px solid #aeb8c4; padding-left: 2px; }
+  #reqUnified.req-unified .ru-tabs { display: flex; gap: 2px; align-items: flex-end; border-bottom: 1px solid #c3cdda; padding: 4px 6px 0; background: #f3f6fa; }
   #reqUnified.req-unified .ru-tab {
-    height: 26px !important; padding: 0 12px !important; margin: 0 0 -1px !important;
-    border: 1px solid #aeb8c4 !important; border-bottom: none !important; border-radius: 3px 3px 0 0 !important;
-    background: #f0f2f5 !important; color: #555 !important; font-size: 12px !important; font-weight: 400 !important;
+    height: 24px !important; padding: 0 12px !important; margin: 0 0 -1px !important;
+    border: 1px solid #c3cdda !important; border-bottom: none !important; border-radius: 0 !important;
+    background: #e6edf7 !important; color: #0b2c66 !important; font-size: 12.5px !important; font-weight: 600 !important;
     cursor: pointer; box-shadow: none !important; line-height: 24px !important; white-space: nowrap; }
-  #reqUnified.req-unified .ru-tab:hover { background: #e3e8ee !important; }
+  #reqUnified.req-unified .ru-tab:hover { background: #d3dff0 !important; }
   #reqUnified.req-unified .ru-tab.active, #reqUnified.req-unified .ru-tab.active:hover {
-    background: #fff !important; color: #0b2c66 !important; font-weight: 700 !important;
-    border-top: 2px solid #0b2c66 !important; height: 27px !important; border-bottom: 1px solid #fff !important; }
-  #reqUnified.req-unified .ru-tabcount { margin-left: 3px; color: #999; font-weight: 400; }
-  #reqUnified.req-unified .ru-tab.hot .ru-tabcount { color: #c0392b; font-weight: 600; }
+    background: #0b2c66 !important; color: #fff !important; font-weight: 700 !important; border-color: #0b2c66 !important;
+    height: 25px !important; border-bottom: 1px solid #0b2c66 !important; }
+  #reqUnified.req-unified .ru-tabcount { margin-left: 3px; color: #7a8699; font-weight: 400; }
+  #reqUnified.req-unified .ru-tab.active .ru-tabcount { color: #c9d6ea; }
+  #reqUnified.req-unified .ru-tab:not(.hot) .ru-tabcount::before { content: "("; }
+  #reqUnified.req-unified .ru-tab:not(.hot) .ru-tabcount::after { content: ")"; }
+  #reqUnified.req-unified .ru-tab.hot .ru-tabcount { display: inline-block; min-width: 16px; height: 16px; padding: 0 4px; margin-left: 4px;
+    border-radius: 999px !important; background: #dc2626 !important; color: #fff !important; font-size: 10.5px; font-weight: 700; line-height: 16px; text-align: center; vertical-align: 1px; box-sizing: border-box; }
 
   #reqUnified.req-unified .ru-panel { padding: 10px 0 16px; }
-  #reqUnified.req-unified .ru-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+  #reqUnified.req-unified .ru-toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; padding: 6px 8px; background: #f1f4f8; border: 1px solid #c3cdda; }
   #reqUnified.req-unified .ru-monthnav { display: inline-flex; align-items: center; gap: 6px; }
   #reqUnified.req-unified .ru-month { font-size: 12.5px; font-weight: 700; min-width: 78px; text-align: center; color: #1f2d3d; }
   #reqUnified.req-unified .ru-count { color: #777; margin-left: 4px; }
@@ -46,34 +51,39 @@ const CSS = `
   #reqUnified.req-unified .ru-btn, #reqUnified.req-unified .ru-select {
     display: inline-flex !important; align-items: center; justify-content: center; box-sizing: border-box;
     height: 24px !important; padding: 0 10px !important; margin: 0 !important;
-    border: 1px solid #b4bdc8 !important; border-radius: 3px !important; background: #fff !important; color: #333 !important;
-    font-size: 11.5px !important; font-weight: 400 !important; line-height: 1 !important;
+    border: 1px solid #c3cdda !important; border-radius: 2px !important; background: #fff !important; color: #1f2937 !important;
+    font-size: 12px !important; font-weight: 600 !important; line-height: 1 !important;
     cursor: pointer; text-decoration: none !important; white-space: nowrap; box-shadow: none !important; }
-  #reqUnified.req-unified .ru-btn:hover { background: #f1f4f7 !important; border-color: #8c97a5 !important; }
-  #reqUnified.req-unified .ru-btn.sm { height: 22px !important; padding: 0 8px !important; }
-  #reqUnified.req-unified .ru-btn.ok { background: #0b2c66 !important; border-color: #0b2c66 !important; color: #fff !important; }
+  #reqUnified.req-unified .ru-seg { display: inline-flex; border: 1px solid #c3cdda; border-radius: 2px; overflow: hidden; }
+  #reqUnified.req-unified .ru-seg button { height: 24px; padding: 0 10px; border: 0; border-radius: 0; background: #fff; color: #334155; font: 600 12px 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif; cursor: pointer; white-space: nowrap; }
+  #reqUnified.req-unified .ru-seg button + button { border-left: 1px solid #c3cdda; }
+  #reqUnified.req-unified .ru-seg button:hover { background: #f1f5f9; }
+  #reqUnified.req-unified .ru-seg button.on { background: #0b2c66; color: #fff; }
+  #reqUnified.req-unified .ru-btn:hover { background: #f6f8fb !important; border-color: #8a97aa !important; }
+  #reqUnified.req-unified .ru-btn.sm { height: 20px !important; padding: 0 7px !important; font-size: 11.5px !important; }
+  #reqUnified.req-unified .ru-btn.ok { background: #0b2c66 !important; border-color: #08214d !important; color: #fff !important; }
   #reqUnified.req-unified .ru-btn.ok:hover { background: #082251 !important; }
-  #reqUnified.req-unified .ru-btn.ng { color: #b42318 !important; border-color: #d9a6a0 !important; }
+  #reqUnified.req-unified .ru-btn.ng { background: #fff !important; color: #a11 !important; border-color: #d79a9a !important; }
   #reqUnified.req-unified .ru-btn.ng:hover { background: #fdf3f2 !important; }
   #reqUnified.req-unified .ru-btn:disabled { opacity: .45; cursor: default; }
-  #reqUnified.req-unified .ru-select { padding: 0 6px !important; appearance: auto; min-width: 110px; }
+  #reqUnified.req-unified .ru-select { padding: 0 6px !important; appearance: auto; min-width: 110px; background: #fff !important; border-radius: 0 !important; font-weight: 400 !important; }
 
   /* 罫線ありの表 */
   #reqUnified.req-unified .ru-tablewrap { overflow-x: auto; }
-  #reqUnified.req-unified .ru-table { width: 100% !important; min-width: 880px !important; border-collapse: collapse !important; table-layout: auto !important; display: table !important; margin: 0 !important; border: 1px solid #c3cbd4 !important; font-size: 12px !important; background: #fff; }
+  #reqUnified.req-unified .ru-table { width: 100% !important; min-width: 880px !important; border-collapse: collapse !important; table-layout: auto !important; display: table !important; margin: 0 !important; border: 1px solid #c3cdda !important; font-size: 12.5px !important; background: #fff; }
   #reqUnified.req-unified .ru-table th {
     position: static !important;
-    background: #edf0f4 !important; background-image: linear-gradient(#f6f8fa, #e8ecf1) !important;
-    color: #444 !important; font-size: 11.5px !important; font-weight: 600 !important; text-align: left !important;
-    padding: 4px 8px !important; border: 1px solid #c3cbd4 !important; white-space: nowrap; height: auto !important; }
-  #reqUnified.req-unified .ru-table td { padding: 4px 8px !important; border: 1px solid #d9dfe6 !important; vertical-align: middle !important; color: #333 !important; font-size: 12px !important; text-align: left !important; background: #fff; }
-  #reqUnified.req-unified .ru-table tbody tr:nth-child(even) td { background: #f9fafb; }
-  #reqUnified.req-unified .ru-table tbody tr:hover td { background: #eef4fb; }
+    background: #eef2f7 !important; background-image: none !important;
+    color: #0f172a !important; font-size: 12px !important; font-weight: 700 !important; text-align: left !important;
+    padding: 4px 8px !important; border: 1px solid #c3cdda !important; white-space: nowrap; height: auto !important; }
+  #reqUnified.req-unified .ru-table td { padding: 3px 8px !important; border: 1px solid #d3dae4 !important; vertical-align: middle !important; color: #1f2937 !important; font-size: 12.5px !important; text-align: left !important; background: #fff; }
+  #reqUnified.req-unified .ru-table tbody tr:nth-child(even) td { background: #f7f9fc; }
+  #reqUnified.req-unified .ru-table tbody tr:hover td { background: #fff8db; }
   #reqUnified.req-unified .ru-table tr.is-warn td { background: #fdf1f0 !important; }
   #reqUnified.req-unified .ru-table .nowrap { white-space: nowrap !important; word-break: normal !important; }
   #reqUnified.req-unified .ru-table .c-content { min-width: 170px; }
   #reqUnified.req-unified .ru-table .c-reason { min-width: 150px; }
-  #reqUnified.req-unified .ru-sub { color: #888; font-size: 11px; }
+  #reqUnified.req-unified .ru-table td .ru-sub { color: #8a94a3 !important; font-size: 10px !important; line-height: 1.2 !important; margin-top: 1px; }
   #reqUnified.req-unified .ru-muted { color: #666 !important; }
   #reqUnified.req-unified .ru-warn { color: #b42318; font-size: 11px; margin-top: 2px; }
   #reqUnified.req-unified .ru-note { color: #888; font-size: 11px; }
@@ -81,10 +91,11 @@ const CSS = `
   #reqUnified.req-unified .ru-ops { display: flex; gap: 4px; flex-wrap: nowrap; align-items: center; }
 
   /* 状態（角型の枠付きラベル） */
-  #reqUnified.req-unified .ru-pill { display: inline-block; padding: 0 6px; border: 1px solid; border-radius: 2px; font-size: 11px; line-height: 17px; white-space: nowrap; }
-  #reqUnified.req-unified .ru-pill.pending { color: #a15c07; border-color: #e7c08a; background: #fff8ec; }
-  #reqUnified.req-unified .ru-pill.approved { color: #1e6b34; border-color: #a9d3b5; background: #f1faf3; }
-  #reqUnified.req-unified .ru-pill.rejected { color: #a3231a; border-color: #e3aaa4; background: #fdf2f1; }
+  /* 状態ラベル: 共通の色（待ち=黄・済=緑・差戻し=赤） */
+  #reqUnified.req-unified .ru-pill { display: inline-block; min-width: 56px; text-align: center; padding: 0 8px; border: 1px solid; border-radius: 0; font-size: 11.5px; font-weight: 700; line-height: 18px; white-space: nowrap; }
+  #reqUnified.req-unified .ru-pill.pending { color: #8a5300; border-color: #e5bf5c; background: #fff4d6; }
+  #reqUnified.req-unified .ru-pill.approved { color: #146c2e; border-color: #8cc79c; background: #e6f4ea; }
+  #reqUnified.req-unified .ru-pill.rejected { color: #9b1c1c; border-color: #e09a9a; background: #fde8e8; }
 `;
 function ensureStyles() {
   if (document.getElementById('ru-css')) return;
@@ -109,7 +120,7 @@ export async function mount({ content }) {
   const parent = legacy?.parentElement;
   if (!parent) return null;
 
-  const state = { tab: readTab(), month: ym(new Date()), status: 'pending', items: [], summary: {}, busy: false, adjustChanged: false };
+  const state = { tab: readTab(), month: ym(new Date()), status: '', items: [], summary: {}, busy: false, adjustChanged: false };
   // ?tab=leave など（旧「休暇申請承認」URL からの転送）
   try {
     const urlTab = new URLSearchParams(window.location.search).get('tab');
@@ -131,12 +142,6 @@ export async function mount({ content }) {
           <span class="ru-month"></span>
           <button type="button" class="ru-btn ru-next" aria-label="翌月">翌月 ›</button>
         </div>
-        <select class="ru-select ru-status" aria-label="状態">
-          <option value="pending">承認待ち</option>
-          <option value="approved">承認済み</option>
-          <option value="rejected">却下</option>
-          <option value="">すべての状態</option>
-        </select>
         <span class="ru-count"></span>
       </div>
       <div class="ru-msg"></div>
@@ -155,7 +160,6 @@ export async function mount({ content }) {
 
   const $ = (sel) => root.querySelector(sel);
   const panel = $('.ru-panel');
-  $('.ru-status').value = state.status;
 
   function renderTabs() {
     const pend = state.summary?.pendingByCategory || {};
@@ -164,7 +168,7 @@ export async function mount({ content }) {
       const n = t.key === 'all' ? total : (pend[t.key] || 0);
       const active = t.key === state.tab;
       // 調整申請 タブは従来画面なので件数は出さない（月の絞り込みが別のため）
-      const count = t.key === 'adjust' ? '' : `<span class="ru-tabcount">(${n})</span>`;
+      const count = t.key === 'adjust' ? '' : `<span class="ru-tabcount">${n}</span>`;
       return `<button type="button" role="tab" data-tab="${t.key}" aria-selected="${active}"
         class="ru-tab${active ? ' active' : ''}${n ? ' hot' : ''}">${esc(t.label)}${count}</button>`;
     }).join('');
@@ -208,7 +212,7 @@ export async function mount({ content }) {
         <td class="c-content">${esc(r.content)}${warn}</td>
         <td class="c-reason ru-muted">${esc(r.reason)}</td>
         <td class="nowrap"><span class="ru-pill ${st}">${esc(STATUS_LABEL[st])}</span></td>
-        <td class="nowrap">${esc(r.processedByName || '')}</td>
+        <td class="nowrap">${r.processedByName ? esc(r.processedByName) : (r.status !== 'pending' ? '<span style="color:#94a3b8;font-size:11px;" title="この機能を入れる前に処理されたため、処理者の記録がありません">記録なし</span>' : '')}</td>
         <td class="nowrap"><div class="ru-ops">${ops.join('')}</div></td>
       </tr>`;
     }).join('');
@@ -277,7 +281,6 @@ export async function mount({ content }) {
     else if (ev.target.closest('.ru-next')) { state.month = shiftMonth(state.month, 1); load(); }
   };
   const onChange = (ev) => {
-    if (ev.target.closest('.ru-status')) { state.status = ev.target.value; load(); }
   };
   root.addEventListener('click', onClick);
   root.addEventListener('change', onChange);

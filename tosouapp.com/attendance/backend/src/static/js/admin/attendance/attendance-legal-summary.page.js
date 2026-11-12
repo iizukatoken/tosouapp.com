@@ -19,10 +19,11 @@ function hm(minutes) {
   return `${n < 0 ? '-' : ''}${h}:${String(m).padStart(2, '0')}`;
 }
 
+// 判定ラベル: 共通の状態色（正常=緑・注意=黄・超過=赤）
 const JUDGEMENT_META = {
-  normal: { label: '正常', style: 'background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;' },
-  caution: { label: '注意', style: 'background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;' },
-  exceeded: { label: '超過', style: 'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;' }
+  normal: { label: '正常', cls: 'ok' },
+  caution: { label: '注意', cls: 'warn' },
+  exceeded: { label: '超過', cls: 'ng' }
 };
 
 function progressBar(value, limit) {
@@ -30,11 +31,11 @@ function progressBar(value, limit) {
   const pct = Math.max(0, Math.min(100, ratio * 100));
   const color = ratio >= 1 ? '#dc2626' : ratio >= 0.8 ? '#f59e0b' : '#16a34a';
   return `
-    <div style="display:flex;align-items:center;gap:8px;min-width:150px;">
-      <div style="flex:1;height:6px;border-radius:999px;background:#e2e8f0;overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:${color};border-radius:999px;"></div>
+    <div style="display:flex;align-items:center;gap:6px;min-width:130px;">
+      <div style="flex:1;height:5px;background:#e2e8f0;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${color};"></div>
       </div>
-      <span style="font-size:12px;color:#334155;white-space:nowrap;">${escapeHtml(hm(value))}</span>
+      <span class="num" style="font-size:12px;white-space:nowrap;">${escapeHtml(hm(value))}</span>
     </div>
   `;
 }
@@ -58,13 +59,13 @@ export async function mount({ content } = {}) {
       .catch(() => []);
     const deptSel = root.querySelector('#lsDeptFilter');
     if (deptSel) {
-      deptSel.innerHTML = ['<option value="">すべて</option>']
+      deptSel.innerHTML = ['<option value="">全部署</option>']
         .concat(departments.map(d => `<option value="${escapeHtml(d.name)}">${escapeHtml(d.name)}</option>`))
         .join('');
     }
     const empSel = root.querySelector('#lsUserFilter');
     if (empSel) {
-      empSel.innerHTML = ['<option value="">全員</option>']
+      empSel.innerHTML = ['<option value="">全社員</option>']
         .concat(employees.map(u => `<option value="${u.id}">${escapeHtml(u.username || '')}${u.employee_code ? `（${escapeHtml(u.employee_code)}）` : ''}</option>`))
         .join('');
     }
@@ -73,30 +74,21 @@ export async function mount({ content } = {}) {
   async function loadClosureBanner() {
     const box = root.querySelector('#lsCloseBanner');
     if (!box) return;
-    box.style.display = 'flex';
-    box.innerHTML = '読み込み中...';
+    // 月次締めの操作はこの画面では行わない。締め済み（全員承認済み）の時だけ1行で知らせる
+    box.style.display = 'none';
+    box.innerHTML = '';
     try {
       const summary = await fetchJSONAuth(`/api/attendance/month/closure-summary?month=${encodeURIComponent(month)}`);
       if (summary.closed) {
-        box.style.background = '#f1f5f9';
-        box.style.borderColor = '#cbd5e1';
-        box.style.color = '#334155';
+        box.style.display = '';
         box.innerHTML = `<span>🔒 ${escapeHtml(month)}分は締め済みです</span>`;
       } else {
-        box.style.background = '#f0fdf4';
-        box.style.borderColor = '#bbf7d0';
-        box.style.color = '#166534';
-        box.innerHTML = `
-          <span>${escapeHtml(month)}分は入力・修正ができます（未締め、承認済み ${summary.approved}/${summary.total}名）</span>
-          <button type="button" id="lsCloseMonthBtn" style="height:28px;padding:0 14px;border:none;border-radius:6px;background:#166534;color:#fff;font-size:12px;font-weight:600;cursor:pointer;">月次締めを実行</button>
-        `;
-        root.querySelector('#lsCloseMonthBtn')?.addEventListener('click', onCloseMonth);
+        box.style.display = 'none';
+        box.innerHTML = '';
       }
     } catch (err) {
-      box.style.background = '#fef2f2';
-      box.style.borderColor = '#fecaca';
-      box.style.color = '#991b1b';
-      box.textContent = `締め状況の取得に失敗しました: ${err.message}`;
+      // 締め状況はお知らせだけなので、取れなくても画面は使える（表示しない）
+      box.style.display = 'none';
     }
   }
 
@@ -120,39 +112,33 @@ export async function mount({ content } = {}) {
       { label: '法定外残業', value: hm(summary.totalOvertimeMinutes) },
       { label: 'アラート', value: `${summary.alertCount}名`, danger: summary.alertCount > 0 }
     ];
-    box.innerHTML = cards.map(c => `
-      <div style="flex:1;min-width:160px;border:1px solid ${c.danger ? '#fecaca' : '#e2e8f0'};border-radius:10px;padding:18px 20px;background:#fff;">
-        <div style="font-size:26px;font-weight:700;color:${c.danger ? '#991b1b' : '#0f172a'};line-height:1.2;">${escapeHtml(c.value)}</div>
-        <div style="font-size:13px;color:#64748b;margin-top:4px;">${escapeHtml(c.label)}</div>
-      </div>
-    `).join('');
+    box.innerHTML = cards.map(c => `<span class="ui-stat${c.danger ? ' alert' : ''}"><span>${escapeHtml(c.label)}</span><b>${escapeHtml(c.value)}</b></span>`).join('');
   }
 
   function renderTable(items, config) {
     const body = root.querySelector('#lsTableBody');
     if (!body) return;
     if (!items.length) {
-      body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:#94a3b8;">対象データがありません</td></tr>';
+      body.innerHTML = '<tr><td colspan="11" class="empty">対象データがありません</td></tr>';
       return;
     }
-    const cellStyle = 'padding:12px;border-bottom:1px solid #f1f5f9;white-space:nowrap;color:#334155;';
     body.innerHTML = items.map(r => {
       const meta = JUDGEMENT_META[r.judgement] || JUDGEMENT_META.normal;
       const diffColor = r.diffMinutes === 0 ? '#334155' : r.diffMinutes > 0 ? '#c2410c' : '#0369a1';
       const diffLabel = r.diffMinutes > 0 ? `+${hm(r.diffMinutes)}` : hm(r.diffMinutes);
       return `
         <tr>
-          <td style="${cellStyle}font-weight:600;">${escapeHtml(r.username || '')}${r.employeeCode ? `<br><span style="font-size:11px;font-weight:400;color:#94a3b8;">${escapeHtml(r.employeeCode)}</span>` : ''}</td>
-          <td style="${cellStyle}">${escapeHtml(r.departmentName || '—')}</td>
-          <td style="${cellStyle}text-align:center;">${r.attendDays}</td>
-          <td style="${cellStyle}">${escapeHtml(hm(r.workedMinutes))}</td>
-          <td style="padding:12px;border-bottom:1px solid #f1f5f9;">${progressBar(r.overtimeMinutes, config.monthlyOtLimitMinutes)}</td>
-          <td style="${cellStyle}">${escapeHtml(hm(r.nightMinutes))}</td>
-          <td style="${cellStyle}">${escapeHtml(hm(r.holidayWorkMinutes))}</td>
-          <td style="padding:12px;border-bottom:1px solid #f1f5f9;">${progressBar(r.annualOvertimeMinutes, config.annualOtLimitMinutes)}</td>
-          <td style="${cellStyle}"><span style="display:inline-block;padding:5px 14px;border-radius:999px;font-size:12px;font-weight:600;${meta.style}">${meta.label}</span></td>
-          <td style="${cellStyle}">${escapeHtml(hm(r.reportedMinutes))}</td>
-          <td style="${cellStyle}color:${diffColor};font-weight:600;">${escapeHtml(diffLabel)}</td>
+          <td><b>${escapeHtml(r.username || '')}</b>${r.employeeCode ? ` <span class="muted" style="font-size:11px;">${escapeHtml(r.employeeCode)}</span>` : ''}</td>
+          <td>${escapeHtml(r.departmentName || '—')}</td>
+          <td class="num">${r.attendDays}</td>
+          <td class="num">${escapeHtml(hm(r.workedMinutes))}</td>
+          <td>${progressBar(r.overtimeMinutes, config.monthlyOtLimitMinutes)}</td>
+          <td class="num">${escapeHtml(hm(r.nightMinutes))}</td>
+          <td class="num">${escapeHtml(hm(r.holidayWorkMinutes))}</td>
+          <td>${progressBar(r.annualOvertimeMinutes, config.annualOtLimitMinutes)}</td>
+          <td><span class="ui-pill ${meta.cls}">${meta.label}</span></td>
+          <td class="num">${escapeHtml(hm(r.reportedMinutes))}</td>
+          <td class="num" style="color:${diffColor};font-weight:700;">${escapeHtml(diffLabel)}</td>
         </tr>
       `;
     }).join('');
@@ -170,7 +156,7 @@ export async function mount({ content } = {}) {
 
   async function loadList() {
     const body = root.querySelector('#lsTableBody');
-    if (body) body.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:24px;color:#94a3b8;">読み込み中...</td></tr>';
+    if (body) body.innerHTML = '<tr><td colspan="11" class="empty">読み込み中...</td></tr>';
     try {
       const [year, m] = month.split('-').map(n => parseInt(n, 10));
       const qs = new URLSearchParams({ year: String(year), month: String(m) });
@@ -182,56 +168,43 @@ export async function mount({ content } = {}) {
       renderTable(data.items || [], data.config);
       renderFootnote(data.config);
     } catch (err) {
-      if (body) body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:24px;color:#ef4444;">エラー: ${escapeHtml(err.message)}</td></tr>`;
+      if (body) body.innerHTML = `<tr><td colspan="11" class="empty" style="color:#b91c1c;">エラー: ${escapeHtml(err.message)}</td></tr>`;
     }
   }
 
+  // 画面の見た目は 勤怠記録 と同じ共通UI（/static/css/admin-ui.css の .ui-c）
   root.innerHTML = `
-    <div style="padding:16px 20px 32px;max-width:1400px;">
-      <div id="lsCloseBanner" style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 18px;margin-bottom:16px;border-radius:8px;font-size:13px;font-weight:600;border:1px solid transparent;flex-wrap:wrap;"></div>
-
-      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:20px;flex-wrap:wrap;">
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <label style="font-size:12px;color:#64748b;font-weight:600;">対象月</label>
-          <input type="month" id="lsMonthFilter" value="${month}" style="height:36px;border:1px solid #cbd5e1;border-radius:6px;padding:0 10px;font-size:13px;">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <label style="font-size:12px;color:#64748b;font-weight:600;">部署</label>
-          <select id="lsDeptFilter" style="height:36px;border:1px solid #cbd5e1;border-radius:6px;padding:0 10px;min-width:130px;font-size:13px;"><option value="">すべて</option></select>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:4px;">
-          <label style="font-size:12px;color:#64748b;font-weight:600;">社員</label>
-          <select id="lsUserFilter" style="height:36px;border:1px solid #cbd5e1;border-radius:6px;padding:0 10px;min-width:150px;font-size:13px;"><option value="">全員</option></select>
-        </div>
-        <button type="button" id="lsGoBtn" style="height:36px;padding:0 18px;background:#0b2c66;color:#fff;border:none;border-radius:6px;cursor:pointer;font-weight:600;font-size:13px;">表示</button>
-        <div style="flex:1;"></div>
-        <button type="button" id="lsCsvBtn" style="height:36px;padding:0 16px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:pointer;font-weight:600;font-size:13px;color:#334155;">CSV出力</button>
-        <button type="button" id="lsXlsxBtn" style="height:36px;padding:0 16px;border:none;border-radius:6px;background:#0b2c66;color:#fff;cursor:pointer;font-weight:600;font-size:13px;">Excel出力</button>
+    <div class="ui-c" style="max-width:1400px;">
+      <div class="ui-ph">
+        <h2>法定集計（36協定）</h2>
+        <span class="ui-sp"></span>
+        <input type="month" id="lsMonthFilter" class="ui-inp" value="${month}" title="対象月" aria-label="対象月">
+        <select id="lsDeptFilter" class="ui-inp" style="min-width:120px;" title="部署" aria-label="部署"><option value="">全部署</option></select>
+        <select id="lsUserFilter" class="ui-inp" style="min-width:130px;" title="社員" aria-label="社員"><option value="">全社員</option></select>
+        <button type="button" class="ui-btn primary" id="lsGoBtn">表示</button>
+        <span style="width:1px;height:18px;background:#c3cdda;margin:0 4px;"></span>
+        <button type="button" class="ui-btn" id="lsCsvBtn">CSV出力</button>
+        <button type="button" class="ui-btn primary" id="lsXlsxBtn">Excel出力</button>
       </div>
+      <div id="lsCloseBanner" class="ui-note" style="display:none;"></div>
 
-      <div id="lsCards" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;"></div>
+      <div id="lsCards" class="ui-stats" style="margin-bottom:10px;"></div>
 
-      <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:auto;max-height:65vh;background:#fff;">
-        <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:13px;min-width:1200px;">
-          <thead>
-            <tr>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">社員</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">部署</th>
-              <th style="padding:12px;text-align:center;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">出勤日数</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">実働</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">法定外残業</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">深夜</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">休日</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">年間時間外</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">判定</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">報告時間</th>
-              <th style="padding:12px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f8fafc;color:#64748b;font-weight:600;font-size:12px;border-bottom:1px solid #e2e8f0;transform:translateZ(0);">実働との差</th>
-            </tr>
-          </thead>
-          <tbody id="lsTableBody"></tbody>
-        </table>
+      <div class="ui-panel">
+        <div class="ui-ptitle">社員別一覧</div>
+        <div class="ui-tablewrap">
+          <table class="ui-table" style="min-width:1200px;">
+            <thead>
+              <tr>
+                <th>社員</th><th>部署</th><th class="num">出勤日数</th><th class="num">実働</th><th>法定外残業</th>
+                <th class="num">深夜</th><th class="num">休日</th><th>年間時間外</th><th>判定</th><th class="num">報告時間</th><th class="num">実働との差</th>
+              </tr>
+            </thead>
+            <tbody id="lsTableBody"></tbody>
+          </table>
+        </div>
+        <div id="lsFootnote" class="ui-pager" style="justify-content:flex-start;font-size:11px;"></div>
       </div>
-      <div id="lsFootnote" style="font-size:11px;color:#94a3b8;margin-top:10px;line-height:1.6;"></div>
     </div>
   `;
 

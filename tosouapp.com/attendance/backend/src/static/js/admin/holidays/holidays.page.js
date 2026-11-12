@@ -24,11 +24,11 @@ import{escapeHtml as l}from"../_shared/dom.js";import{api as u}from"../../shared
         .hol-toolbar button.danger:hover { background:#fef2f2; }
         .hol-stats { display:flex; gap:12px; flex-wrap:wrap; font-size:13px; color:#64748b; margin-bottom:12px; align-items:center; }
         .hol-stats strong { color:#1e293b; }
-        .hol-stat-badge { display:inline-flex; align-items:center; gap:4px; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:600; }
+        .hol-stat-badge { display:inline-flex; align-items:center; gap:4px; height:26px; padding:0 10px; border-radius:0; border:1px solid #c3ccd8; font-size:11.5px; font-weight:600; }
         .hol-stat-jp { background:#fef3c7; color:#92400e; }
         .hol-stat-company { background:#dbeafe; color:#1e40af; }
         .hol-stat-dept { background:#e0e7ff; color:#4338ca; }
-        .hol-table-wrap { flex:1; overflow:auto; border:1px solid #e2e8f0; border-radius:8px; background:#fff; }
+        .hol-table-wrap { flex:1; overflow:auto; border:0; border-radius:0; background:#fff; }
         .hol-table { width:100%; border-collapse:collapse; font-size:13px; }
         .hol-table thead { background:#f8fafc; position:sticky; top:0; z-index:1; }
         .hol-table th { padding:10px 12px; text-align:left; font-weight:600; color:#475569; border-bottom:2px solid #e2e8f0; white-space:nowrap; }
@@ -52,8 +52,8 @@ import{escapeHtml as l}from"../_shared/dom.js";import{api as u}from"../../shared
         .hol-btn-del:hover { background:#fee2e2; }
         .hol-dow-sun { color:#dc2626; font-weight:600; }
         .hol-dow-sat { color:#2563eb; font-weight:600; }
-        .hol-empty { text-align:center; padding:48px 24px; color:#94a3b8; }
-        .hol-empty-icon { font-size:32px; margin-bottom:8px; }
+        .hol-empty { text-align:center; padding:20px; color:#94a3b8; }
+        .hol-empty-icon { display:none; }
 
         /* Modal */
         .hol-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:10000; display:flex; align-items:center; justify-content:center; }
@@ -79,25 +79,30 @@ import{escapeHtml as l}from"../_shared/dom.js";import{api as u}from"../../shared
           .hol-modal { padding:20px; width:95vw; }
         }
       </style>
-      <div class="hol-page">
-        <div class="hol-toolbar">
-          <select id="holDept">
-            <option value="">\u5168\u90E8\u7F72</option>
-            ${i}
-          </select>
-          <select id="holYear">${c.join("")}</select>
-          <button class="primary" id="holAdd">\uFF0B \u4F11\u65E5\u8FFD\u52A0</button>
-          <button class="danger" id="holBulkDel" ${p?"":'disabled title="\u90E8\u7F72\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044"'}>\u4E00\u62EC\u524A\u9664</button>
-          <button id="holGenRule">\u{1F4C5} \u5B9A\u671F\u30EB\u30FC\u30EB\u751F\u6210</button>
+      <div class="hol-page ui-c" style="max-width:none;height:auto;">
+        <div class="ui-ph">
+          <h2>\u4F11\u65E5\u8A2D\u5B9A</h2>
+          <span class="ui-sp"></span>
+          <button class="ui-btn danger" id="holBulkDel" ${p?"":'disabled title="\u90E8\u7F72\u3092\u9078\u629E\u3057\u3066\u304F\u3060\u3055\u3044"'}>\u4E00\u62EC\u524A\u9664</button>
+          <button class="ui-btn" id="holGenRule">\u5B9A\u671F\u30EB\u30FC\u30EB\u751F\u6210</button>
+          <button class="ui-btn primary" id="holAdd">\uFF0B \u4F11\u65E5\u8FFD\u52A0</button>
         </div>
-        <div class="hol-stats">
+        <div class="ui-panel">
+          <div class="ui-ptitle">\u691C\u7D22\u6761\u4EF6</div>
+          <div class="ui-filters">
+            <div class="ui-f"><label for="holDept">\u90E8\u7F72</label><select id="holDept" class="ui-inp"><option value="">\u5168\u90E8\u7F72</option>${i}</select></div>
+            <div class="ui-f"><label for="holYear">\u5E74</label><select id="holYear" class="ui-inp">${c.join("")}</select></div>
+          </div>
+        </div>
+        <div class="hol-stats ui-stats" style="margin-bottom:10px;">
           <span class="hol-stat-badge hol-stat-jp">\u{1F1EF}\u{1F1F5} \u795D\u65E5: ${a}\u4EF6</span>
           <span class="hol-stat-badge hol-stat-company">\u{1F3E2} \u5168\u793E\u4F11\u65E5: ${t}\u4EF6</span>
           <span class="hol-stat-badge hol-stat-dept">\u{1F4CB} \u90E8\u7F72\u8A2D\u5B9A: ${r}\u4EF6</span>
           <span>\u5408\u8A08: <strong>${o.length}</strong>\u4EF6</span>
           ${p?`<span>\u2014 ${l(f.find(e=>String(e.id)===String(p))?.name||"")}</span>`:""}
         </div>
-        <div class="hol-table-wrap">
+        <div class="ui-panel"><div class="ui-ptitle">\u4F11\u65E5\u4E00\u89A7</div>
+        <div class="hol-table-wrap ui-tablewrap">
           ${o.length?`
             <table class="hol-table">
               <thead>
@@ -119,7 +124,7 @@ import{escapeHtml as l}from"../_shared/dom.js";import{api as u}from"../../shared
               <div>\u30C7\u30FC\u30BF\u304C\u3042\u308A\u307E\u305B\u3093</div>
             </div>
           `}
-        </div>
+        </div></div>
       </div>
     `,h.querySelector("#holDept")?.addEventListener("change",async e=>{p=e.target.value,await m(),g()}),h.querySelector("#holYear")?.addEventListener("change",async e=>{b=parseInt(e.target.value,10),await Promise.all([k(),m()]),g()}),h.querySelector("#holAdd")?.addEventListener("click",()=>{s={id:null,department_id:p||"",date:"",name:"",type:"custom",is_off:!0},z()}),h.querySelector("#holBulkDel")?.addEventListener("click",async()=>{if(!p)return;const e=f.find(n=>String(n.id)===String(p))?.name||"";if(confirm(`\u300C${e}\u300D\u306E ${b}\u5E74 \u306E\u4F1A\u793E\u8A2D\u5B9A\u4F11\u65E5\u3092\u5168\u3066\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F
 \u203B \u795D\u65E5\uFF08\u56FD\u306E\u4F11\u65E5\uFF09\u306F\u524A\u9664\u3055\u308C\u307E\u305B\u3093\u3002`))try{await u.del(`/holidays/department/${p}/year/${b}`),await m(),g()}catch(n){alert("\u524A\u9664\u306B\u5931\u6557\u3057\u307E\u3057\u305F: "+(n.message||n))}}),h.querySelector("#holGenRule")?.addEventListener("click",()=>{GR()}),h.querySelectorAll(".hol-btn-edit").forEach(e=>{e.addEventListener("click",()=>{const n=e.dataset.id,d=x.find(S=>String(S.id)===n);d&&(s={...d,date:String(d.date||"").slice(0,10),is_off:!!d.is_off},z())})}),h.querySelectorAll(".hol-btn-del").forEach(e=>{e.addEventListener("click",async()=>{const n=e.dataset.id;if(confirm("\u3053\u306E\u4F11\u65E5\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F"))try{await u.del(`/holidays/${n}`),await m(),g()}catch(d){alert("\u524A\u9664\u306B\u5931\u6557\u3057\u307E\u3057\u305F: "+(d.message||d))}})})},z=()=>{if(document.querySelector(".hol-overlay")?.remove(),!s)return;const o=!s.id,i=f.map(t=>`<option value="${l(t.id)}" ${String(t.id)===String(s.department_id)?"selected":""}>${l(t.name)}</option>`).join(""),c=C.map(t=>`<option value="${l(t.value)}" ${t.value===s.type?"selected":""}>${l(t.label)}</option>`).join(""),a=document.createElement("div");a.className="hol-overlay",a.innerHTML=`

@@ -417,13 +417,16 @@ import{escapeHtml as v,delegate as Pt}from"../_shared/dom.js";import{api as vt,d
         color: #0f172a !important;
       }
     </style>
-    <div class="dash-card attrec-fiori-override" style="height: auto; display: flex; flex-direction: column; overflow: visible !important;">
-      <div class="attrec-controls" style="margin-bottom: 8px; flex-shrink: 0; padding: 0 !important; background: transparent !important; border: none !important; overflow: visible !important; display: none !important;">
+    <div class="dash-card attrec-fiori-override ui-c" data-ui="daily" style="height: auto; display: flex; flex-direction: column; overflow: visible !important; max-width: none;">
+      <div class="ui-ph"><h2>\u52E4\u6020\u8A18\u9332\uFF08\u65E5\u5225\uFF09</h2></div>
+      <div class="attrec-controls" style="margin: 0 0 10px; flex-shrink: 0; padding: 6px 10px; background: #f1f4f8; border: 1px solid #c3cdda; border-left: 3px solid #0b2c66; overflow: visible !important; display: none !important;">
       </div>
       <div class="attrec-head" style="display: none !important;">
         <div id="rosterSummary" class="attrec-summary" aria-live="polite" style="display: flex; gap: 8px; margin-bottom: 0; align-items: center; flex-wrap: wrap;"></div>
       </div>
-      <div id="rosterTable" class="attrec-table" style="height: calc(100vh - 140px); overflow: auto; max-height: calc(100vh - 140px); max-width: 100%;"></div>
+      <div class="ui-panel" style="margin:0;"><div class="ui-ptitle">\u52E4\u6020\u4E00\u89A7</div>
+      <div id="rosterTable" class="attrec-table" style="height: calc(100vh - 190px); overflow: auto; max-height: calc(100vh - 190px); max-width: 100%;"></div>
+      </div>
     </div>
   `,F.appendChild(b);const at=document.getElementById("attHubMobileActions"),lt=`
       <div style="display:flex; align-items:center; justify-content:center; gap:8px;">

@@ -6,15 +6,22 @@ import{fetchJSONAuth as G}from"../../api/http.api.js";
  * - 全員の一覧表は「従業員＝行・日付＝列」（名前が切れない）。未提出の人は下にまとめて薄く表示
  * - 代理入力（Z）と承認API呼び出し（X）は従来の実装をそのまま使う（ファイル末尾）
  */
-let g = "", O = [], l = null, q = "", H = "", TAB = "PENDING";
+let g = "", O = [], l = null, q = "", H = "", TAB = "ALL"; // 承認は 申請一覧 で行うので、開いたら全員の一覧表
 const picked = new Set();
 
 window.addEventListener("resize", () => { if (l && document.getElementById("saMonth")) syncMobileMonth(); });
 
+// 今月(0)・来月(1) の YYYY-MM（日本時間）。月の1日で計算するので 10/31 → 11月 のように月末でもずれない
+function ymJST(add) {
+  const now = new Date(Date.now() + 9 * 3600 * 1000);
+  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + add, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 async function te({ content: o }) {
   l = o; l.style.visibility = "";
-  const d = new Date(); d.setMonth(d.getMonth() + 1);
-  g = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  // 既定は来月（シフトの提出・未提出の確認は来月分のため）。今月は「今月」ボタンですぐ切り替えられる
+  g = ymJST(1);
   // 申請一覧（統合）の「内容を見る」から: ?month=YYYY-MM&view=<userId> でその人の月カレンダーを開く
   let viewId = "";
   try {
@@ -35,7 +42,7 @@ const STATUS = {
   UNSUBMITTED: { label: "未提出", color: "#64748b", bg: "#f1f5f9" }
 };
 const statusOf = (e) => (STATUS[e.submission_status] ? e.submission_status : "UNSUBMITTED");
-const pill = (st) => `<span class="sa-pill" style="color:${STATUS[st].color};background:${STATUS[st].bg};">${STATUS[st].label}</span>`;
+const pill = (st) => `<span class="sa-pill${st === "UNSUBMITTED" ? " unsub" : ""}" style="color:${STATUS[st].color};background:${STATUS[st].bg};">${STATUS[st].label}</span>`;
 const WORK = ["WORKING", "CA_NGAY", "CA_CHIEU", "CA_DEM", "09:00-14:00"];
 const WD = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -93,49 +100,56 @@ async function I() {
 
 const CSS = `
   #adminContent { padding: 0 !important; margin: 0 !important; width: 100% !important; max-width: 100% !important; }
-  .sa-root { font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; color: #1e293b; padding: 14px 20px 24px; box-sizing: border-box; }
-  .sa-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-  .sa-title { font-size: 18px; font-weight: 800; margin: 0; }
-  .sa-tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .sa-tools input, .sa-tools select { height: 34px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 13px; background: #fff; box-sizing: border-box; }
+  /* 共通UI（案C, admin-ui.css）と同じ見た目 */
+  .sa-root { font-family: 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif; color: #1f2937; font-size: 12.5px; padding: 12px 16px 24px; box-sizing: border-box; }
+  .sa-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #0b2c66; }
+  .sa-title { font-size: 16px; font-weight: 700; margin: 0; color: #0b2c66; }
+  .sa-tools { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sa-tools input, .sa-tools select { height: 26px; padding: 0 6px; border: 1px solid #c3cdda; border-radius: 0; font-size: 12.5px; background: #fff; box-sizing: border-box; font-family: inherit; }
   /* ボタンは「登録」ボタン（#0b2c66・角丸4px）と同じトーン。管理画面の共通CSSに負けないよう !important */
-  .sa-root .sa-btn, #saView .sa-btn, .sa-root .sa-tab { display: inline-flex !important; align-items: center; justify-content: center; gap: 4px; height: 32px; padding: 0 14px !important; border: 1px solid #c7ced8 !important; border-radius: 4px !important; background: #fff !important; color: #1f2937 !important; font-size: 13px !important; font-weight: 600 !important; line-height: 1 !important; cursor: pointer; white-space: nowrap; box-shadow: 0 1px 1px rgba(15,23,42,.04) !important; transition: background .12s, border-color .12s; }
-  .sa-root .sa-btn:hover, #saView .sa-btn:hover, .sa-root .sa-tab:hover { background: #f3f5f8 !important; border-color: #9aa4b2 !important; }
-  .sa-root .sa-btn.sm, #saView .sa-btn.sm { height: 28px; padding: 0 10px !important; font-size: 12.5px !important; }
-  .sa-root .sa-btn.ok, #saView .sa-btn.ok { background: #0b2c66 !important; border-color: #0b2c66 !important; color: #fff !important; }
-  .sa-root .sa-btn.ok:hover, #saView .sa-btn.ok:hover { background: #0a2455 !important; }
-  .sa-root .sa-btn.ng, #saView .sa-btn.ng { border-color: #f0b4b4 !important; color: #c02626 !important; }
-  .sa-root .sa-btn.ng:hover, #saView .sa-btn.ng:hover { background: #fef2f2 !important; border-color: #e58f8f !important; }
+  .sa-root .sa-btn, #saView .sa-btn { display: inline-flex !important; align-items: center; justify-content: center; gap: 4px; height: 24px; padding: 0 10px !important; border: 1px solid #c3cdda !important; border-radius: 2px !important; background: #fff !important; color: #1f2937 !important; font-family: inherit !important; font-size: 12px !important; font-weight: 600 !important; line-height: 1 !important; cursor: pointer; white-space: nowrap; box-shadow: none !important; }
+  .sa-root .sa-btn:hover, #saView .sa-btn:hover { background: #f6f8fb !important; border-color: #8a97aa !important; }
+  .sa-root .sa-btn.sm, #saView .sa-btn.sm { height: 20px; padding: 0 7px !important; font-size: 11.5px !important; }
+  .sa-root .sa-btn.ok, #saView .sa-btn.ok { background: #0b2c66 !important; border-color: #08214d !important; color: #fff !important; }
+  .sa-root .sa-btn.ok:hover, #saView .sa-btn.ok:hover { background: #0a2556 !important; }
+  .sa-root .sa-btn.ng, #saView .sa-btn.ng { background: #fff !important; border-color: #d79a9a !important; color: #a11 !important; }
+  .sa-root .sa-btn.ng:hover, #saView .sa-btn.ng:hover { background: #fbeeee !important; }
+  /* タブ: 紙のファイルの見出し風（申請一覧と同じ） */
+  .sa-root .sa-tab { display: inline-flex !important; align-items: center; gap: 4px; height: 24px; padding: 0 12px !important; margin-bottom: -1px; border: 1px solid #c3cdda !important; border-bottom: 0 !important; border-radius: 0 !important; background: #f6f8fb !important; color: #334155 !important; font-family: inherit !important; font-size: 12.5px !important; font-weight: 600 !important; cursor: pointer; white-space: nowrap; box-shadow: none !important; }
+  .sa-root .sa-tab:hover { background: #eef2f7 !important; }
   .sa-root .sa-btn:disabled, #saView .sa-btn:disabled { opacity: .45; cursor: default; }
-  .sa-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
-  .sa-root .sa-tab.active, .sa-root .sa-tab.active:hover { background: #e0f2fe !important; border-color: #7dd3fc !important; color: #075985 !important; }
+  .sa-tabs { display: flex; gap: 2px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 0; padding: 4px 6px 0; background: #f3f6fa; border: 1px solid #c3cdda; border-bottom: 1px solid #c3cdda; }
+  .sa-root .sa-tab.active, .sa-root .sa-tab.active:hover { background: #fff !important; color: #0b2c66 !important; font-weight: 700 !important; height: 25px; }
   .sa-root .sa-count { font-weight: 600; }
   .sa-root .sa-tab.hot:not(.active) .sa-count { color: #c2410c; font-weight: 800; }
-  .sa-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
+  .sa-pill { display: inline-block; padding: 0 8px; border-radius: 0; border: 1px solid rgba(0,0,0,.12); font-size: 11.5px; font-weight: 700; line-height: 18px; white-space: nowrap; }
   .sa-type { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px; border: 1px solid #bfdbfe; background: #eff6ff; color: #1e40af; }
   .sa-type.part { border-color: #bbf7d0; background: #dcfce7; color: #166534; }
-  .sa-list { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
-  .sa-list th { background: #f8fafc; font-size: 12px; color: #64748b; text-align: left; padding: 9px 12px; border-bottom: 1px solid #e2e8f0; white-space: nowrap; }
-  .sa-list td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; font-size: 13.5px; vertical-align: middle; }
-  .sa-list tr:last-child td { border-bottom: none; }
+  .sa-list { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #c3cdda; border-top: 0; }
+  .sa-list th { background: #eef2f7; font-size: 12px; color: #0f172a; font-weight: 700; text-align: left; padding: 4px 8px; border: 1px solid #c3cdda; white-space: nowrap; }
+  .sa-list td { padding: 3px 8px; border: 1px solid #d3dae4; font-size: 12.5px; vertical-align: middle; }
+  .sa-list tbody tr:nth-child(even) td { background: #f7f9fc; }
+  .sa-list tbody tr:hover td { background: #fff8db; }
   .sa-list .num { text-align: right; white-space: nowrap; }
-  .sa-name { font-weight: 800; font-size: 14.5px; }
+  .sa-name { font-weight: 700; font-size: 13px; }
   .sa-code { color: #94a3b8; font-size: 12px; margin-left: 6px; }
   .sa-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
-  .sa-empty { padding: 36px 16px; text-align: center; color: #64748b; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; }
+  .sa-empty { padding: 24px 16px; text-align: center; color: #64748b; background: #fff; border: 1px solid #c3cdda; border-top: 0; }
   .sa-bulk { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0 0; flex-wrap: wrap; font-size: 12.5px; color: #64748b; }
   /* 全員の一覧表: 従業員=行, 日付=列 */
-  .sa-grid-wrap { overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px; max-height: calc(100vh - 230px); background: #fff; }
+  .sa-grid-wrap { overflow: auto; border: 1px solid #c3cdda; border-top: 0; max-height: calc(100vh - 230px); background: #fff; }
   .sa-grid { border-collapse: separate; border-spacing: 0; font-size: 11px; }
-  .sa-grid th, .sa-grid td { border-right: 1px solid #eef2f7; border-bottom: 1px solid #eef2f7; padding: 3px 2px; text-align: center; background: #fff; }
-  .sa-grid thead th { position: sticky; top: 0; z-index: 3; background: #f8fafc; font-weight: 700; color: #475569; min-width: 26px; }
+  .sa-grid th, .sa-grid td { border-right: 1px solid #d3dae4; border-bottom: 1px solid #d3dae4; padding: 3px 2px; text-align: center; background: #fff; }
+  .sa-grid thead th { position: sticky; top: 0; z-index: 3; background: #eef2f7; font-weight: 700; color: #0f172a; min-width: 26px; border-color: #c3cdda; }
   .sa-grid .emp { position: sticky; left: 0; z-index: 2; text-align: left; min-width: 190px; max-width: 190px; padding: 4px 8px; background: #fff; box-shadow: 1px 0 0 #e2e8f0; }
-  .sa-grid thead th.emp { z-index: 4; background: #f8fafc; }
+  .sa-grid thead th.emp { z-index: 4; background: #eef2f7; }
   .sa-grid .emp .n { font-weight: 800; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .sa-grid .emp .s { display: flex; gap: 4px; align-items: center; margin-top: 2px; font-size: 11px; color: #64748b; }
+  .sa-grid .emp .s .sa-pill, .sa-grid .emp .s .sa-type { font-size: 9px !important; line-height: 13px !important; padding: 0 3px !important; font-weight: 600 !important; border-radius: 2px !important; }
+  .sa-grid .emp .s .sa-pill.unsub { background: transparent !important; border-color: transparent !important; padding: 0 !important; color: #64748b !important; font-weight: 600 !important; }
   .sa-grid tr.dim td { opacity: .45; }
-  .sa-grid tr.dim td.emp { opacity: .7; }
-  .sa-grid tr:hover td { background: #f8fafc; }
+  .sa-grid tr.dim td.emp { opacity: 1; }
+  .sa-grid tbody tr:hover td { background: #fff8db; }
   .sa-grid .sat { color: #2563eb; } .sa-grid .sun { color: #dc2626; }
   .sa-grid td.sun-col, .sa-grid th.sun-col { background: #fff7f7; }
   .sa-grid td.sat-col, .sa-grid th.sat-col { background: #f5f9ff; }
@@ -153,17 +167,17 @@ const CSS = `
   /* 内容を見る（月カレンダー） */
   /* 上部メニュー（z-index が非常に高い）の下から表示し、見出しとボタンは常に見えるようにする */
   .sa-ov { position: fixed; inset: 0; top: var(--topbar-height, 52px); background: rgba(15,23,42,.45); z-index: 9990; display: flex; align-items: center; justify-content: center; padding: 12px 16px; box-sizing: border-box; }
-  .sa-modal { background: #fff; border-radius: 12px; width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
-  .sa-mh { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: flex-start; padding: 16px 18px 10px; border-bottom: 1px solid #e2e8f0; }
+  .sa-modal { background: #fff; border-radius: 2px; border: 1px solid #c3cdda; width: min(560px, 100%); max-height: 100%; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  .sa-mh { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: flex-start; padding: 8px 14px; background: #eef2f7; color: #0b2c66; border-bottom: 1px solid #c3cdda; }
   .sa-mb { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 14px 18px; }
-  .sa-mf { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid #e2e8f0; flex-wrap: wrap; }
+  .sa-mf { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 6px; padding: 8px 14px; border-top: 1px solid #c3cdda; background: #f1f4f8; flex-wrap: wrap; }
   .sa-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
   .sa-cal .wd { text-align: center; font-size: 11.5px; font-weight: 700; color: #64748b; padding-bottom: 2px; }
   .sa-cal .day { border: 1px solid #e2e8f0; border-radius: 6px; padding: 3px; min-height: 50px; box-sizing: border-box; }
   .sa-cal .day .d { font-size: 11px; font-weight: 700; margin-bottom: 3px; }
   .sa-sum { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-  .sa-sum div { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 10px; font-size: 12.5px; color: #475569; }
-  .sa-sum b { color: #0f172a; font-size: 14px; }
+  .sa-sum div { background: #fff; border: 1px solid #c3ccd8; border-radius: 0; padding: 2px 10px; font-size: 11.5px; color: #475569; }
+  .sa-sum b { color: #0b2c66; font-size: 13.5px; }
   .reason-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 9999; display: none; align-items: center; justify-content: center; }
   .reason-modal-overlay.show { display: flex; }
   .reason-modal-content { background: #fff; border-radius: 8px; width: 90%; max-width: 320px; overflow: hidden; }
@@ -206,20 +220,19 @@ function V() {
     <style>${CSS}</style>
     <div class="sa-root">
       <div class="sa-head">
-        <h2 class="sa-title">シフト承認</h2>
+        <h2 class="sa-title">シフト表</h2>
         <div class="sa-tools">
           <input type="text" id="saSearch" value="${h(q)}" placeholder="名前・番号で検索" style="width:160px;">
           <select id="saDept"><option value="">全部署</option>${depts.map((d) => `<option value="${h(d)}" ${d === H ? "selected" : ""}>${h(d)}</option>`).join("")}</select>
+          <span style="display:inline-flex;gap:4px;">${[[ymJST(0), "今月"], [ymJST(1), "来月"]].map(([ym, lb]) => `<button type="button" class="sa-btn${g === ym ? " ok" : ""}" data-ym="${ym}" title="${ym}">${lb}</button>`).join("")}</span>
           <input type="month" id="saMonth" value="${g}" style="width:140px;">
           <button type="button" class="sa-btn pdf" id="shiftsExportPdf">PDF出力</button>
         </div>
       </div>
       <div class="sa-tabs">
-        ${tabBtn("PENDING", "承認待ち", counts.PENDING, true)}
-        ${tabBtn("REJECTED", "差戻し", counts.REJECTED)}
-        ${tabBtn("APPROVED", "承認済", counts.APPROVED)}
-        ${tabBtn("UNSUBMITTED", "未提出", counts.UNSUBMITTED)}
         ${tabBtn("ALL", "全員の一覧表", null)}
+        ${tabBtn("UNSUBMITTED", "未提出", counts.UNSUBMITTED)}
+        <a href="/admin/attendance/adjust-requests?tab=shift" style="margin-left:auto;align-self:center;font-size:12px;color:#0b2c66;text-decoration:underline;">シフトの承認は 申請一覧 で${counts.PENDING ? `（承認待ち ${counts.PENDING}件）` : ""}</a>
       </div>
       ${body}
     </div>
@@ -383,6 +396,7 @@ function bind(root) {
   root.querySelector("#saSearch")?.addEventListener("input", (ev) => { q = ev.target.value; V(); });
   root.querySelector("#saDept")?.addEventListener("change", (ev) => { H = ev.target.value; I(); });
   root.querySelector("#saMonth")?.addEventListener("change", (ev) => { g = ev.target.value; picked.clear(); I(); });
+  root.querySelectorAll("[data-ym]").forEach((b) => b.addEventListener("click", () => { g = b.getAttribute("data-ym"); picked.clear(); I(); }));
   root.querySelectorAll(".btn-view").forEach((b) => b.addEventListener("click", () => openView(b.getAttribute("data-id"))));
   root.querySelectorAll(".sa-pick").forEach((c) => c.addEventListener("change", () => { const id = c.closest("tr").getAttribute("data-id"); c.checked ? picked.add(id) : picked.delete(id); V(); }));
   root.querySelector("#saPickAll")?.addEventListener("change", (ev) => {

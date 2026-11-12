@@ -54,16 +54,18 @@ import{fetchJSONAuth as m}from"../../api/http.api.js";let s=null,__adjCanDelete=
             <td style="font-family:monospace;">${z}</td>
             <td>${w}</td>
             <td><span class="${k}">${j}</span></td>
+            <td style="white-space:nowrap;">${o.processed_by_name?p(o.processed_by_name):'<span style="color:#94a3b8;">\u2014</span>'}</td>
             <td style="white-space:nowrap;text-align:right;">${M}</td>
           </tr>
           <tr class="adj-mobile-row">
-            <td colspan="7" class="adj-mobile-cell">
+            <td colspan="8" class="adj-mobile-cell">
               <div class="adj-card">
                 <div class="adj-card-header">
                   <div class="adj-card-user">${b}</div>
                   <span class="${k}">${j}</span>
                 </div>
                 <div class="adj-card-body">
+                  ${o.processed_by_name?`<div class="adj-card-row"><span class="adj-card-label">\u51E6\u7406\u8005</span><span class="adj-card-value">${p(o.processed_by_name)}</span></div>`:""}
                   <div class="adj-card-row">
                     <span class="adj-card-label">\u4F5C\u6210</span>
                     <span class="adj-card-value">${x}</span>
@@ -188,6 +190,7 @@ import{fetchJSONAuth as m}from"../../api/http.api.js";let s=null,__adjCanDelete=
                 <th style="width:140px;">\u4FEE\u6B63(\u9000\u52E4)</th>
                 <th style="width:280px;">\u7406\u7531 / \u5DEE\u623B\u3057\u5185\u5BB9</th>
                 <th style="width:100px;">\u72B6\u614B</th>
+                <th style="width:100px;">\u51E6\u7406\u8005</th>
                 <th style="width:140px;text-align:right;">\u30A2\u30AF\u30B7\u30E7\u30F3</th>
               </tr>
             </thead>

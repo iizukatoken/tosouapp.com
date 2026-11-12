@@ -3,6 +3,7 @@ const router = express.Router();
 const { authenticate, authorize } = require('../../core/middleware/authMiddleware');
 const { resolveTenant } = require('../../core/middleware/tenantMiddleware');
 const db = require('../../core/database/mysql');
+const { resolveDefaultApproverName } = require('../attendance/attendance.utils');
 
 const isYM = (s) => /^\d{4}-\d{2}$/.test(String(s || ''));
 const monthJST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7);
@@ -85,6 +86,24 @@ function nextDay(ymd) {
 // 有給・休暇 (leave_requests) / 打刻修正 (time_adjust_requests) / シフト提出 (shift_month_status) /
 // プロフィール変更 (user_change_requests) / その他 (employee_requests: 残業申請・休日申請・通勤交通費)。
 // allMonths: bỏ lọc theo tháng (dùng cho 「承認待ち」: hiện mọi đơn chờ dù thuộc tháng nào)
+// 処理済みで処理者の記録がない申請（記録を始める前のシフト承認など）は、
+// 本人に設定されたマネージャー（月次勤怠の承認者と同じ決め方）の名前を出す
+async function fillDefaultProcessor(rows, tenantId) {
+  const missing = rows.filter(r => r.status !== 'pending' && !r.processedByName && r.userId);
+  if (!missing.length) return;
+  const ids = [...new Set(missing.map(r => r.userId))];
+  const users = await queryOptional(
+    `SELECT id, manager_id, departmentId, tenant_id FROM users WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  const names = new Map();
+  for (const u of users) {
+    try { names.set(String(u.id), await resolveDefaultApproverName(u, u.id, tenantId)); } catch (e) { /* 名前なしのまま */ }
+  }
+  for (const r of missing) {
+    const nm = names.get(String(r.userId));
+    if (nm) r.processedByName = nm;
+  }
+}
+
 async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths = false }) {
   const { start, end } = monthRange(month);
 
@@ -144,10 +163,12 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths
   const sf = userFilters(filt, 's.userId');
   const shiftRows = await queryOptional(`
     SELECT s.id, s.userId, s.month, s.status, s.created_at, s.updated_at,
-           u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName
+           u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName,
+           pu.username AS processedByName
     FROM shift_month_status s
     JOIN users u ON u.id = s.userId
     LEFT JOIN departments d ON d.id = u.departmentId
+    LEFT JOIN users pu ON pu.id = s.processed_by
     WHERE ${allMonths ? '1 = 1' : 's.month = ?'} AND s.status IN ('PENDING', 'APPROVED', 'REJECTED')${sf.sql}
   `, [...(allMonths ? [] : [month]), ...sf.params]);
   const shiftCounts = new Map();
@@ -289,7 +310,7 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths
       content: parts.length ? parts.join(' / ') : 'シフト（休日なし）',
       reason: (Number(c.paidDays) || Number(c.paidHalfDays)) ? '承認すると有給も承認されます' : '',
       status: st,
-      processedByName: null,
+      processedByName: st === 'pending' ? null : (r.processedByName || null),
       processedAt: st === 'pending' ? null : (r.updated_at || null),
       actions: shiftActions(r.userId, r.month),
       sortDate: `${r.month}-01`
@@ -343,6 +364,7 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths
 
   let all = [...normLeave, ...normAdj, ...normShift, ...normProfile, ...normOther];
   if (status) all = all.filter(r => r.status === status);
+  await fillDefaultProcessor(all, tenantId);
   return all.sort((a, b) => {
     if (a.sortDate !== b.sortDate) return a.sortDate < b.sortDate ? 1 : -1;
     return b.requestId - a.requestId;

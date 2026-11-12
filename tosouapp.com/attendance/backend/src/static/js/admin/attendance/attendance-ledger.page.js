@@ -44,18 +44,16 @@ export async function mount({ content } = {}) {
     box.innerHTML = '読み込み中...';
     try {
       const summary = await fetchJSONAuth(`/api/attendance/month/closure-summary?month=${encodeURIComponent(month)}`);
+      // 月次締めの操作はこの画面では行わない（承認は 月次勤怠入力 で社員ごとに行う）。
+      // 全員承認済みの時だけ1行で知らせ、それ以外はバナーを出さない。
       if (summary.closed) {
+        box.style.display = '';
         box.style.background = '#eef2f8';
         box.style.borderColor = '#0b2c66';
         box.innerHTML = `<b style="color:#0b2c66;">締め済み</b> — ${escapeHtml(month)}分は全員（${summary.total}名）承認済みです`;
       } else {
-        box.style.background = '#f0fdf4';
-        box.style.borderColor = '#16a34a';
-        box.innerHTML = `
-          <b style="color:#166534;">未締め</b> — ${escapeHtml(month)}分は入力・修正ができます（承認済み ${summary.approved}/${summary.total}名）
-          <button type="button" id="ledgerCloseBtn" style="margin-left:12px;height:28px;padding:0 12px;background:#0b2c66;color:#fff;border:none;border-radius:4px;font-size:12px;cursor:pointer;">月次締めを実行</button>
-        `;
-        root.querySelector('#ledgerCloseBtn')?.addEventListener('click', onCloseMonth);
+        box.style.display = 'none';
+        box.innerHTML = '';
       }
     } catch (err) {
       box.style.background = '#fef2f2';
@@ -142,24 +140,23 @@ export async function mount({ content } = {}) {
     const outOf = r => isActual ? r.checkOut : (r.roundedOut || r.checkOut);
     root.querySelectorAll('[data-ledger-mode]').forEach(b => {
       const on = b.getAttribute('data-ledger-mode') === viewMode;
-      b.style.background = on ? '#0b2c66' : '#fff';
-      b.style.color = on ? '#fff' : '#334155';
+      b.classList.toggle('on', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     {
       const chipsBox = root.querySelector('#ledgerTodayChips');
       if (chipsBox && data.todayStatus) {
         const ts = data.todayStatus;
-        const chip = (label, count, bg, fg) => `
-          <span style="display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;background:${bg};color:${fg};font-size:12px;font-weight:600;">
-            ${escapeHtml(label)} <span style="background:rgba(255,255,255,0.6);border-radius:999px;padding:1px 8px;">${ts[count]}</span>
-          </span>
-        `;
+        // 今日の状況: 状態ラベルと同じ色（作業中=青・済=緑・休み=灰）
+        const chip = (label, count, cls) => `<span class="ui-pill ${cls}">${escapeHtml(label)} ${Number(ts[count] || 0)}</span>`;
         chipsBox.innerHTML =
-          chip('出勤中', 'working', '#fef9c3', '#854d0e') +
-          chip('退勤済', 'checkedOut', '#dcfce7', '#166534') +
-          chip('休日・休暇', 'offOrLeave', '#f1f5f9', '#475569');
+          '<span style="font-size:11px;color:#475569;">今日</span>' +
+          chip('出勤中', 'working', 'info') +
+          chip('退勤済', 'checkedOut', 'ok') +
+          chip('休日・休暇', 'offOrLeave', 'off');
       }
+      const countEl = root.querySelector('#ledgerCount');
+      if (countEl) countEl.textContent = `（${Number(data.total || 0)}行）`;
       if (cards) {
         cards.innerHTML = [
           { label: '出勤日数', value: `${data.totals.attendDays}日` },
@@ -168,43 +165,38 @@ export async function mount({ content } = {}) {
           { label: '法定外残業', value: hm(isActual ? data.totals.actualOvertimeMinutes : data.totals.overtimeMinutes) },
           { label: '深夜', value: hm(data.totals.nightMinutes) },
           { label: '休日労働', value: hm(isActual ? data.totals.actualHolidayWorkMinutes : data.totals.holidayWorkMinutes) }
-        ].map(c => `
-          <div style="flex:1;min-width:120px;border:1px solid #e2e8f0;border-radius:8px;padding:12px 16px;background:#fff;">
-            <div style="font-size:20px;font-weight:700;color:#0f172a;">${escapeHtml(c.value)}</div>
-            <div style="font-size:11px;color:#64748b;margin-top:2px;">${escapeHtml(c.label)}</div>
-          </div>
-        `).join('');
+        ].map(c => `<span class="ui-stat"><span>${escapeHtml(c.label)}</span><b>${escapeHtml(c.value)}</b></span>`).join('');
       }
       if (body) {
         const rows = data.rows || [];
-        const rowBg = r => r.isHolidayWork ? 'background:#fffbeb;' : '';
-        const cellBorder = 'border-bottom:1px solid #f1f5f9;';
+        // 休日出勤の行は薄い黄色（縞模様より優先）
+        const td = (r, cls, inner) => `<td class="${cls}"${r.isHolidayWork ? ' style="background:#fffbeb;"' : ''}>${inner}</td>`;
         body.innerHTML = rows.length ? rows.map(r => `
-          <tr style="${rowBg(r)}">
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${escapeHtml(r.date.slice(5))}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${escapeHtml(r.employeeCode || r.userId)}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${escapeHtml(r.username || '')}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}"><span style="display:inline-block;white-space:nowrap;background:#f1f5f9;border-radius:4px;padding:2px 8px;font-size:12px;">${escapeHtml(KUBUN_LABEL[r.kubun] || r.kubun)}</span></td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${escapeHtml(inOf(r) || '—')}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${escapeHtml(outOf(r) || '—')}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${r.breakMinutes != null ? `${r.breakMinutes}分` : '—'}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${workedOf(r) ? hm(workedOf(r)) : '—'}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}${overtimeOf(r) ? 'color:#b45309;font-weight:600;' : ''}">${overtimeOf(r) ? hm(overtimeOf(r)) : '—'}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${r.nightMinutes ? hm(r.nightMinutes) : '—'}</td>
-            <td style="padding:6px 8px;white-space:nowrap;${cellBorder}">${r.isHolidayWork ? hm(workedOf(r)) : '—'}</td>
-            <td style="padding:6px 8px;color:#64748b;font-size:12px;max-width:260px;white-space:pre-wrap;word-break:break-word;${cellBorder}">${escapeHtml(r.memo || '')}</td>
+          <tr>
+            ${td(r, '', escapeHtml(r.date.slice(5)))}
+            ${td(r, '', escapeHtml(r.employeeCode || r.userId))}
+            ${td(r, '', escapeHtml(r.username || ''))}
+            ${td(r, '', `<span class="ui-tag">${escapeHtml(KUBUN_LABEL[r.kubun] || r.kubun)}</span>`)}
+            ${td(r, 'num', escapeHtml(inOf(r) || '—'))}
+            ${td(r, 'num', escapeHtml(outOf(r) || '—'))}
+            ${td(r, 'num', r.breakMinutes != null ? `${r.breakMinutes}分` : '—')}
+            ${td(r, 'num', workedOf(r) ? hm(workedOf(r)) : '—')}
+            ${td(r, 'num', overtimeOf(r) ? `<span style="color:#b45309;font-weight:700;">${hm(overtimeOf(r))}</span>` : '—')}
+            ${td(r, 'num', r.nightMinutes ? hm(r.nightMinutes) : '—')}
+            ${td(r, 'num', r.isHolidayWork ? hm(workedOf(r)) : '—')}
+            <td class="wrap muted" style="max-width:260px;font-size:12px;${r.isHolidayWork ? 'background:#fffbeb;' : ''}">${escapeHtml(r.memo || '')}</td>
           </tr>
-        `).join('') : '<tr><td colspan="12" style="text-align:center;padding:24px;color:#94a3b8;">該当データがありません</td></tr>';
+        `).join('') : '<tr><td colspan="12" class="empty">該当データがありません</td></tr>';
       }
       if (pager) {
         const from = data.total ? (data.page - 1) * data.pageSize + 1 : 0;
         const to = Math.min(data.total, data.page * data.pageSize);
         pager.innerHTML = `
-          <span style="font-size:12px;color:#64748b;">全 ${data.total} 行中 ${from}–${to} 行 （${data.page} / ${data.pages} ページ）</span>
-          <div style="display:flex;gap:8px;">
-            <button type="button" id="ledgerPrev" ${data.page <= 1 ? 'disabled' : ''} style="height:28px;padding:0 12px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;cursor:pointer;">前へ</button>
-            <button type="button" id="ledgerNext" ${data.page >= data.pages ? 'disabled' : ''} style="height:28px;padding:0 12px;border:1px solid #cbd5e1;border-radius:4px;background:#fff;cursor:pointer;">次へ</button>
-          </div>
+          <span>全 ${data.total} 行中 ${from}–${to} 行（${data.page} / ${data.pages} ページ）</span>
+          <span style="display:flex;gap:4px;">
+            <button type="button" class="ui-btn sm" id="ledgerPrev" ${data.page <= 1 ? 'disabled' : ''}>前へ</button>
+            <button type="button" class="ui-btn sm" id="ledgerNext" ${data.page >= data.pages ? 'disabled' : ''}>次へ</button>
+          </span>
         `;
         root.querySelector('#ledgerPrev')?.addEventListener('click', () => { if (page > 1) { page -= 1; loadLedger(); } });
         root.querySelector('#ledgerNext')?.addEventListener('click', () => { if (page < data.pages) { page += 1; loadLedger(); } });
@@ -214,59 +206,48 @@ export async function mount({ content } = {}) {
 
   departments = await listDepartments().catch(() => []);
 
+  // 画面の見た目は共通UI（/static/css/admin-ui.css の .ui-c）にそろえる
   root.innerHTML = `
-    <div style="padding:16px 20px 32px;max-width:1300px;">
-      <h2 style="margin:0 0 16px;font-size:18px;font-weight:700;">勤怠記録</h2>
+    <div class="ui-c">
+      <div class="ui-ph">
+        <h2>勤怠記録</h2>
+        <div id="ledgerTodayChips" class="ui-stats" title="今日の状況" style="margin:0 0 0 12px;"></div>
+        <span class="ui-sp"></span>
+        <input type="month" id="ledgerMonth" class="ui-inp" value="${month}" title="対象月" aria-label="対象月">
+        <select id="ledgerDept" class="ui-inp" title="部署" aria-label="部署">
+          <option value="">全部署</option>
+          ${departments.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('')}
+        </select>
+        <button type="button" class="ui-btn primary" id="ledgerGoBtn">表示</button>
+        <span style="width:1px;height:18px;background:#c3cdda;margin:0 4px;"></span>
+        <span class="ui-seg" role="group" aria-label="表示切替" title="実績: 打刻どおりの時間 / 丸め: 出勤30分切り上げ・退勤30分切り捨て後の時間">
+          <button type="button" class="ui-btn" data-ledger-mode="actual">実績</button>
+          <button type="button" class="ui-btn" data-ledger-mode="round">丸め</button>
+        </span>
+        <button type="button" class="ui-btn primary" id="ledgerXlsxBtn">Excel出力</button>
+      </div>
 
-      <div id="ledgerClosureBanner" style="border:1px solid #e2e8f0;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;"></div>
+      <div id="ledgerClosureBanner" class="ui-note" style="display:none;"></div>
       <div id="ledgerCloseResult" style="display:none;"></div>
 
-      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap;">
-        <div style="display:flex;flex-direction:column;gap:2px;">
-          <label style="font-size:11px;color:#475569;">対象月</label>
-          <input type="month" id="ledgerMonth" value="${month}" style="height:32px;border:1px solid #cbd5e1;border-radius:4px;padding:0 8px;">
-        </div>
-        <div style="display:flex;flex-direction:column;gap:2px;">
-          <label style="font-size:11px;color:#475569;">部署</label>
-          <select id="ledgerDept" style="height:32px;border:1px solid #cbd5e1;border-radius:4px;padding:0 8px;">
-            <option value="">すべて</option>
-            ${departments.map(d => `<option value="${d.id}">${escapeHtml(d.name)}</option>`).join('')}
-          </select>
-        </div>
-        <button type="button" id="ledgerGoBtn" style="height:32px;padding:0 16px;background:#0b2c66;color:#fff;border:none;border-radius:4px;cursor:pointer;">表示</button>
-        <div id="ledgerTodayChips" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;"></div>
-        <div style="flex:1;"></div>
-        <div role="group" aria-label="表示切替" title="実績: 打刻どおりの時間 / 丸め: 出勤30分切り上げ・退勤30分切り捨て後の時間" style="display:inline-flex;border:1px solid #cbd5e1;border-radius:4px;overflow:hidden;">
-          <button type="button" data-ledger-mode="actual" style="height:32px;padding:0 14px;border:none;background:#fff;color:#334155;cursor:pointer;font-weight:600;">実績</button>
-          <button type="button" data-ledger-mode="round" style="height:32px;padding:0 14px;border:none;border-left:1px solid #cbd5e1;background:#fff;color:#334155;cursor:pointer;font-weight:600;">丸め</button>
-        </div>
-        <button type="button" id="ledgerXlsxBtn" style="height:32px;padding:0 16px;border:none;border-radius:4px;background:#0b2c66;color:#fff;cursor:pointer;font-weight:600;">Excel出力</button>
-      </div>
+      <div id="ledgerCards" class="ui-stats" style="margin-bottom:10px;"></div>
 
-      <div id="ledgerCards" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;"></div>
-
-      <div style="border:1px solid #e2e8f0;border-radius:8px;overflow:auto;max-height:65vh;">
-        <table style="width:100%;border-collapse:separate;border-spacing:0;font-size:13px;min-width:1100px;">
-          <thead>
-            <tr>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">日付</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">社員番号</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">氏名</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">区分</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">出勤</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">退勤</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">休憩</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">実働</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">法定外残業</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">深夜</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">休日</th>
-              <th style="padding:8px;text-align:left;white-space:nowrap;position:sticky;top:-1px;z-index:1;background:#f1f5f9;border-bottom:2px solid #e2e8f0;transform:translateZ(0);">備考</th>
-            </tr>
-          </thead>
-          <tbody id="ledgerTableBody"></tbody>
-        </table>
+      <div class="ui-panel">
+        <div class="ui-ptitle">勤怠一覧 <span class="ui-sub" id="ledgerCount"></span></div>
+        <div class="ui-tablewrap">
+          <table class="ui-table" style="min-width:1100px;">
+            <thead>
+              <tr>
+                <th>日付</th><th>社員番号</th><th>氏名</th><th>区分</th>
+                <th class="num">出勤</th><th class="num">退勤</th><th class="num">休憩</th><th class="num">実働</th>
+                <th class="num">法定外残業</th><th class="num">深夜</th><th class="num">休日</th><th>備考</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerTableBody"></tbody>
+          </table>
+        </div>
+        <div id="ledgerPager" class="ui-pager"></div>
       </div>
-      <div id="ledgerPager" style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;"></div>
     </div>
   `;
 

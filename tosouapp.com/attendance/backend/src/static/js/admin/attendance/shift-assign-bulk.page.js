@@ -18,33 +18,33 @@ async function mount({ content }) {
   const base = role === 'manager' ? '/api/manager' : '/api/admin';
 
   container.className = 'card wide';
+  // 画面の見た目は 勤怠記録 と同じ共通UI（/static/css/admin-ui.css の .ui-c）
   container.innerHTML = `
-    <div style="padding:16px 20px;border-bottom:1px solid #edeff0;">
-      <a href="/admin/attendance/shifts" style="color:#0b2c66;text-decoration:none;font-weight:700;">&larr; シフト管理へ戻る</a>
-      <h2 style="margin:8px 0 0;font-size:18px;">シフト一括割当</h2>
-    </div>
-    <div style="padding:16px 20px;border-bottom:1px solid #edeff0;display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
-      <div>
-        <label style="display:block;font-size:12px;color:#6a6d70;margin-bottom:4px;">シフト *</label>
-        <select id="bulkShift" style="padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;min-width:220px;"><option value="">読み込み中...</option></select>
+    <div class="ui-c">
+      <div class="ui-ph">
+        <h2>シフト一括割当</h2>
+        <span class="ui-sp"></span>
+        <a href="/admin/attendance/shifts" class="ui-btn" style="text-decoration:none;">&larr; シフト管理へ戻る</a>
       </div>
-      <div>
-        <label style="display:block;font-size:12px;color:#6a6d70;margin-bottom:4px;">適用開始日 *</label>
-        <input type="date" id="bulkStart" style="padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;">
+      <div class="ui-panel">
+        <div class="ui-ptitle">割当内容</div>
+        <div class="ui-filters">
+          <div class="ui-f"><label for="bulkShift">シフト *</label><select id="bulkShift" class="ui-inp" style="min-width:220px;"><option value="">読み込み中...</option></select></div>
+          <div class="ui-f"><label for="bulkStart">適用開始日 *</label><input type="date" id="bulkStart" class="ui-inp"></div>
+          <div class="ui-f"><label for="bulkEnd">適用終了日（空欄=継続）</label><input type="date" id="bulkEnd" class="ui-inp"></div>
+          <button type="button" class="ui-btn primary" id="btnBulkAssign">選択した従業員に一括割当</button>
+        </div>
       </div>
-      <div>
-        <label style="display:block;font-size:12px;color:#6a6d70;margin-bottom:4px;">適用終了日（空欄=継続）</label>
-        <input type="date" id="bulkEnd" style="padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;">
+      <div id="bulkStatus" style="margin:0 0 8px;font-weight:700;"></div>
+      <div class="ui-panel">
+        <div class="ui-ptitle">対象の従業員 <span class="ui-sub" id="bulkSelectedCount"></span></div>
+        <div class="ui-filters" style="background:#fff;">
+          <input type="text" id="bulkSearch" class="ui-inp" placeholder="氏名・社員番号・部署で検索" style="min-width:240px;">
+          <label style="font-size:12.5px;display:inline-flex;align-items:center;gap:4px;"><input type="checkbox" id="bulkSelectAll"> 表示中を全て選択</label>
+        </div>
+        <div id="bulkEmpList" style="padding:0;">読み込み中...</div>
       </div>
-      <button type="button" id="btnBulkAssign" style="height:34px;padding:0 16px;border-radius:6px;border:none;background:#0b2c66;color:#fff;font-weight:700;cursor:pointer;">選択した従業員に一括割当</button>
     </div>
-    <div id="bulkStatus" style="padding:0 20px;margin-top:10px;font-weight:700;"></div>
-    <div style="padding:8px 20px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-      <input type="text" id="bulkSearch" placeholder="氏名・社員番号・部署で検索" style="padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;min-width:240px;">
-      <label style="font-size:13px;"><input type="checkbox" id="bulkSelectAll"> 表示中を全て選択</label>
-      <span id="bulkSelectedCount" style="font-size:12px;color:#6a6d70;"></span>
-    </div>
-    <div id="bulkEmpList" style="padding:0 20px 20px;">読み込み中...</div>
   `;
 
   const shiftSelect = container.querySelector('#bulkShift');

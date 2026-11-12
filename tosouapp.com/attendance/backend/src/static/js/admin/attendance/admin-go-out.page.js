@@ -110,53 +110,42 @@ import{fetchJSONAuth as O}from"../../api/http.api.js";async function Y({content:
       .btn-force-end:hover { background-color: #fef2f2 !important; }
       .btn-edit:hover { background-color: #eff6ff !important; }
     </style>
-    <div class="go-out-root-container" style="padding: 0; font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif; display: flex; flex-direction: column; flex: 1 1 0%; min-height: 0;">
-      <div class="page-header-container" style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 0px; padding: 16px 24px 8px 24px; flex-shrink: 0;">
-        <h2 class="page-header-title" style="display: none;">\u5916\u51FA\u7BA1\u7406</h2>
-        
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <input type="month" id="goOutAdminFilterMonth" style="height: 30px; padding: 0 10px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; width: 140px; color: #1f2937; outline: none; transition: border-color 0.2s, box-shadow 0.2s; box-sizing: border-box;">
-          <button id="goOutExportPdf" type="button" style="display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 12px;border:1px solid #c7d2fe;background:#eef2ff;color:#3730a3;font-size:13px;font-weight:600;cursor:pointer;border-radius:4px;white-space:nowrap;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg> PDF出力</button>
-        </div>
+    <div class="ui-c go-out-root-container" style="max-width:none;">
+      <div class="ui-ph">
+        <h2>\u5916\u51FA\u7BA1\u7406</h2>
+        <span class="ui-sp"></span>
+        <input type="month" id="goOutAdminFilterMonth" class="ui-inp" style="width:140px;" title="\u5BFE\u8C61\u6708" aria-label="\u5BFE\u8C61\u6708">
+        <span style="width:1px;height:18px;background:#c3cdda;margin:0 4px;"></span>
+        <button id="goOutExportPdf" type="button" class="ui-btn">PDF\u51FA\u529B</button>
       </div>
-
-      <!-- Table -->
-      <div class="go-out-table-wrapper" style="border-top: none; border-bottom: none; box-shadow: none; padding: 16px 24px 24px 24px;">
-          <table class="go-out-table" style="width: 100%; border-collapse: collapse;">
-            <thead style="position: sticky; top: 0; z-index: 10;">
-              <tr style="background: #e6f2ff; color: #0f172a; text-align: center; height: 30px;">
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u65E5\u4ED8</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u793E\u54E1\u540D</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u5916\u51FA</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u623B\u308A</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u6642\u9593</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u533A\u5206</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u7406\u7531</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u72B6\u614B</th>
-                <th style="padding: 4px 8px; font-size: 13px; font-weight: 600; text-align: center; border: 1px solid #cbd5e1;">\u30A2\u30AF\u30B7\u30E7\u30F3</th>
+      <div class="ui-panel">
+        <div class="ui-ptitle">\u5916\u51FA\u4E00\u89A7 <span class="ui-sub" id="goOutAdminItemCount">\u5168 0 \u4EF6</span></div>
+        <div class="ui-tablewrap">
+          <table class="go-out-table" style="width:100%;">
+            <thead>
+              <tr>
+                <th>\u65E5\u4ED8</th><th>\u793E\u54E1\u540D</th><th>\u5916\u51FA</th><th>\u623B\u308A</th><th>\u6642\u9593</th>
+                <th>\u533A\u5206</th><th>\u7406\u7531</th><th>\u72B6\u614B</th><th>\u64CD\u4F5C</th>
               </tr>
             </thead>
-          <tbody id="goOutAdminTableBody">
-            <tr><td colspan="9" style="text-align: center; padding: 20px; color: #64748b;">\u8AAD\u307F\u8FBC\u307F\u4E2D...</td></tr>
-          </tbody>
-        </table>
-      </div>
-      
-      <!-- Pagination Controls -->
-      <div class="pagination-container" style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; font-size: 13px; color: #475569; padding: 0 16px 16px 16px;">
-        <div class="pagination-info">
-          \u8868\u793A\u4EF6\u6570: 
-          <select id="goOutAdminPageSize" style="padding: 4px; border: 1px solid #cbd5e1; border-radius: 4px; margin-left: 4px; margin-right: 12px;">
-            <option value="10">10</option>
-            <option value="20" selected>20</option>
-            <option value="50">50</option>
-          </select>
-          <span id="goOutAdminItemCount">\u5168 0 \u4EF6</span>
+            <tbody id="goOutAdminTableBody">
+              <tr><td colspan="9" style="text-align:center;color:#94a3b8;">\u8AAD\u307F\u8FBC\u307F\u4E2D...</td></tr>
+            </tbody>
+          </table>
         </div>
-        <div class="pagination-actions" style="display: flex; gap: 8px; align-items: center;">
-          <button id="goOutAdminPrevPage" style="padding: 4px 12px; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" disabled>\u524D\u3078</button>
-          <span id="goOutAdminPageInfo">\u30DA\u30FC\u30B8 1 / 1</span>
-          <button id="goOutAdminNextPage" style="padding: 4px 12px; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer;" disabled>\u6B21\u3078</button>
+        <div class="ui-pager">
+          <span>\u8868\u793A\u4EF6\u6570:
+            <select id="goOutAdminPageSize" class="ui-inp" style="height:22px;margin-left:4px;">
+              <option value="10">10</option>
+              <option value="20" selected>20</option>
+              <option value="50">50</option>
+            </select>
+          </span>
+          <span style="display:flex;gap:4px;align-items:center;">
+            <button id="goOutAdminPrevPage" type="button" class="ui-btn sm" disabled>\u524D\u3078</button>
+            <span id="goOutAdminPageInfo">\u30DA\u30FC\u30B8 1 / 1</span>
+            <button id="goOutAdminNextPage" type="button" class="ui-btn sm" disabled>\u6B21\u3078</button>
+          </span>
         </div>
       </div>
     </div>

@@ -133,37 +133,34 @@ async function mount({ content }) {
   const userName = params.get('name') || `従業員 #${userId}`;
 
   if (!userId) {
-    container.innerHTML = '<div class="card" style="padding:20px;">userId が指定されていません。</div>';
+    container.innerHTML = '<div class="ui-c"><div class="ui-ph"><h2>書類</h2></div><div class="ui-note">社員が選ばれていません。社員管理から開いてください。</div></div>';
     return;
   }
 
   container.className = 'card wide';
+  // 画面の見た目は 勤怠記録 と同じ共通UI（/static/css/admin-ui.css の .ui-c）
   container.innerHTML = `
-    <div style="padding:16px 20px;border-bottom:1px solid #edeff0;display:flex;align-items:center;justify-content:space-between;">
-      <div>
-        <a href="/admin/employees?detail=${encodeURIComponent(userId)}" style="color:#0b2c66;text-decoration:none;font-weight:700;">&larr; 従業員詳細へ戻る</a>
-        <h2 style="margin:8px 0 0;font-size:18px;">${escapeHtml(userName)} — 書類</h2>
+    <div class="ui-c">
+      <div class="ui-ph">
+        <h2>${escapeHtml(userName)} — 書類</h2>
+        <span class="ui-sp"></span>
+        <a href="/admin/employees?detail=${encodeURIComponent(userId)}" class="ui-btn" style="text-decoration:none;">&larr; 従業員詳細へ戻る</a>
+      </div>
+      <div class="ui-panel">
+        <div class="ui-ptitle">書類のアップロード</div>
+        <form id="docUploadForm" class="ui-filters">
+          <div class="ui-f"><label for="docType">種類 *</label><input type="text" id="docType" class="ui-inp" placeholder="例: 契約書, 身分証" required style="min-width:160px;"></div>
+          <div class="ui-f"><label for="docTitle">タイトル</label><input type="text" id="docTitle" class="ui-inp" placeholder="任意" style="min-width:200px;"></div>
+          <div class="ui-f"><label for="docFile">ファイル（画像 / PDF, 10MBまで）*</label><input type="file" id="docFile" accept="image/*,application/pdf" required style="font-size:12px;"></div>
+          <button type="submit" id="btnDocUpload" class="ui-btn primary">アップロード</button>
+        </form>
+        <div id="docUploadStatus" style="padding:0 10px;font-weight:700;"></div>
+      </div>
+      <div class="ui-panel">
+        <div class="ui-ptitle">書類一覧</div>
+        <div id="docList" style="padding:0;"></div>
       </div>
     </div>
-    <div style="padding:16px 20px;border-bottom:1px solid #edeff0;">
-      <form id="docUploadForm" style="display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;">
-        <div>
-          <label style="display:block;font-size:12px;color:#6a6d70;margin-bottom:4px;">種類 *</label>
-          <input type="text" id="docType" placeholder="例: 契約書, 身分証" required style="padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;min-width:160px;">
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:#6a6d70;margin-bottom:4px;">タイトル</label>
-          <input type="text" id="docTitle" placeholder="任意" style="padding:6px 10px;border:1px solid #d0d7de;border-radius:6px;min-width:200px;">
-        </div>
-        <div>
-          <label style="display:block;font-size:12px;color:#6a6d70;margin-bottom:4px;">ファイル (画像 / PDF, 10MBまで) *</label>
-          <input type="file" id="docFile" accept="image/*,application/pdf" required style="padding:4px 0;">
-        </div>
-        <button type="submit" id="btnDocUpload" style="height:34px;padding:0 16px;border-radius:6px;border:none;background:#0b2c66;color:#fff;font-weight:700;cursor:pointer;">アップロード</button>
-      </form>
-      <div id="docUploadStatus" style="margin-top:8px;font-weight:700;"></div>
-    </div>
-    <div id="docList" style="padding:0;"></div>
   `;
 
   const listEl = container.querySelector('#docList');

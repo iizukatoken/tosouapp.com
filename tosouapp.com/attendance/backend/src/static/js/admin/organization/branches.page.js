@@ -1,39 +1,31 @@
 import{fetchJSONAuth as o}from"../../api/http.api.js";async function u(h={}){const g=h&&h.content||document.querySelector("#adminContent");if(!g)return;g.innerHTML=`
-    <div class="branch-page" style="padding:16px;max-width:720px;">
-      <div class="branch-toolbar" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-        <h2 class="branch-title" style="margin:0;font-size:18px;font-weight:700;">\u652F\u5E97\u7BA1\u7406</h2>
-        <div class="branch-new" style="display:flex;gap:8px;align-items:center;">
-          <span style="font-size:13px;color:#64748b;">\u65B0\u898F</span>
-          <input id="branchNewName" type="text" placeholder="\u4F8B: \u6771\u4EAC\u652F\u5E97" style="height:32px;border:1px solid #cbd5e1;border-radius:4px;padding:0 10px;font-size:13px;width:200px;">
-          <input id="branchNewCode" type="text" placeholder="\u30B3\u30FC\u30C9 (\u4EFB\u610F)" style="height:32px;border:1px solid #cbd5e1;border-radius:4px;padding:0 10px;font-size:13px;width:100px;">
-          <button id="btnCreateBranch" type="button" style="height:32px;padding:0 14px;background:#0b2c66;color:#fff;border:none;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;">\u4F5C\u6210</button>
+    <div class="ui-c branch-page" style="max-width:900px;">
+      <div class="ui-ph">
+        <h2 class="branch-title">\u652F\u5E97\u7BA1\u7406</h2>
+      </div>
+      <div class="ui-panel">
+        <div class="ui-ptitle">\u65B0\u898F\u4F5C\u6210</div>
+        <div class="ui-filters branch-new">
+          <div class="ui-f"><label for="branchNewName">\u652F\u5E97\u540D</label><input id="branchNewName" type="text" class="ui-inp" placeholder="\u4F8B: \u6771\u4EAC\u652F\u5E97" style="width:200px;"></div>
+          <div class="ui-f"><label for="branchNewCode">\u30B3\u30FC\u30C9\uFF08\u4EFB\u610F\uFF09</label><input id="branchNewCode" type="text" class="ui-inp" style="width:110px;"></div>
+          <button id="btnCreateBranch" type="button" class="ui-btn primary">\u4F5C\u6210</button>
         </div>
       </div>
-
-      <div id="branchTableWrap" class="branch-table-wrap" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
-        <table class="branch-table" style="width:100%;border-collapse:collapse;table-layout:fixed;font-size:13px;">
-          <colgroup>
-            <col style="width:36px;">
-            <col style="width:70px;">
-            <col style="width:160px;">
-            <col style="width:50px;">
-            <col style="width:140px;">
-            <col style="width:110px;">
-          </colgroup>
-          <thead>
-            <tr style="background:#f1f5f9;">
-              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">ID</th>
-              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">\u30B3\u30FC\u30C9</th>
-              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">\u540D\u524D</th>
-              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">\u793E\u54E1\u6570</th>
-              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">\u7BA1\u7406\u8005</th>
-              <th style="padding:8px 10px;text-align:left;border-bottom:2px solid #e2e8f0;">\u64CD\u4F5C</th>
-            </tr>
-          </thead>
-          <tbody id="branchTableBody">
-            <tr><td colspan="6" style="text-align:center;padding:24px;color:#94a3b8;">\u8AAD\u307F\u8FBC\u307F\u4E2D...</td></tr>
-          </tbody>
-        </table>
+      <div class="ui-panel">
+        <div class="ui-ptitle">\u652F\u5E97\u4E00\u89A7</div>
+        <div id="branchTableWrap" class="branch-table-wrap ui-tablewrap">
+          <table class="branch-table" style="width:100%;table-layout:fixed;">
+            <colgroup>
+              <col style="width:44px;"><col style="width:90px;"><col style="width:200px;"><col style="width:70px;"><col style="width:180px;"><col style="width:130px;">
+            </colgroup>
+            <thead>
+              <tr><th>ID</th><th>\u30B3\u30FC\u30C9</th><th>\u540D\u524D</th><th>\u793E\u54E1\u6570</th><th>\u7BA1\u7406\u8005</th><th>\u64CD\u4F5C</th></tr>
+            </thead>
+            <tbody id="branchTableBody">
+              <tr><td colspan="6" style="text-align:center;color:#94a3b8;">\u8AAD\u307F\u8FBC\u307F\u4E2D...</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   `;function p(t){return String(t||"").replace(/[<>&"']/g,d=>({"<":"&lt;",">":"&gt;","&":"&amp;",'"':"&quot;","'":"&#39;"})[d])}async function c(){const t=document.getElementById("branchTableBody");try{const d=await o("/api/branches"),r=d?.data||d||[];if(!r.length){t.innerHTML='<tr><td colspan="6" style="text-align:center;padding:24px;color:#94a3b8;">\u652F\u5E97\u304C\u307E\u3060\u767B\u9332\u3055\u308C\u3066\u3044\u307E\u305B\u3093</td></tr>';return}t.innerHTML=r.map(e=>`

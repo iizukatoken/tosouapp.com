@@ -296,12 +296,12 @@ import{requireAdmin as K}from"../_shared/require-admin.js";import{fetchJSONAuth 
         }
       </style>
 
-      <div class="notice-page">
+      <div class="notice-page ui-c" data-ui="notices"><div class="ui-ph"><h2>\u304A\u77E5\u3089\u305B</h2></div>
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
       </div>
 
       <div style="margin-top:12px;display:grid;grid-template-columns:1fr;gap:10px;">
-        <div class="notice-card">
+        <div class="notice-card ui-panel"><div class="ui-ptitle">\u304A\u77E5\u3089\u305B\u306E\u767B\u9332</div>
           ${m?`
             <div style="border:1px solid #fecaca;background:#fff1f2;color:#7f1d1d;border-radius:12px;padding:10px 12px;font-weight:900;margin-bottom:10px;">
               API\u30A8\u30E9\u30FC: ${c(m)}
@@ -310,7 +310,7 @@ import{requireAdmin as K}from"../_shared/require-admin.js";import{fetchJSONAuth 
               </div>
             </div>
           `:""}
-          <div class="notice-controls">
+          <div class="notice-controls ui-filters">
             <select id="noticeRecipient" class="notice-select" style="min-width:240px;">
               <option value="">\u5168\u793E\u54E1</option>
               ${n.map(t=>`<option value="${c(t.id)}">${c([t.employeeCode,t.username].filter(Boolean).join(" "))}</option>`).join("")}
@@ -331,8 +331,8 @@ import{requireAdmin as K}from"../_shared/require-admin.js";import{fetchJSONAuth 
           </div>
         </div>
 
-        <div class="notice-listbar">
-          <div class="notice-sub">\u4E00\u89A7</div>
+        <div class="ui-panel"><div class="notice-listbar ui-ptitle">
+          <div class="notice-sub">\u304A\u77E5\u3089\u305B\u4E00\u89A7</div><span class="ui-sp"></span>
           <label class="notice-switch" title="\u4E00\u89A7\u3092\u8868\u793A/\u975E\u8868\u793A">
             <input id="toggleNoticeTable" type="checkbox" ${A?"checked":""}>
             <span class="notice-switch-track"></span>
@@ -353,7 +353,7 @@ import{requireAdmin as K}from"../_shared/require-admin.js";import{fetchJSONAuth 
         <div id="noticePagination" style="display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:8px;padding:4px 12px;font-size:13px;color:#475569;font-weight:600;">
           ${l.length>y?`\u30DA\u30FC\u30B8 ${s} / ${w} (${l.length}\u4EF6)\u3000<button id="noticePrevPage" type="button" style="padding:4px 10px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer;font-weight:700;">\u25C0</button> <button id="noticeNextPage" type="button" style="padding:4px 10px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer;font-weight:700;">\u25B6</button>`:`${l.length}\u4EF6`}
         </div>
-        </div>
+        </div></div>
       </div>
       </div>
     `;const E=()=>{const t=o.querySelector("#noticeTableBody"),e=o.querySelector("#noticePagination");t&&(t.innerHTML=I(z())),e&&l.length>y&&(e.innerHTML=`\u30DA\u30FC\u30B8 ${s} / ${w} (${l.length}\u4EF6)\u3000<button id="noticePrevPage" type="button" style="padding:4px 10px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer;font-weight:700;" ${s<=1?"disabled":""}>\u25C0</button> <button id="noticeNextPage" type="button" style="padding:4px 10px;border:1px solid #cbd5e1;background:#fff;border-radius:6px;cursor:pointer;font-weight:700;" ${s>=w?"disabled":""}>\u25B6</button>`,e.querySelector("#noticePrevPage")?.addEventListener("click",()=>{s>1&&(s--,E())}),e.querySelector("#noticeNextPage")?.addEventListener("click",()=>{s<w&&(s++,E())})),o.querySelectorAll("[data-notice-del]").forEach(a=>{a.addEventListener("click",async()=>{const r=a.dataset.noticeDel;if(!(!r||!confirm("\u3053\u306E\u901A\u77E5\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F")))try{await $(`/api/notices/admin/${r}`,{method:"DELETE"}),await _()}catch{}})})};o.querySelector("#noticePrevPage")?.addEventListener("click",()=>{s>1&&(s--,E())}),o.querySelector("#noticeNextPage")?.addEventListener("click",()=>{s<w&&(s++,E())});const f=t=>{const e=o.querySelector("#noticeError");if(e){if(!t){e.style.display="none",e.textContent="";return}e.style.display="block",e.textContent=t}},M=o.querySelector("#btnNoticeComposerToggle");M&&M.addEventListener("click",()=>{const t=o.querySelector("#noticeComposerBody"),a=!!!(t&&t.hasAttribute&&t.hasAttribute("hidden"));if(a)try{t&&t.setAttribute("hidden","")}catch{}else try{t&&t.removeAttribute("hidden")}catch{}try{localStorage.setItem(q,a?"0":"1")}catch{}try{o.querySelector("#btnNoticeComposerToggle").textContent=a?"\u5165\u529B\u6B04\u3092\u8868\u793A":"\u5165\u529B\u6B04\u3092\u96A0\u3059"}catch{}});const T=o.querySelector("#toggleNoticeTable");T&&T.addEventListener("change",()=>{const t=T,e=o.querySelector("#noticeTableSection"),a=!!t.checked;if(a)try{e&&e.removeAttribute("hidden")}catch{}else try{e&&e.setAttribute("hidden","")}catch{}try{localStorage.setItem(N,a?"1":"0")}catch{}});const D=o.querySelector("#noticeRecipient"),h=o.querySelector("#noticeScope"),v=o.querySelector("#noticeDate"),S=o.querySelector("#noticeMonth"),g=o.querySelector("#noticeMessage"),j=()=>{if(g)try{g.style.height="0px";const t=Math.max(120,g.scrollHeight);g.style.height=`${t}px`}catch{}},H=()=>{const t=String(h&&h.value!=null?h.value:"global");v&&(v.style.display=t==="date"?"":"none"),S&&(S.style.display=t==="month"?"":"none")};h&&h.addEventListener("change",H),H(),g&&g.addEventListener("input",j),j();const R=o.querySelector("#btnNoticePost");R&&R.addEventListener("click",async()=>{f("");const t=D?String(D.value||"").trim():"",e=String(h&&h.value!=null?h.value:"global"),a=e==="date"?String(v&&v.value?v.value:"").slice(0,10):null,r=e==="month"?String(S&&S.value?S.value:"").slice(0,7):null,b=String(g&&g.value!=null?g.value:"").trim();if(!b){f("\u5185\u5BB9\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");return}try{await $(p,{method:"POST",body:JSON.stringify({targetUserId:t||null,targetDate:a,targetMonth:r,message:b})}),await _()}catch(k){const B=String(k&&k.message?k.message:k||"");f(B==="Not Found"?`Not Found: ${window.location.origin}${p}`:B||"\u767B\u9332\u306B\u5931\u6557\u3057\u307E\u3057\u305F")}}),o.querySelectorAll("[data-notice-del]").forEach(t=>{t.addEventListener("click",async()=>{f("");const e=t.getAttribute("data-notice-del");if(window.confirm("\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F"))try{await $(`/api/notices/admin/${encodeURIComponent(String(e||""))}`,{method:"DELETE"}),await _()}catch(r){f(r&&r.message?r.message:"\u524A\u9664\u306B\u5931\u6557\u3057\u307E\u3057\u305F")}})})};await _()}export{W as mount};

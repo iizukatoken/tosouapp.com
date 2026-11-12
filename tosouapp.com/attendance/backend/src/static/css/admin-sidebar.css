@@ -149,3 +149,90 @@ body.admin.has-sidebar .sidebar .sidebar-nav > details:not([open]) > summary:has
 /* 開いているグループは子の各行にバッジが出るので、親の合計は隠す */
 body.admin .sidebar details[open] > summary > .nav-badge,
 body.admin #drawerNavMount details[open] > summary > .nav-badge { display: none !important; }
+
+/* ==========================================================================
+ * 2026-11 デザイン統一（勤怠記録 と同じ「紺・フラット・罫線」の業務システム調）
+ * - 紫をやめて紺（#0b2c66）に。角丸なし、行は低め、文字は Meiryo UI
+ * - 選択中のページ: 紺地に白文字 / 開いているグループ: 薄い青地＋左の紺線
+ * - ダークモードは admin-dark.css に任せる（ここはライトのみ）
+ * ========================================================================== */
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar {
+  background: #f7f9fc !important; border-right: 1px solid #c3cdda !important; box-shadow: none !important;
+}
+body.admin.has-sidebar .sidebar .sidebar-nav { padding-top: 6px !important; font-family: 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif !important; }
+/* 大項目 */
+body.admin.has-sidebar .sidebar .sidebar-nav > a,
+body.admin.has-sidebar .sidebar .sidebar-nav > details > summary {
+  min-height: 32px !important; margin: 0 !important; padding-left: 14px !important;
+  border-radius: 0 !important; border-left: 3px solid transparent !important;
+  font-size: 13px !important; font-weight: 600 !important;
+}
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details > summary { color: #1e293b !important; background: transparent !important; }
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a svg,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details > summary svg { color: #475569 !important; stroke: currentColor; }
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a:hover,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details > summary:hover { background: #e8eef6 !important; }
+/* 開いているグループ・選択中の大項目: 薄い青地＋左の紺線 */
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details > summary.selected,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details.active-section > summary {
+  background: #e3eaf5 !important; color: #0b2c66 !important; border-left-color: #0b2c66 !important;
+}
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details.active-section > summary svg { color: #0b2c66 !important; }
+/* 単独リンクで選択中 → 紺地に白文字 */
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.active,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.selected {
+  background: #0b2c66 !important; color: #fff !important; border-left-color: #0b2c66 !important;
+}
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.active svg,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.selected svg { color: #fff !important; }
+/* 開いたグループの中身は白い帯にして、上下に罫線 */
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details[open] {
+  background: #fff !important; border-top: 1px solid #dbe2ec !important; border-bottom: 1px solid #dbe2ec !important;
+}
+/* サブメニュー */
+body.admin.has-sidebar .sidebar .sidebar-nav details > a {
+  min-height: 28px !important; margin: 0 !important; padding-left: 40px !important; border-radius: 0 !important;
+  font-size: 12.5px !important; font-weight: 500 !important;
+}
+body.admin.has-sidebar .sidebar .sidebar-nav details > a:first-of-type { margin-top: 0 !important; }
+body.admin.has-sidebar .sidebar .sidebar-nav details > a:last-of-type { margin-bottom: 0 !important; }
+body.admin.has-sidebar .sidebar .sidebar-nav details > a::before { left: 24px !important; background: #d5dde8 !important; }
+body.admin.has-sidebar .sidebar .sidebar-nav details > a.active { margin-right: 0 !important; padding-left: 40px !important; }
+body.admin.has-sidebar .sidebar .sidebar-nav details > a.active::before { left: 23px !important; width: 3px !important; top: 0 !important; bottom: 0 !important; background: #fff !important; border-radius: 0 !important; }
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav details > a { color: #334155 !important; background: transparent !important; }
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav details > a:hover { color: #0b2c66 !important; background: #eef2f8 !important; }
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav details > a.active,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav details > a.active:hover {
+  color: #fff !important; background: #0b2c66 !important; font-weight: 700 !important;
+}
+/* 矢印: 小さな灰色の三角 */
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav summary .chev { background: transparent !important; color: #94a3b8 !important; }
+/* 選択中の行の上のバッジは白縁で目立たせる */
+body.admin.has-sidebar .sidebar .sidebar-nav a.active .nav-badge { box-shadow: 0 0 0 1.5px #fff !important; }
+/* 以前の紫の縦線（summary::after）は消す。左の紺線は border-left で出している */
+body.admin.has-sidebar .sidebar .sidebar-nav > details > summary::after,
+body.admin.has-sidebar .sidebar .sidebar-nav > a::after { display: none !important; }
+
+/* ---- 2026-11 改: 紺の塗りつぶしは重いので、薄い青地＋紺文字＋左の紺線に（Google Workspace / freee 系の控えめな選択表示） ---- */
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details > summary.selected,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details.active-section > summary {
+  background: transparent !important; color: #0b2c66 !important; border-left-color: transparent !important; font-weight: 700 !important;
+}
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details > summary.selected:hover,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details.active-section > summary:hover { background: #e8eef6 !important; }
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > details[open] {
+  background: transparent !important; border-top: 0 !important; border-bottom: 0 !important; padding-bottom: 4px !important;
+}
+/* 選択中（サブ・単独リンク共通）: 薄い青地・紺の太字・左に紺の線 */
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav details > a.active,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav details > a.active:hover,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.active,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.selected {
+  background: #e3ecf8 !important; color: #0b2c66 !important; font-weight: 700 !important; border-left-color: #0b2c66 !important;
+}
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.active svg,
+:root:not([data-theme="dark"]) body.admin.has-sidebar .sidebar .sidebar-nav > a.selected svg { color: #0b2c66 !important; }
+body.admin.has-sidebar .sidebar .sidebar-nav details > a.active::before { left: 24px !important; width: 3px !important; top: 4px !important; bottom: 4px !important; background: #0b2c66 !important; border-radius: 2px !important; }
+body.admin.has-sidebar .sidebar .sidebar-nav details > a { margin: 0 8px 0 0 !important; border-radius: 0 4px 4px 0 !important; }
+body.admin.has-sidebar .sidebar .sidebar-nav a.active .nav-badge { box-shadow: none !important; }

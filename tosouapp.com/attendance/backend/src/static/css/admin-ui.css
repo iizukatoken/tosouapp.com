@@ -1,0 +1,353 @@
+/*
+ * 管理画面 共通UI（案C: 日本の業務システム風）
+ * 画面の一番外側に class="ui-c" を付けたページだけに効く。まだ移行していない画面には影響しない。
+ *
+ * ボタンは3種類だけ:
+ *   .ui-btn.primary  … 紺。画面で一番大事な操作（表示・保存・承認・Excel出力）
+ *   .ui-btn          … 白。追加・出力・戻る・詳細 など
+ *   .ui-btn.danger   … 赤枠。削除・差戻し など取り消せない操作
+ */
+.ui-c {
+  --ui-navy: #0b2c66;
+  --ui-line: #c3cdda;
+  --ui-line-soft: #d3dae4;
+  --ui-band: #f1f4f8;
+  padding: 12px 16px 24px;
+  max-width: 1300px;
+  color: #1f2937;
+  font-family: 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+.ui-c *, .ui-c *::before, .ui-c *::after { box-sizing: border-box; }
+
+/* ページ見出し: タイトル左・操作ボタン右、下に紺の線 */
+.ui-c .ui-ph { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 2px solid var(--ui-navy); }
+.ui-c .ui-ph h2 { margin: 0; font-size: 16px; font-weight: 700; color: var(--ui-navy); }
+.ui-c .ui-sp { flex: 1; }
+
+/* ボタン */
+.ui-c .ui-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  height: 24px; padding: 0 10px; border-radius: 2px; white-space: nowrap; cursor: pointer;
+  font: 600 12px 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif;
+  background: #fff; border: 1px solid var(--ui-line); color: #1f2937;
+}
+.ui-c .ui-btn:hover:not(:disabled) { background: #f6f8fb; border-color: #8a97aa; }
+.ui-c .ui-btn.primary { background: linear-gradient(#123a80, var(--ui-navy)); border-color: #08214d; color: #fff; }
+.ui-c .ui-btn.primary:hover:not(:disabled) { background: #0a2556; }
+.ui-c .ui-btn.danger { background: #fff; border-color: #d79a9a; color: #a11; }
+.ui-c .ui-btn.dashed { border-style: dashed; background: #f8fafc; color: #475569; }
+.ui-c .ui-btn.sm { height: 20px; padding: 0 7px; font-size: 11.5px; }
+.ui-c .ui-btn:disabled { opacity: .45; cursor: default; }
+
+/* 切替（実績/丸め など） */
+.ui-c .ui-seg { display: inline-flex; border: 1px solid var(--ui-line); border-radius: 2px; overflow: hidden; }
+.ui-c .ui-seg .ui-btn { border: 0; border-radius: 0; height: 22px; }
+.ui-c .ui-seg .ui-btn + .ui-btn { border-left: 1px solid var(--ui-line); }
+.ui-c .ui-seg .ui-btn.on { background: var(--ui-navy); color: #fff; }
+
+/* 枠（タイトル帯つき） */
+.ui-c .ui-panel { border: 1px solid var(--ui-line); background: #fff; margin-bottom: 10px; }
+.ui-c .ui-ptitle { display: flex; align-items: center; gap: 8px; background: #eef2f7; color: #0b2c66; border-bottom: 1px solid #c3cdda; border-left: 3px solid #0b2c66; font-weight: 700; font-size: 12.5px; padding: 3px 10px; }
+.ui-c .ui-ptitle .ui-sub { font-weight: 400; color: #475569; }
+
+/* 絞り込み */
+.ui-c .ui-filters { display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; background: var(--ui-band); padding: 8px 10px; }
+.ui-c .ui-f { display: flex; flex-direction: column; gap: 2px; }
+.ui-c .ui-f label { font-size: 11px; font-weight: 600; color: #334155; }
+.ui-c .ui-inp { height: 26px; padding: 0 6px; border: 1px solid var(--ui-line); border-radius: 0; background: #fff; color: #1f2937; font: 12.5px 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif; }
+
+/* 集計（ラベル＋値を1行） */
+.ui-c .ui-stats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.ui-c .ui-stat { display: inline-flex; align-items: baseline; gap: 7px; height: 26px; line-height: 24px; padding: 0 10px; border: 1px solid #c3ccd8; background: #fff; white-space: nowrap; }
+.ui-c .ui-stat span { font-size: 11px; color: #475569; }
+.ui-c .ui-stat b { font-size: 13.5px; color: var(--ui-navy); }
+.ui-c .ui-stat.alert { border-color: #e2a1a1; }
+.ui-c .ui-stat.alert b { color: #b91c1c; }
+.ui-c .ui-stat.click { cursor: pointer; }
+.ui-c .ui-stat.click:hover { background: #f6f8fb; }
+
+/* タブ（紙のファイルの見出し風） */
+.ui-c .ui-tabs { display: flex; gap: 2px; background: #f3f6fa; border-bottom: 1px solid var(--ui-line); padding: 4px 6px 0; }
+.ui-c .ui-tab { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 12px; background: #f6f8fb; border: 1px solid var(--ui-line); border-bottom: 0; color: #334155; font-weight: 600; cursor: pointer; }
+.ui-c .ui-tab .n { font-size: 11px; color: #64748b; }
+.ui-c .ui-tab.on { background: #fff; color: var(--ui-navy); height: 25px; margin-bottom: -1px; }
+
+/* 表 */
+.ui-c .ui-tablewrap { overflow: auto; max-height: 65vh; }
+.ui-c table.ui-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 12.5px; }
+.ui-c .ui-table th {
+  position: sticky; top: 0; z-index: 1;
+  background: #eef2f7; color: #0f172a; font-size: 12px; font-weight: 700; text-align: left; white-space: nowrap;
+  padding: 3px 8px; line-height: 1.3; border-right: 1px solid var(--ui-line); border-bottom: 1px solid var(--ui-line);
+}
+.ui-c .ui-table td { padding: 3px 8px; border-right: 1px solid var(--ui-line-soft); border-bottom: 1px solid var(--ui-line-soft); white-space: nowrap; }
+.ui-c .ui-table th:last-child, .ui-c .ui-table td:last-child { border-right: 0; }
+.ui-c .ui-table tbody tr:nth-child(even) td { background: #f7f9fc; }
+.ui-c .ui-table tbody tr:hover td { background: #fff8db; }
+.ui-c .ui-table .num { text-align: right; font-family: Consolas, 'Courier New', monospace; }
+.ui-c .ui-table th.num { font-family: inherit; }
+.ui-c .ui-table .wrap { white-space: pre-wrap; word-break: break-word; }
+.ui-c .ui-table .muted { color: #64748b; }
+.ui-c .ui-table .empty { text-align: center; padding: 20px; color: #94a3b8; background: #fff !important; }
+
+/* 状態ラベル: 5色だけ（済=緑・待ち=黄・不足=赤・作業中=青・休み=灰） */
+.ui-c .ui-pill { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 56px; padding: 0 8px; height: 20px; font-size: 11.5px; font-weight: 700; border: 1px solid; border-radius: 0; white-space: nowrap; }
+.ui-c .ui-pill.ok { background: #e6f4ea; color: #146c2e; border-color: #8cc79c; }
+.ui-c .ui-pill.warn { background: #fff4d6; color: #8a5300; border-color: #e5bf5c; }
+.ui-c .ui-pill.ng { background: #fde8e8; color: #9b1c1c; border-color: #e09a9a; }
+.ui-c .ui-pill.info { background: #e6effc; color: #123a80; border-color: #9cb6e0; }
+.ui-c .ui-pill.off { background: #eef1f5; color: #475569; border-color: #c3ccd8; }
+.ui-c .ui-tag { display: inline-block; padding: 0 6px; background: #eef1f5; border: 1px solid #d3dae4; font-size: 12px; }
+
+/* ページ送り */
+.ui-c .ui-pager { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; background: var(--ui-band); border-top: 1px solid var(--ui-line); color: #475569; font-size: 12px; }
+
+/* お知らせ（締め済み など） */
+.ui-c .ui-note { border: 1px solid #c3ccd8; background: #eef2f8; padding: 4px 10px; margin-bottom: 8px; font-size: 12.5px; }
+
+/* =====================================================================
+ * 自動適用（#adminContent[data-ui="c"]）: まだ個別に移行していない管理画面にも、同じ見た目を当てる。
+ * attendance-hub.page.js が内容エリアに data-ui="c" を付ける（月次勤怠入力(管理者) は除く）。
+ * 共通クラス（.ui-btn / .ui-inp / .ui-table / .ui-ph）を使っている所、シフト表 .sa-root・申請一覧 #reqUnified・.ui-keep には当てない（.ui-c の中でも古い書き方の表やボタンには当たる）。
+ * 除外条件は :where() に入れて詳細度を 0 にする（主ボタン・注意ボタンの色が通常ボタンに負けないように）。
+ * 各画面のインライン style に勝つため !important を使う。
+ * ===================================================================== */
+#adminContent[data-ui="c"] { font-family: 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif; }
+
+/* 見出し: 紺の文字＋下線（ダイアログ内は除く） */
+#adminContent[data-ui="c"] :where(h1, h2):where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep, [role="dialog"], [class*="modal"], [id*="Modal"]) *)) {
+  font-size: 16px !important; font-weight: 700 !important; color: #0b2c66 !important;
+  margin: 0 0 8px !important; padding: 0 0 6px !important; border-bottom: 2px solid #0b2c66 !important;
+  letter-spacing: 0 !important; line-height: 1.3 !important;
+}
+
+/* ボタン（通常: 白・グレー枠）。中に複数行の内容があるボタン（集計カード型）・閉じる・タブは対象外 */
+#adminContent[data-ui="c"] button:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep, .sidebar, nav) *):not([class*="close"], [class*="Close"], [id*="Close"], [aria-label="閉じる"], .ui-keep, [role="tab"], .ui-btn):not(:has(div, p, br, strong, img)):not([class*="stage"], [class*="card"], [class*="tile"])) {
+  height: 24px !important; min-height: 0 !important; padding: 0 10px !important;
+  border: 1px solid #c3cdda !important; border-radius: 2px !important;
+  background: #fff !important; color: #1f2937 !important;
+  font-family: inherit !important; font-size: 12px !important; font-weight: 600 !important; line-height: 1 !important;
+  box-shadow: none !important; text-shadow: none !important;
+}
+#adminContent[data-ui="c"] button:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep, .sidebar, nav) *):not(:has(div, p, br, strong, img)):not([class*="stage"], [class*="card"], [class*="tile"])):not(:disabled):hover { background: #f6f8fb !important; border-color: #8a97aa !important; }
+#adminContent[data-ui="c"] button:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *)):disabled { opacity: .45 !important; }
+
+/* 主ボタン（紺）: もともと紺・青で塗っていたボタン、主・保存系のクラス、送信ボタン */
+#adminContent[data-ui="c"] button:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep, .sidebar, nav) *):not(:has(div, p, br, strong, img)):not([class*="stage"], [class*="card"], [class*="tile"])):is(
+  [style*="#0b2c66"], [style*="#0B2C66"], [style*="#1e3a8a"], [style*="#1d4ed8"], [style*="#2563eb"], [style*="#0f172a"], [style*="#1e40af"], [style*="#0a2455"],
+  [style*="rgb(11, 44, 102)"], .primary, .btn-primary, .is-primary, [type="submit"]
+) {
+  background: #0b2c66 !important; border-color: #08214d !important; color: #fff !important;
+}
+#adminContent[data-ui="c"] button:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep, .sidebar, nav) *):not(:has(div, p, br, strong, img)):not([class*="stage"], [class*="card"], [class*="tile"])):is(
+  [style*="#0b2c66"], [style*="#1e3a8a"], [style*="#1d4ed8"], [style*="#2563eb"], [style*="#0f172a"], [style*="#1e40af"], .primary, .btn-primary, [type="submit"]
+):not(:disabled):hover { background: #0a2556 !important; }
+
+/* 注意ボタン（赤枠）: 赤で塗っていた・赤文字だったボタン、削除系のクラス */
+#adminContent[data-ui="c"] button:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep, .sidebar, nav) *):not(:has(div, p, br, strong, img)):not([class*="stage"], [class*="card"], [class*="tile"])):is(
+  [style*="#dc2626"], [style*="#ef4444"], [style*="#b91c1c"], [style*="#991b1b"], [style*="#e11d48"], [style*="#c02626"],
+  .danger, .btn-danger, .is-danger, [class*="delete"], [class*="Delete"], [id*="delete"], [id*="Delete"]
+) {
+  background: #fff !important; border-color: #d79a9a !important; color: #a11 !important;
+}
+
+/* 表の中のボタンは小さく */
+#adminContent[data-ui="c"] td button:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(:has(div, p, br, strong, img)):not([class*="stage"], [class*="card"], [class*="tile"])) { height: 20px !important; padding: 0 7px !important; font-size: 11.5px !important; }
+
+/* 入力欄 */
+#adminContent[data-ui="c"] :where(input:not([type="checkbox"], [type="radio"], [type="file"], [type="range"], [type="color"], [type="hidden"]), select):where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(.ui-inp)) {
+  height: 26px !important; min-height: 0 !important; padding: 0 6px !important;
+  border: 1px solid #c3cdda !important; border-radius: 0 !important; background-color: #fff !important;
+  font-family: inherit !important; font-size: 12.5px !important; box-shadow: none !important;
+}
+#adminContent[data-ui="c"] textarea:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *)) {
+  border: 1px solid #c3cdda !important; border-radius: 0 !important; font-family: inherit !important; font-size: 12.5px !important; box-shadow: none !important;
+}
+
+/* 表: 見出しは青灰、罫線あり、行は詰める */
+#adminContent[data-ui="c"] table:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(.ui-keep, .ui-table)) { border-collapse: collapse; font-size: 12.5px; }
+#adminContent[data-ui="c"] table:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(.ui-keep, .ui-table)) th {
+  background: #eef2f7 !important; color: #0f172a !important; font-size: 12px !important; font-weight: 700 !important;
+  padding: 2px 8px !important; border: 1px solid #c3cdda !important; letter-spacing: 0 !important; text-transform: none !important;
+  line-height: 1.3 !important; height: auto !important; vertical-align: middle !important;
+}
+#adminContent[data-ui="c"] table:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(.ui-keep, .ui-table)) td {
+  padding: 2px 8px !important; border-bottom: 1px solid #d3dae4 !important; font-size: 12.5px !important; line-height: 1.35 !important; height: auto !important;
+}
+/* 表の中の状態ラベル・バッジは低く（行の高さを詰める） */
+#adminContent[data-ui="c"] table:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(.ui-keep, .ui-table)) td :is(.attrec-pill, [class*="pill"], [class*="badge"], [class*="status"]) {
+  padding: 0 8px !important; line-height: 18px !important; height: auto !important; font-size: 11.5px !important; border-radius: 0 !important;
+  border-color: transparent !important; vertical-align: top !important;
+  display: block !important; width: fit-content !important; margin: 0 auto !important; /* 行の高さ＝ラベルの高さ（行間の余白を足さない） */ /* 表の罫線の中に枠を重ねない */
+}
+/* 表の中の小さなラベル（遅刻 など）も行の中央に。下に余白ができて行が高くならないように */
+#adminContent[data-ui="c"] table:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(.ui-keep, .ui-table)) td span { vertical-align: top !important; line-height: 18px !important; }
+#adminContent[data-ui="c"] table:where(:not(:is(.ui-ph, .ui-table, .ui-seg, .sa-root, #reqUnified, #saView, .ui-keep) *):not(.ui-keep, .ui-table)) tbody tr:hover td { background-color: #fff8db; }
+
+/* シフト管理（legacy-shifts）: 画面の古いCSSより共通UIを優先 */
+.ui-c[data-ui="shifts"] { max-width: none; flex: 0 0 auto !important; }
+.ui-c[data-ui="shifts"] .form-card { padding: 0 !important; margin: 0 !important; }
+.ui-c[data-ui="shifts"] .shift-form-actions { display: block !important; padding: 0 !important; margin: 0 0 10px !important; background: #fff !important; box-shadow: none !important; }
+.ui-c[data-ui="shifts"] .shift-form-actions > .ui-filters { display: flex !important; flex-wrap: wrap !important; align-items: flex-end !important; gap: 8px !important; padding: 8px 10px !important; margin: 0 !important; background: #f1f4f8 !important; border: 0 !important; border-radius: 0 !important; }
+.ui-c[data-ui="shifts"] .shift-field-wrapper { display: flex !important; flex-direction: column !important; gap: 2px !important; margin: 0 !important; width: auto !important; }
+.ui-c[data-ui="shifts"] .shift-field-label { font-size: 11px !important; font-weight: 600 !important; color: #334155 !important; margin: 0 !important; }
+.ui-c[data-ui="shifts"] .shift-input { height: 26px !important; min-height: 0 !important; padding: 0 6px !important; border: 1px solid #c3cdda !important; border-radius: 0 !important; font-size: 12.5px !important; box-shadow: none !important; }
+.ui-c[data-ui="shifts"] .shift-btns-wrap { display: flex !important; gap: 6px !important; align-items: flex-end !important; margin: 0 !important; padding: 0 !important; }
+.ui-c[data-ui="shifts"] .shift-btn { height: 24px !important; min-height: 0 !important; width: auto !important; min-width: 0 !important; padding: 0 10px !important; font-size: 12px !important; border-radius: 2px !important; box-shadow: none !important; }
+.ui-c[data-ui="shifts"] .shift-list-container { padding: 0 !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+.ui-c[data-ui="shifts"] .shift-list-container > table { margin: 0 !important; width: 100% !important; }
+
+/* お知らせ（notices）: 画面の古いCSSより共通UIを優先 */
+.ui-c[data-ui="notices"] { max-width: none; }
+.ui-c[data-ui="notices"] .notice-card { padding: 0 !important; border-radius: 0 !important; box-shadow: none !important; border: 1px solid #c3cdda !important; background: #fff !important; }
+.ui-c[data-ui="notices"] .notice-controls { margin: 0 !important; border-radius: 0 !important; }
+.ui-c[data-ui="notices"] #noticeComposerBody { padding: 8px 10px; }
+.ui-c[data-ui="notices"] .notice-textarea { width: 100% !important; box-sizing: border-box !important; min-height: 90px !important; border-radius: 0 !important; border: 1px solid #c3cdda !important; padding: 6px !important; font-size: 12.5px !important; }
+.ui-c[data-ui="notices"] .notice-listbar { display: flex !important; align-items: center !important; margin: 0 !important; border-radius: 0 !important; }
+.ui-c[data-ui="notices"] .notice-sub { font-size: 12.5px !important; font-weight: 700 !important; color: #0b2c66 !important; margin: 0 !important; }
+.ui-c[data-ui="notices"] .notice-table-wrap { border: 0 !important; border-radius: 0 !important; box-shadow: none !important; margin: 0 !important; overflow: auto; }
+.ui-c[data-ui="notices"] .notice-table { width: 100% !important; }
+.ui-c[data-ui="notices"] #noticePagination { margin: 0 !important; padding: 5px 8px !important; background: #f1f4f8; border-top: 1px solid #c3cdda; font-size: 12px !important; }
+
+/* システム設定（settings）・監査ログ（audit-logs）: 勤怠記録 と同じ見た目（枠＝淡い罫線、枠の見出し＝淡い帯＋紺の左線） */
+#adminContent[data-ui="c"] .settings-root { max-width: 1100px !important; padding: 12px 16px 24px !important; font-size: 12.5px !important; color: #1f2937 !important; background: #fff !important; }
+#adminContent[data-ui="c"] .settings-card { border: 1px solid #c3cdda !important; border-radius: 0 !important; box-shadow: none !important; background: #fff !important; padding: 0 !important; margin: 0 0 10px !important; }
+#adminContent[data-ui="c"] .settings-card--warn { border-left: 1px solid #c3cdda !important; }
+#adminContent[data-ui="c"] .settings-card-header { display: flex !important; align-items: baseline !important; gap: 10px !important; margin: 0 !important; padding: 3px 10px !important; background: #eef2f7 !important; border-bottom: 1px solid #c3cdda !important; border-left: 3px solid #0b2c66 !important; }
+#adminContent[data-ui="c"] .settings-card--warn .settings-card-header { border-left-color: #b45309 !important; }
+#adminContent[data-ui="c"] .settings-card-icon { display: none !important; }
+#adminContent[data-ui="c"] .settings-card-header > div { display: flex !important; align-items: baseline !important; gap: 10px !important; flex-wrap: wrap; }
+#adminContent[data-ui="c"] .settings-card-title { margin: 0 !important; font-size: 12.5px !important; font-weight: 700 !important; color: #0b2c66 !important; border: 0 !important; padding: 0 !important; }
+#adminContent[data-ui="c"] .settings-card-desc { margin: 0 !important; font-size: 11.5px !important; color: #64748b !important; }
+#adminContent[data-ui="c"] .settings-form { padding: 8px 10px !important; margin: 0 !important; display: flex !important; flex-direction: column !important; gap: 6px !important; }
+#adminContent[data-ui="c"] .settings-form-row, #adminContent[data-ui="c"] .settings-toggle-row { display: flex !important; align-items: center !important; gap: 10px !important; margin: 0 !important; padding: 2px 0 !important; }
+#adminContent[data-ui="c"] .settings-label, #adminContent[data-ui="c"] .settings-toggle-label { min-width: 160px !important; font-size: 12px !important; font-weight: 600 !important; color: #334155 !important; margin: 0 !important; }
+#adminContent[data-ui="c"] .settings-checkbox { font-size: 12.5px !important; color: #1f2937 !important; }
+#adminContent[data-ui="c"] .settings-form-actions { display: flex !important; gap: 6px !important; margin: 4px 0 0 !important; padding: 0 !important; }
+#adminContent[data-ui="c"] .settings-table-wrap, #adminContent[data-ui="c"] .audit-table-wrap { border: 1px solid #c3cdda !important; border-radius: 0 !important; box-shadow: none !important; }
+#adminContent[data-ui="c"] .settings-status-box { border: 1px solid #c3cdda !important; border-radius: 0 !important; background: #f1f4f8 !important; padding: 6px 10px !important; font-size: 12px !important; }
+#adminContent[data-ui="c"] .audit-page { padding: 12px 16px 24px !important; max-width: 1300px !important; }
+#adminContent[data-ui="c"] .audit-filters { border: 1px solid #c3cdda !important; border-radius: 0 !important; background: #f1f4f8 !important; padding: 8px 10px !important; margin: 0 0 10px !important; gap: 8px !important; }
+#adminContent[data-ui="c"] .settings-form, #adminContent[data-ui="c"] .settings-form * { text-align: left !important; }
+#adminContent[data-ui="c"] .settings-form-row, #adminContent[data-ui="c"] .settings-toggle-row { flex-direction: row !important; justify-content: flex-start !important; flex-wrap: wrap !important; }
+#adminContent[data-ui="c"] .settings-toggle-row { padding: 4px 10px !important; }
+#adminContent[data-ui="c"] .settings-checkbox-group { display: flex !important; flex-direction: row !important; flex-wrap: wrap !important; gap: 4px 14px !important; align-items: center !important; }
+#adminContent[data-ui="c"] .settings-card > :not(.settings-card-header):not(form) { margin-left: 10px !important; margin-right: 10px !important; }
+#adminContent[data-ui="c"] .settings-card > :last-child:not(.settings-card-header) { margin-bottom: 8px !important; }
+
+/* 勤怠記録（日別, legacy-attendance）: 絞り込みは「検索条件」と同じ帯、表は「勤怠一覧」の枠の中 */
+.ui-c[data-ui="daily"] { padding: 12px 16px 16px !important; background: #fff !important; }
+.ui-c[data-ui="daily"] .attrec-controls { border: 1px solid #c3cdda !important; border-left: 3px solid #0b2c66 !important; background: #f1f4f8 !important; padding: 6px 10px !important; margin: 0 0 10px !important; }
+.ui-c[data-ui="daily"] .attrec-table { padding: 0 !important; margin: 0 !important; border: 0 !important; }
+.ui-c[data-ui="daily"] .attrec-paging { padding: 5px 8px !important; background: #f1f4f8; border-top: 1px solid #c3cdda; font-size: 12px !important; }
+.ui-c[data-ui="daily"] #rosterSummaryInline > span { height: 22px !important; padding: 0 8px !important; border-radius: 0 !important; font-size: 11.5px !important; }
+
+/* 社員管理（employees, 一覧）: 勤怠記録 と同じ形にする（見出し・「検索条件」の枠・「社員一覧」の枠）
+ * 画面は JS が細かく組み立てるので、要素は足さず CSS だけで見た目をそろえる */
+#adminContent[data-ui="c"]:has(.emp-filters.filter-bar)::before {
+  content: '社員管理'; display: block; margin: 12px 16px 8px; padding: 0 0 6px; border-bottom: 2px solid #0b2c66;
+  font: 700 16px 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif; color: #0b2c66; line-height: 1.3;
+}
+#adminContent[data-ui="c"] .emp-filters.filter-bar {
+  display: flex !important; flex-wrap: wrap !important; align-items: flex-end !important; gap: 8px !important;
+  margin: 0 16px 10px !important; padding: 0 10px 8px !important;
+  border: 1px solid #c3cdda !important; border-radius: 0 !important; background: #f1f4f8 !important; box-shadow: none !important;
+}
+#adminContent[data-ui="c"] .emp-filters.filter-bar::before {
+  content: '検索条件'; flex: 0 0 calc(100% + 20px); margin: 0 -10px 2px; padding: 3px 10px;
+  background: #eef2f7; border-bottom: 1px solid #c3cdda; border-left: 3px solid #0b2c66;
+  font-size: 12.5px; font-weight: 700; color: #0b2c66;
+}
+#adminContent[data-ui="c"] .emp-filters.filter-bar .fi { display: flex !important; flex-direction: column !important; gap: 2px !important; margin: 0 !important; padding: 0 !important; background: none !important; border: 0 !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar .fi-label { font-size: 11px !important; font-weight: 600 !important; color: #334155 !important; margin: 0 !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar .fi-action { justify-content: flex-end !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar #btnEmpSearch { background: #0b2c66 !important; border-color: #0b2c66 !important; color: #fff !important; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) { margin: 0 16px !important; border: 1px solid #c3cdda !important; border-radius: 0 !important; box-shadow: none !important; background: #fff !important; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap)::before {
+  content: '社員一覧'; display: block; position: sticky; left: 0; padding: 3px 10px;
+  background: #eef2f7; border-bottom: 1px solid #c3cdda; border-left: 3px solid #0b2c66;
+  font: 700 12.5px 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif; color: #0b2c66;
+}
+/* 社員の詳細（sap-*）: 枠と見出しを 勤怠記録 の枠と同じに */
+#adminContent[data-ui="c"] .sap-section { border: 1px solid #c3cdda !important; border-radius: 0 !important; box-shadow: none !important; margin: 0 0 10px !important; }
+#adminContent[data-ui="c"] .sap-section-title { background: #eef2f7 !important; color: #0b2c66 !important; border-bottom: 1px solid #c3cdda !important; border-left: 3px solid #0b2c66 !important; padding: 3px 10px !important; font-size: 12.5px !important; font-weight: 700 !important; border-radius: 0 !important; }
+#adminContent[data-ui="c"] .sap-table td { padding: 2px 8px !important; font-size: 12.5px !important; }
+#adminContent[data-ui="c"] .sap-table td.lbl { background: #f7f9fc !important; color: #334155 !important; font-weight: 600 !important; width: 130px; }
+#adminContent[data-ui="c"] .sap-obj-header { border: 1px solid #c3cdda !important; border-radius: 0 !important; box-shadow: none !important; margin-bottom: 10px !important; }
+#adminContent[data-ui="c"] .sap-badge { border-radius: 0 !important; font-size: 11.5px !important; }
+#adminContent[data-ui="c"] .section-header { background: #eef2f7 !important; color: #0b2c66 !important; border-left: 3px solid #0b2c66 !important; border-bottom: 1px solid #c3cdda !important; padding: 3px 10px !important; font-size: 12.5px !important; font-weight: 700 !important; border-radius: 0 !important; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) table thead th {
+  background: #eef2f7 !important; background-image: none !important; color: #0f172a !important;
+  font-size: 12px !important; font-weight: 700 !important; padding: 3px 8px !important; line-height: 1.3 !important; height: auto !important;
+  border: 1px solid #c3cdda !important; text-align: left !important;
+}
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) table tbody td,
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) table tbody td * { font-size: 12.5px !important; line-height: 1.35 !important; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) table tbody td { padding: 2px 8px !important; height: auto !important; text-align: left !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar .fi-label { text-align: left !important; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) ~ * { margin-left: 16px !important; margin-right: 16px !important; font-size: 12px !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar .fi { align-items: flex-start !important; }
+/* 勤怠記録（日別）: 表の右に細い列のような隙間が出ないように（admin.css の max-width: calc(100vw - 240px)・常時スクロール・二重の枠をやめる） */
+.ui-c[data-ui="daily"] #rosterTable { border: 0 !important; scrollbar-gutter: auto !important; }
+.ui-c[data-ui="daily"] #rosterTable .attrec-list-scroll-wrap { width: 100% !important; max-width: none !important; margin: 0 !important; border: 0 !important; overflow: visible !important; }
+.ui-c[data-ui="daily"] #rosterTable .attrec-list-scroll-wrap > table { width: 100% !important; min-width: 100% !important; margin: 0 !important; border-left: 0 !important; border-right: 0 !important; }
+.ui-c[data-ui="daily"] #rosterTable .attrec-list-scroll-wrap > table tr > :last-child { border-right: 0 !important; }
+/* 社員フォーム: チェックボックス（フレックス など）は入力欄の幅・高さにしない */
+#adminContent .field-value input[type="checkbox"], #adminContent .field-value input[type="radio"] { width: auto !important; max-width: none !important; height: auto !important; margin: 0 !important; }
+#adminContent .field-value label:has(> input[type="checkbox"]) { white-space: nowrap; }
+/* 社員フォーム（新規・編集）: 枠を入力欄の幅に合わせる（右側の空白まで罫線が伸びないように） */
+#adminContent .emp-add-form { max-width: 640px !important; }
+#adminContent .emp-add-form table { width: 100% !important; }
+#adminContent .emp-add-form .field-label { width: 150px !important; white-space: nowrap; }
+/* 社員フォーム: 入力欄はセルの右端まで（枠との間に空白を残さない） */
+#adminContent .emp-add-form .field-value input:not([type="checkbox"]):not([type="radio"]),
+#adminContent .emp-add-form .field-value select,
+#adminContent .emp-add-form .field-value textarea { width: 100% !important; max-width: none !important; box-sizing: border-box !important; }
+/* 社員フォーム: 左の項目名の列に色をつける（表の見出しと同じ色） */
+#adminContent .emp-add-form .field-label { background: #eef2f7 !important; color: #1e3a5f !important; font-weight: 600 !important; border-right: 1px solid #c3cdda !important; }
+/* 調整申請の操作ボタン: アイコンだけの四角いボタン。役割ごとに色を分ける（承認=紺、却下=赤枠、やり取り=灰枠、削除=赤） */
+#adminContent .adj-action-btn { width: 26px !important; height: 24px !important; min-width: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 1px !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; border-radius: 3px !important; box-shadow: none !important; border: 1px solid #c3cdda !important; background: #fff !important; color: #475569 !important; vertical-align: middle; transition: background .15s, border-color .15s; }
+#adminContent .adj-action-btn svg { width: 13px; height: 13px; flex: none; }
+#adminContent .adj-action-btn:hover { background: #f1f5f9 !important; border-color: #94a3b8 !important; }
+#adminContent .adj-action-btn.approve { background: #0b2c66 !important; border-color: #0b2c66 !important; color: #fff !important; }
+#adminContent .adj-action-btn.approve:hover { background: #163f8a !important; border-color: #163f8a !important; }
+#adminContent .adj-action-btn.reject { border-color: #e5a3a3 !important; color: #b91c1c !important; }
+#adminContent .adj-action-btn.reject:hover { background: #fef2f2 !important; border-color: #dc2626 !important; }
+#adminContent .adj-action-btn.danger { border-color: #e5a3a3 !important; color: #b91c1c !important; background: #fff !important; }
+#adminContent .adj-action-btn.danger:hover { background: #fef2f2 !important; border-color: #dc2626 !important; }
+/* 社員一覧: 左右の余白の分だけ画面からはみ出して、横スクロールバーが画面の外に出ていた → 幅は余白を引いた分にする */
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap),
+#adminContent[data-ui="c"] .emp-filters.filter-bar,
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) ~ * { width: auto !important; max-width: none !important; box-sizing: border-box !important; }
+/* 内容の枠: width:100% に左右の余白が足されて画面より広くなる（右端が切れ、横スクロールバーが見えない）→ 余白込みで100%にする */
+#adminContent[data-ui="c"] { box-sizing: border-box !important; max-width: 100% !important; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap) { min-width: 0 !important; overflow-x: auto !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar::before { box-sizing: border-box; }
+/* 社員一覧の横スクロールバーをいつも見えるように */
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap)::-webkit-scrollbar { height: 10px; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap)::-webkit-scrollbar-track { background: #f1f4f8; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap)::-webkit-scrollbar-thumb { background: #a8b4c6; border-radius: 5px; }
+#adminContent[data-ui="c"] .emp-list-scroll-wrap:not(.attrec-list-scroll-wrap)::-webkit-scrollbar-thumb:hover { background: #7d8ba1; }
+/* 社員編集: 基本情報・職務情報を左右に分けず、上から順に1列で並べる（新規作成と同じ） */
+#adminContent .emp-edit-2col { display: block !important; max-width: 640px !important; margin-bottom: 0 !important; }
+#adminContent .emp-edit-2col > .emp-add-form { margin-bottom: 12px !important; }
+#adminContent .emp-add-form table { max-width: none !important; }
+#adminContent .emp-add-form { box-shadow: none !important; border-color: #c3cdda !important; }
+#adminContent .emp-add-form { box-sizing: border-box !important; }
+/* 社員編集: 中央寄せをやめて、他の画面と同じく左に寄せる */
+#adminContent .emp-edit-wrap { max-width: 672px !important; margin: 0 !important; padding: 8px 16px 0 !important; box-sizing: border-box !important; }
+/* 社員管理: 「検索条件」の枠をやめ、題名「社員管理」と絞り込みを1本の見出しの帯にまとめる（他の画面と同じ） */
+#adminContent[data-ui="c"]:has(.emp-filters.filter-bar)::before { display: none !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar {
+  align-items: center !important; gap: 6px !important; margin: 12px 16px 8px !important; padding: 0 0 6px !important;
+  background: transparent !important; border: 0 !important; border-bottom: 2px solid #0b2c66 !important;
+}
+#adminContent[data-ui="c"] .emp-filters.filter-bar::before {
+  content: '社員管理' !important; flex: 1 1 auto !important; margin: 0 !important; padding: 0 !important;
+  background: none !important; border: 0 !important; font: 700 16px 'Meiryo UI', 'Yu Gothic UI', Meiryo, sans-serif !important; color: #0b2c66 !important;
+}
+#adminContent[data-ui="c"] .emp-filters.filter-bar .fi { flex-direction: row !important; align-items: center !important; }
+#adminContent[data-ui="c"] .emp-filters.filter-bar .fi-label { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0 0 0 0) !important; }
