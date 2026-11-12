@@ -21,6 +21,8 @@ jest.mock('../../src/modules/webauthn/webauthn.repository', () => ({
   updateCounter: jest.fn(),
 }));
 jest.mock('../../src/modules/auth/refresh.repository', () => ({ createToken: jest.fn() }));
+jest.mock('../../src/modules/audit/audit.repository', () => ({ writeLog: jest.fn(async () => {}) }));
+const auditRepo = require('../../src/modules/audit/audit.repository');
 
 const authRepo = require('../../src/modules/auth/auth.repository');
 const passkeyRepo = require('../../src/modules/webauthn/webauthn.repository');
@@ -87,5 +89,20 @@ describe('Đăng nhập passkey', () => {
     const res = mockRes();
     await ctrl.loginVerify(mkReq({ email: 'boss@x', response: assertion }), res);
     expect(res.status).toHaveBeenCalledWith(400);
+  });
+});
+
+describe('パスキーログインの監査ログ', () => {
+  it('成功は login_success (method: passkey) で記録', async () => {
+    passkeyRepo.findByCredentialId.mockResolvedValue({ user_id: 1, credential_id: 'QUFB', public_key: 'QUFB', counter: 0 });
+    await login();
+    const call = auditRepo.writeLog.mock.calls.find(c => c[0].action === 'login_success');
+    expect(call).toBeTruthy();
+    expect(JSON.parse(call[0].afterData).method).toBe('passkey');
+  });
+  it('他人のパスキーは login_failed で記録', async () => {
+    passkeyRepo.findByCredentialId.mockResolvedValue({ user_id: 77, credential_id: 'QUFB', public_key: 'QUFB', counter: 0 });
+    await login();
+    expect(auditRepo.writeLog.mock.calls.some(c => c[0].action === 'login_failed')).toBe(true);
   });
 });

@@ -2,13 +2,16 @@ function parseOrigins(str) {
   return String(str || '').split(',').map(s => s.trim()).filter(Boolean);
 }
 
-// Default allowed origins (production + local dev)
-const DEFAULT_ORIGINS = [
-  'https://tosouapp.com',
-  'https://www.tosouapp.com',
+// Default allowed origins. localhost は開発用なので本番（NODE_ENV=production）では許可しない
+const DEV_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
   'http://127.0.0.1:3000'
+];
+const DEFAULT_ORIGINS = [
+  'https://tosouapp.com',
+  'https://www.tosouapp.com',
+  ...(process.env.NODE_ENV === 'production' ? [] : DEV_ORIGINS)
 ];
 
 function cors() {

@@ -8,6 +8,17 @@ const { jwtSecretCurrent, accessTokenExpires, refreshTokenExpiresDays } = requir
 
 const challengeStore = new Map();
 
+// パスキーでのログインも、パスワードログインと同じく監査ログに残す（失敗も記録）
+function auditPasskeyLogin(req, userId, action, extra = {}) {
+  try {
+    require('../audit/audit.repository').writeLog({
+      userId: userId || null, action, path: req.path, method: req.method, ip: req.ip,
+      userAgent: req.headers['user-agent'], beforeData: null,
+      afterData: JSON.stringify({ method: 'passkey', ...extra })
+    }).catch(() => {});
+  } catch (e) { /* 監査ログの失敗でログイン自体は止めない */ }
+}
+
 function originFromReq(req) {
   const xfProto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
   const isHttps = xfProto.includes('https') || req.protocol === 'https';
@@ -121,11 +132,12 @@ exports.loginVerify = async (req, res) => {
   const origin = originFromReq(req);
   const credIdBuf = Buffer.from(String(authResp.rawId || ''), 'base64url');
   const stored = await passkeyRepo.findByCredentialId(Buffer.from(credIdBuf).toString('base64url'));
-  if (!stored) return res.status(401).json({ message: 'Unknown credential' });
+  if (!stored) { auditPasskeyLogin(req, null, 'login_failed', { email, reason: 'unknown_credential' }); return res.status(401).json({ message: 'Unknown credential' }); }
   // Passkey phải thuộc đúng người có email này — nếu không, ai có passkey của mình
   // cũng đăng nhập được vào tài khoản người khác chỉ bằng cách đổi email.
   const user = await authRepository.findUserByEmail(email);
   if (!user || String(stored.user_id) !== String(user.id)) {
+    auditPasskeyLogin(req, user ? user.id : null, 'login_failed', { email, reason: 'credential_owner_mismatch' });
     return res.status(401).json({ message: 'Verification failed' });
   }
   if (String(user.employment_status || 'active') !== 'active') {
@@ -145,7 +157,7 @@ exports.loginVerify = async (req, res) => {
       counter: Number(stored.counter || 0)
     }
   });
-  if (!verification.verified) return res.status(401).json({ message: 'Verification failed' });
+  if (!verification.verified) { auditPasskeyLogin(req, user.id, 'login_failed', { email, reason: 'not_verified' }); return res.status(401).json({ message: 'Verification failed' }); }
   if (verification.authenticationInfo) {
     await passkeyRepo.updateCounter(stored.credential_id, verification.authenticationInfo.newCounter || stored.counter || 0);
   }
@@ -162,5 +174,6 @@ exports.loginVerify = async (req, res) => {
   res.cookie('csrfToken', csrf, { httpOnly: false, secure: isHttps, sameSite: 'lax', maxAge: refreshTokenExpiresDays * 24 * 60 * 60 * 1000, path: '/' });
   setSessionCookie(req, res, token);
   challengeStore.delete(`auth:${email}`);
+  auditPasskeyLogin(req, user.id, 'login_success', { role });
   res.status(200).json({ id: user.id, username: user.username, email: user.email, role, accessToken: token });
 };

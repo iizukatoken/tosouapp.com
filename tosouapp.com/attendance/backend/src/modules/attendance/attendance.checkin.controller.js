@@ -27,6 +27,10 @@ exports.checkIn = async (req, res) => {
       return res.status(400).json({ message: 'Missing userId' });
     }
     const b = req.body || {};
+    // 打刻時刻はサーバーの現在時刻。従業員が時刻を送ってきても受け付けない（画面の打刻ボタンは時刻を送らない）
+    if (!canOverride && b.time != null && b.time !== '') {
+      return res.status(400).json({ message: '打刻時刻は指定できません' });
+    }
 
     const wt = String(b?.workType || b?.work_type || '').trim();
     const workType = wt === 'onsite' || wt === 'remote' || wt === 'satellite' ? wt : null;
@@ -127,6 +131,10 @@ exports.checkOut = async (req, res) => {
       return res.status(400).json({ message: 'Missing userId' });
     }
     const b = req.body || {};
+    // 打刻時刻はサーバーの現在時刻。従業員が時刻を送ってきても受け付けない
+    if (!canOverride && b.time != null && b.time !== '') {
+      return res.status(400).json({ message: '打刻時刻は指定できません' });
+    }
     const loc = {
       latitude: b?.latitude,
       longitude: b?.longitude,
