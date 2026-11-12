@@ -78,12 +78,18 @@ async function buildLedgerRows({ tenantId, month, departmentId }) {
     }
 
     const { days } = await computeRange(allRawRows, tenantId || 0);
-    const computedByUserDate = new Map();
+    // 社員+日 → その日の行（出勤の早い順）。1つ目がその日の行、2つ目以降は 追加勤務
+    const itemsByUserDate = new Map();
     for (const day of days) {
       for (const item of day.items) {
-        computedByUserDate.set(`${item.userId}|${item.date}`, item);
+        const key = `${item.userId}|${item.date}`;
+        if (!itemsByUserDate.has(key)) itemsByUserDate.set(key, []);
+        itemsByUserDate.get(key).push(item);
       }
     }
+    for (const list of itemsByUserDate.values()) list.sort((a, b) => String(a.checkIn || '').localeCompare(String(b.checkIn || '')));
+    const computedByUserDate = new Map();
+    for (const [key, list] of itemsByUserDate) computedByUserDate.set(key, list[0]);
 
     // 退勤前(checkOutがまだ無い)の出勤打刻を拾う — computeRangeの集計対象外なので別扱い。
     const openCheckInByUserDate = new Map();
@@ -148,6 +154,39 @@ async function buildLedgerRows({ tenantId, month, departmentId }) {
           // (これを備考に出していたせいで作業内容が混ざって見えていた)。
           memo: daily?.notes || null
         });
+        // 2行目以降（追加勤務。例: 退勤後の社内会議）はすぐ下に別の行で出す
+        const extras = (itemsByUserDate.get(`${u.id}|${dateStr}`) || []).slice(1);
+        for (const ex of extras) {
+          totals.regularMinutes += ex.regularMinutes || 0;
+          totals.overtimeMinutes += ex.overtimeMinutes || 0;
+          totals.nightMinutes += ex.nightMinutes || 0;
+          if (isHolidayWork) totals.holidayWorkMinutes += (ex.regularMinutes || 0) + (ex.overtimeMinutes || 0);
+          totals.actualWorkedMinutes += ex.actualWorkedMinutes || 0;
+          totals.actualOvertimeMinutes += ex.actualOvertimeMinutes || 0;
+          if (isHolidayWork) totals.actualHolidayWorkMinutes += ex.actualWorkedMinutes || 0;
+          rows.push({
+            date: dateStr,
+            userId: u.id,
+            employeeCode: u.employee_code,
+            username: u.username,
+            departmentId: u.departmentId,
+            kubun: '追加勤務',
+            isExtra: true,
+            checkIn: fmtHm(ex.checkIn),
+            checkOut: fmtHm(ex.checkOut),
+            roundedIn: ex.roundedIn || '',
+            roundedOut: ex.roundedOut || '',
+            actualWorkedMinutes: ex.actualWorkedMinutes || 0,
+            actualOvertimeMinutes: ex.actualOvertimeMinutes || 0,
+            breakMinutes: ex.breakMinutes ?? 0,
+            regularMinutes: ex.regularMinutes || 0,
+            overtimeMinutes: ex.overtimeMinutes || 0,
+            nightMinutes: ex.nightMinutes || 0,
+            isHolidayWork,
+            // 追加勤務の 作業内容（例: 社内会議）
+            memo: ex.memo || null
+          });
+        }
       }
     }
 
@@ -178,6 +217,7 @@ exports.getMonthLedger = async (req, res) => {
     let checkedOutCount = 0;
     let offOrLeaveCount = 0;
     for (const r of rows) {
+      if (r.isExtra) continue;
       if (r.date !== today) continue;
       if (r.checkIn && !r.checkOut) workingCount++;
       else if (r.checkIn && r.checkOut) checkedOutCount++;

@@ -116,6 +116,8 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         a.id AS attendanceId,
         a.checkIn AS checkIn,
         a.checkOut AS checkOut,
+        a.open_count AS open_count,
+        ax.extra_times AS extra_times,
         COALESCE(ad.work_type, wr.work_type, a.work_type) AS work_type,
         ad.kubun AS daily_kubun,
         COALESCE(NULLIF(TRIM(a.location), ''), NULLIF(TRIM(ad.location), ''), NULLIF(TRIM(wr.site), '')) AS site,
@@ -140,18 +142,30 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         ON sms.userId = u.id
        AND sms.month = ?
       LEFT JOIN (
-        SELECT
-          userId,
-          MIN(id) AS id,
-          MIN(checkIn) AS checkIn,
-          CASE WHEN SUM(checkOut IS NULL) > 0 THEN NULL ELSE MAX(checkOut) END AS checkOut,
-          MAX(CASE WHEN (location IS NOT NULL AND location <> '') OR (memo IS NOT NULL AND memo <> '') THEN location END) AS location,
-          MAX(CASE WHEN (location IS NOT NULL AND location <> '') OR (memo IS NOT NULL AND memo <> '') THEN memo END) AS memo,
-          MAX(work_type) AS work_type
-        FROM attendance
-        WHERE DATE(COALESCE(checkIn, checkOut)) = ?
-        GROUP BY userId
+        -- その日の1行目（出勤の早い行）。2行目以降（追加勤務）は下の ax で別に出す
+        SELECT userId, id, checkIn, checkOut, location, memo, work_type, open_count
+        FROM (
+          SELECT userId, id, checkIn, checkOut, location, memo, work_type,
+                 ROW_NUMBER() OVER (PARTITION BY userId ORDER BY COALESCE(checkIn, checkOut) ASC, id ASC) AS rn,
+                 SUM(CASE WHEN checkIn IS NOT NULL AND checkOut IS NULL THEN 1 ELSE 0 END) OVER (PARTITION BY userId) AS open_count
+          FROM attendance
+          WHERE DATE(COALESCE(checkIn, checkOut)) = ?
+        ) segs
+        WHERE rn = 1
       ) a ON a.userId = u.id
+      LEFT JOIN (
+        SELECT userId,
+               GROUP_CONCAT(CONCAT(COALESCE(DATE_FORMAT(checkIn, '%H:%i'), '—'), '〜', COALESCE(DATE_FORMAT(checkOut, '%H:%i'), ''))
+                            ORDER BY COALESCE(checkIn, checkOut) SEPARATOR ' / ') AS extra_times
+        FROM (
+          SELECT userId, checkIn, checkOut,
+                 ROW_NUMBER() OVER (PARTITION BY userId ORDER BY COALESCE(checkIn, checkOut) ASC, id ASC) AS rn
+          FROM attendance
+          WHERE DATE(COALESCE(checkIn, checkOut)) = ?
+        ) xs
+        WHERE rn > 1
+        GROUP BY userId
+      ) ax ON ax.userId = u.id
       LEFT JOIN (
         SELECT userId, work_type, site, work, updated_at
         FROM (
@@ -174,7 +188,7 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
         COALESCE(u.employee_code, '') ASC,
         u.id ASC,
         a.checkIn ASC
-    `, [date, date, date, date.slice(0, 7), date, date]);
+    `, [date, date, date, date.slice(0, 7), date, date, date]);
 
     // Per-department off-day logic — tra department_holidays thật của từng công ty,
     // không hardcode tên bộ phận "工事部" nữa (đã thay bằng cấu hình 休日設定 theo tenant).
@@ -188,7 +202,8 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
 
     const items = (rows || []).map(r => {
       const hasIn = !!r.checkIn;
-      const hasOut = !!r.checkOut;
+      // 追加勤務の行がまだ退勤前なら 勤務中 として扱う
+      const hasOut = !!r.checkOut && !Number(r.open_count || 0);
       let kubun = String(r.daily_kubun || '').trim();
       if (kubun === '休み') kubun = '休日';
       if (kubun === '半休（有給）') kubun = '半休(有給)';
@@ -269,6 +284,8 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
           checkIn: r.checkIn || null,
           checkOut: r.checkOut || null
         },
+        // 2行目以降（追加勤務）の時刻。例 "19:00〜22:00"（複数は " / " 区切り）
+        extraTimes: r.extra_times || null,
         status,
         dailyKubun: kubunOut || null,
         // 終日の休暇（有給・無給・欠勤）なのに打刻がある → 管理画面で要確認

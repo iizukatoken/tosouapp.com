@@ -172,11 +172,11 @@ export async function mount({ content } = {}) {
         // 休日出勤の行は薄い黄色（縞模様より優先）
         const td = (r, cls, inner) => `<td class="${cls}"${r.isHolidayWork ? ' style="background:#fffbeb;"' : ''}>${inner}</td>`;
         body.innerHTML = rows.length ? rows.map(r => `
-          <tr>
-            ${td(r, '', escapeHtml(r.date.slice(5)))}
-            ${td(r, '', escapeHtml(r.employeeCode || r.userId))}
-            ${td(r, '', escapeHtml(r.username || ''))}
-            ${td(r, '', `<span class="ui-tag">${escapeHtml(KUBUN_LABEL[r.kubun] || r.kubun)}</span>`)}
+          <tr${r.isExtra ? ' class="is-extra" title="追加勤務（その日に追加した勤務の行。全部 残業）"' : ''}>
+            ${td(r, '', r.isExtra ? '<span style="color:#94a3b8;">↳</span>' : escapeHtml(r.date.slice(5)))}
+            ${td(r, '', r.isExtra ? '' : escapeHtml(r.employeeCode || r.userId))}
+            ${td(r, '', r.isExtra ? '' : escapeHtml(r.username || ''))}
+            ${td(r, '', r.isExtra ? '<span class="ui-tag" style="background:#f1f5f9;color:#475569;border-color:#cbd5e1;">追加勤務</span>' : `<span class="ui-tag">${escapeHtml(KUBUN_LABEL[r.kubun] || r.kubun)}</span>`)}
             ${td(r, 'num', escapeHtml(inOf(r) || '—'))}
             ${td(r, 'num', escapeHtml(outOf(r) || '—'))}
             ${td(r, 'num', r.breakMinutes != null ? `${r.breakMinutes}分` : '—')}
