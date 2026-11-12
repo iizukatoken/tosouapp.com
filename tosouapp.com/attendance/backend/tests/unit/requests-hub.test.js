@@ -171,3 +171,49 @@ describe('fetchMerged', () => {
     expect(rows[0].createdAt).toBe("2026-11-06");
   });
 });
+
+describe('fillDefaultProcessor（処理者の記録がない処理済み申請）', () => {
+  const { fillDefaultProcessor } = require('../../src/modules/requestsHub/requestsHub.admin.routes');
+
+  it('本人に設定されたマネージャーの名前を出す。承認待ち・記録ありはそのまま', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 10, departmentId: 1, tenant_id: 1, m_name: '鈴木' }]]);
+    const rows = [
+      { userId: 10, status: 'approved', processedByName: null },
+      { userId: 10, status: 'pending', processedByName: null },
+      { userId: 10, status: 'rejected', processedByName: '佐藤' }
+    ];
+    await fillDefaultProcessor(rows, 1);
+    expect(rows.map(r => r.processedByName)).toEqual(['鈴木', null, '佐藤']);
+    expect(db.query).toHaveBeenCalledTimes(1);
+  });
+
+  it('マネージャー未設定なら同じ部署の manager → admin を、全員分まとめて1回で引く', async () => {
+    db.query
+      .mockResolvedValueOnce([[
+        { id: 10, departmentId: 1, tenant_id: 1, m_name: null },
+        { id: 11, departmentId: 2, tenant_id: 1, m_name: null }
+      ]])
+      .mockResolvedValueOnce([[
+        { id: 5, tenant_id: 1, departmentId: 1, role: 'admin', full_name: '管理 太郎', username: 'adm' },
+        { id: 7, tenant_id: 1, departmentId: 1, role: 'manager', full_name: '', username: 'mgr1' },
+        { id: 8, tenant_id: 1, departmentId: 2, role: 'admin', full_name: '部長', username: 'a2' }
+      ]]);
+    const rows = [{ userId: 10, status: 'approved' }, { userId: 11, status: 'approved' }];
+    await fillDefaultProcessor(rows, 1);
+    expect(rows.map(r => r.processedByName)).toEqual(['mgr1', '部長']);
+    expect(db.query).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('シフト提出: processed_by 列が無い DB', () => {
+  it('列なしで取り直して一覧は出る', async () => {
+    const bad = Object.assign(new Error('Unknown column'), { code: 'ER_BAD_FIELD_ERROR', errno: 1054 });
+    db.query.mockImplementation(async (sql) => {
+      if (/FROM shift_month_status/.test(sql) && /processed_by/.test(sql)) throw bad;
+      if (/FROM shift_month_status/.test(sql)) return [[{ id: 3, userId: 10, month: '2026-11', status: 'PENDING', username: '長野' }]];
+      return [[]];
+    });
+    const rows = await fetchMerged({ tenantId: 1, month: '2026-11' });
+    expect(rows.find(r => r.category === 'shift')).toBeTruthy();
+  });
+});

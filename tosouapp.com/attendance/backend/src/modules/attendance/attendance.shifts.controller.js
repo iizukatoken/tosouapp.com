@@ -309,7 +309,7 @@ exports.postShiftsBulk = async (req, res) => {
       }
       await conn.query(`
         INSERT INTO shift_month_status (userId, month, status, tenant_id) VALUES (?, ?, 'PENDING', ?)
-        ON DUPLICATE KEY UPDATE status = 'PENDING', processed_by = NULL
+        ON DUPLICATE KEY UPDATE status = 'PENDING'
       `, [userId, month, tid]);
       await conn.commit();
       res.status(200).json({ success: true, message: 'Shifts saved successfully', data: { submission_status: 'PENDING' } });
@@ -461,7 +461,13 @@ exports.approveShiftMonth = async (req, res) => {
     }
     // 承認・差戻しは処理者を記録（申請一覧の「処理者」）。未処理に戻すときは消す
     const decided = status === 'APPROVED' || status === 'REJECTED';
-    await db.query(`UPDATE shift_month_status SET status = ?, processed_by = ? WHERE userId = ? AND month = ?`, [status, decided ? (req.user?.id || null) : null, userId, month]);
+    try {
+      await db.query(`UPDATE shift_month_status SET status = ?, processed_by = ? WHERE userId = ? AND month = ?`, [status, decided ? (req.user?.id || null) : null, userId, month]);
+    } catch (e) {
+      // processed_by 列が無い DB（マイグレーション未適用）でも承認自体は通す
+      if (!(e && (e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054))) throw e;
+      await db.query(`UPDATE shift_month_status SET status = ? WHERE userId = ? AND month = ?`, [status, userId, month]);
+    }
 
     // シフト承認 = 有給承認: ngày 有給 trong ca thành đơn 有給 (hiện ở 申請一覧). Chỉ ghi leave_requests,
     // không ghi bảng tháng (xem quy tắc cứng bên dưới). Lỗi ở đây không chặn việc duyệt ca.

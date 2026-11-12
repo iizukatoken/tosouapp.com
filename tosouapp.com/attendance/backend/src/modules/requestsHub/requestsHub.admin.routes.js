@@ -3,7 +3,6 @@ const router = express.Router();
 const { authenticate, authorize } = require('../../core/middleware/authMiddleware');
 const { resolveTenant } = require('../../core/middleware/tenantMiddleware');
 const db = require('../../core/database/mysql');
-const { resolveDefaultApproverName } = require('../attendance/attendance.utils');
 
 const isYM = (s) => /^\d{4}-\d{2}$/.test(String(s || ''));
 const monthJST = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 7);
@@ -88,15 +87,53 @@ function nextDay(ymd) {
 // allMonths: bỏ lọc theo tháng (dùng cho 「承認待ち」: hiện mọi đơn chờ dù thuộc tháng nào)
 // 処理済みで処理者の記録がない申請（記録を始める前のシフト承認など）は、
 // 本人に設定されたマネージャー（月次勤怠の承認者と同じ決め方）の名前を出す
+// 決め方は attendance.utils の resolveDefaultApproverName と同じ（社員のマネージャー → 同じ部署の manager → admin）。
+// 社員ごとに問い合わせると件数分 DB を往復するので、2 回のクエリでまとめて引く。
 async function fillDefaultProcessor(rows, tenantId) {
   const missing = rows.filter(r => r.status !== 'pending' && !r.processedByName && r.userId);
   if (!missing.length) return;
+  const nameOf = (u) => String(u?.full_name || u?.username || '').trim();
   const ids = [...new Set(missing.map(r => r.userId))];
-  const users = await queryOptional(
-    `SELECT id, manager_id, departmentId, tenant_id FROM users WHERE id IN (${ids.map(() => '?').join(',')})`, ids);
+  // 本人と、設定されたマネージャー（別会社所属でも tenant_users でこの会社にいれば可）
+  // 別会社のマネージャーは名前を出さない（tenant_users が無い環境では同じ会社の人だけ）
+  const usersSql = (withTu) => `
+    SELECT u.id, u.departmentId, u.tenant_id,
+           CASE WHEN m.id IS NULL OR COALESCE(u.tenant_id, ?) IS NULL OR m.tenant_id = COALESCE(u.tenant_id, ?)${withTu ? ' OR mtu.tenant_id IS NOT NULL' : ''}
+                THEN COALESCE(NULLIF(TRIM(m.full_name), ''), m.username) END AS m_name
+    FROM users u
+    LEFT JOIN users m ON m.id = u.manager_id${withTu ? '\n    LEFT JOIN tenant_users mtu ON mtu.user_id = m.id AND mtu.tenant_id = COALESCE(u.tenant_id, ?)' : ''}
+    WHERE u.id IN (${ids.map(() => '?').join(',')})
+  `;
+  let users = [];
+  try {
+    [users] = await db.query(usersSql(true), [tenantId, tenantId, tenantId, ...ids]);
+  } catch (e) {
+    try { [users] = await db.query(usersSql(false), [tenantId, tenantId, ...ids]); } catch (e2) { users = []; }
+  }
   const names = new Map();
+  const needDept = [];
   for (const u of users) {
-    try { names.set(String(u.id), await resolveDefaultApproverName(u, u.id, tenantId)); } catch (e) { /* 名前なしのまま */ }
+    const nm = String(u.m_name || '').trim();
+    if (nm) names.set(String(u.id), nm);
+    else if (u.departmentId != null && (u.tenant_id ?? tenantId) != null) needDept.push(u);
+  }
+  if (needDept.length) {
+    const depts = [...new Set(needDept.map(u => u.departmentId))];
+    const tids = [...new Set(needDept.map(u => u.tenant_id ?? tenantId))];
+    const staff = await queryOptional(`
+      SELECT id, tenant_id, departmentId, role, full_name, username FROM users
+      WHERE departmentId IN (${depts.map(() => '?').join(',')}) AND tenant_id IN (${tids.map(() => '?').join(',')})
+        AND role IN ('manager', 'admin') AND (employment_status IS NULL OR employment_status = 'active')
+      ORDER BY id
+    `, [...depts, ...tids]).catch(() => []);
+    for (const u of needDept) {
+      const tid = String(u.tenant_id ?? tenantId);
+      for (const role of ['manager', 'admin']) {
+        const hit = staff.find(x => String(x.tenant_id) === tid && String(x.departmentId) === String(u.departmentId)
+          && x.role === role && String(x.id) !== String(u.id) && nameOf(x));
+        if (hit) { names.set(String(u.id), nameOf(hit)); break; }
+      }
+    }
   }
   for (const r of missing) {
     const nm = names.get(String(r.userId));
@@ -161,16 +198,19 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths
   const filt = { tenantId, dept, userId, q };
 
   const sf = userFilters(filt, 's.userId');
-  const shiftRows = await queryOptional(`
+  const shiftSql = (withProc) => `
     SELECT s.id, s.userId, s.month, s.status, s.created_at, s.updated_at,
-           u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName,
-           pu.username AS processedByName
+           u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName${withProc ? ',\n           pu.username AS processedByName' : ''}
     FROM shift_month_status s
     JOIN users u ON u.id = s.userId
-    LEFT JOIN departments d ON d.id = u.departmentId
-    LEFT JOIN users pu ON pu.id = s.processed_by
+    LEFT JOIN departments d ON d.id = u.departmentId${withProc ? '\n    LEFT JOIN users pu ON pu.id = s.processed_by' : ''}
     WHERE ${allMonths ? '1 = 1' : 's.month = ?'} AND s.status IN ('PENDING', 'APPROVED', 'REJECTED')${sf.sql}
-  `, [...(allMonths ? [] : [month]), ...sf.params]);
+  `;
+  const shiftParams = [...(allMonths ? [] : [month]), ...sf.params];
+  const shiftRows = await queryOptional(shiftSql(true), shiftParams).catch((e) => {
+    if (e && (e.code === 'ER_BAD_FIELD_ERROR' || e.errno === 1054)) return queryOptional(shiftSql(false), shiftParams);
+    throw e;
+  });
   const shiftCounts = new Map();
   if (shiftRows.length) {
     const ids = [...new Set(shiftRows.map(r => r.userId))];
@@ -493,3 +533,4 @@ router.get('/export.csv', authorize('admin', 'manager'), async (req, res) => {
 
 module.exports = router;
 module.exports.fetchMerged = fetchMerged;
+module.exports.fillDefaultProcessor = fillDefaultProcessor;
