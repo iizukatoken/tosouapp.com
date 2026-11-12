@@ -600,7 +600,8 @@
         goOutHtml = `<div style="margin-top:4px;">${badges.join('')}</div>`;
       }
 
-      const kubunClass = kubunInit === '' ? 'is-planned' : (kubunInit === '休日' || kubunInit === '代替休日' ? 'is-holiday' : (kubunInit === '欠勤' ? 'is-absence' : ''));
+      // 青い枠（is-planned）は「予定」の印。時刻が入った日は予定ではないので枠を付けない（表示だけ。区分の保存値は変えない）
+      const kubunClass = (kubunInit === '' && !hasActual) ? 'is-planned' : (kubunInit === '休日' || kubunInit === '代替休日' ? 'is-holiday' : (kubunInit === '欠勤' ? 'is-absence' : ''));
 
       const rowId = seg?.id ? `id${seg.id}` : (seg?.clientId || makeClientId());
 
