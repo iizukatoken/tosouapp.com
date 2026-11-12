@@ -144,6 +144,9 @@ exports.getMonthDetail = async (req, res) => {
         shiftId: r.shiftId || null, workType: r.work_type || r.workType || null,
         labels: r.labels || null, location: r.location || null,
         memo: r.memo || null, notes: r.notes || null,
+        // 追加勤務の行（2行目以降）の休憩・理由
+        break_minutes: r.break_minutes != null ? Number(r.break_minutes) : null,
+        extra_reason: r.extra_reason || null,
       });
     }
 
