@@ -1997,12 +1997,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
       } catch (e) { /* 区分は 確定 でも保存できる */ }
       const hm = String(r?.checkIn || '').slice(11, 16) || nowHmJST();
-      await load(state.date);
+      await load(state.date, { silent: true, spinner: false }); // 画面を消さずに裏で更新（チラつかない）
       showToast(`出勤を記録しました（${hm}）`, 'success');
     } catch (e) {
       const m = stampErrorText(e);
       if (/Already checked in|409/.test(m)) {
-        await load(state.date);
+        await load(state.date, { silent: true, spinner: false }); // 画面を消さずに裏で更新（チラつかない）
         showErr('すでに出勤が記録されています。');
       } else {
         showErr(`出勤を記録できませんでした: ${m || '通信エラー'}`);
@@ -2040,7 +2040,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
       const r = await fetchJSONAuth('/api/attendance/checkout', { method: 'POST', body: JSON.stringify({}) });
       const hm = String(r?.checkOut || '').slice(11, 16) || hmNow;
-      await load(state.date);
+      await load(state.date, { silent: true, spinner: false }); // 画面を消さずに裏で更新（チラつかない）
       if (!state.hasStartedToday || !stHm) {
         showErr(`退勤を記録しました（${hm}）。出勤が未打刻のため、調整申請 で出勤時刻を申請してください。`);
       } else {
