@@ -3787,7 +3787,9 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
  * どれも「薄いグレーの地・紺の太字」で同じに見せる（以前は 時刻=白い入力欄、休憩=ブラウザ既定の薄い灰色 でバラバラだった）。
  * 予定（まだ打刻のない日）の時刻は従来どおり薄い灰色のまま。 */
 #monthTable input.se-time[disabled]:not(.is-auto):not([data-actual=""]),
-#monthTable select.se-select[disabled]:not(.is-auto):not(.se-kubun-select) {
+/* 休憩は、その日に実際の時刻がある行だけ（予定の行は薄いまま） */
+#monthTable tr:has(input.se-time[data-field="checkIn"]:not([data-actual=""])) select.se-select[disabled]:not(.is-auto):not(.se-kubun-select),
+#monthTable tr:has(input.se-time[data-field="checkOut"]:not([data-actual=""])) select.se-select[disabled]:not(.is-auto):not(.se-kubun-select) {
   background: #f1f5f9 !important;
   border-color: #d5dde8 !important;
   color: #0b2c66 !important;
@@ -3805,3 +3807,30 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 }
 /* 変更できない選択欄は ▼ を出さない（押せるように見えないように） */
 #monthTable select.se-select[disabled]:not(.se-kubun-select) { -webkit-appearance: none; appearance: none; text-align: center; text-align-last: center; }
+
+/* 予定の行の変更できない休憩: 予定の時刻と同じ薄い表示 */
+#monthTable select.se-select[disabled]:not(.se-kubun-select) { background: #f8fafc; color: #94a3b8; -webkit-text-fill-color: #94a3b8; font-weight: 400; opacity: 1; border-color: #e2e8f0; }
+
+/* ---- ステータス列: 長い文字（作業内容未入力・退勤未打刻（調整申請） など）でも1行・同じ高さ ----
+ * 折り返して行が高くなったり、列が広がったりしないように。全文はマウスを乗せると出る（title）。
+ * 「未保存」は下に積まず、ラベルの下の余白に重ねて出す（行の高さを変えない）。 */
+#monthTable .se-status-wrap { position: relative; flex-direction: row !important; }
+#monthTable .se-status-wrap .se-status {
+  white-space: nowrap !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 16px !important;
+  height: 18px;
+  font-size: 10.5px !important;
+  letter-spacing: 0 !important;
+  padding: 0 5px !important;
+  display: inline-block !important;
+}
+#monthTable tr[data-dirty="1"] .se-status-wrap::after {
+  position: absolute;
+  left: 0; right: 0; top: 100%;
+  text-align: center;
+  font-size: 9px !important;
+  line-height: 10px !important;
+  pointer-events: none;
+}

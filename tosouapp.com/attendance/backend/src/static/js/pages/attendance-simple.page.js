@@ -756,7 +756,8 @@ const getSimpleStatusMeta = () => {
     // 出勤・退勤が揃っていて作業内容もあれば確認済み（月次勤怠・Excel と同じ条件）
     const hasBothNow = !!(effectiveHm($('#startTime')) && effectiveHm($('#endTime')));
     if (hasBothNow || (window.state && window.state.hasEndedToday)) {
-      const hasWork = !!String($('#workContent')?.value || '').trim();
+      // 作業内容は「現場」の日だけ必須（月次勤怠・Excel と同じ条件）
+      const hasWork = String($('#workType')?.value || '').trim() !== 'satellite' || !!String($('#workContent')?.value || '').trim();
       return hasWork ? { text: '確認済み', cls: 'ok' } : { text: '作業内容未入力', cls: 'warn' };
     }
     // 過去の日で退勤の打刻がない → 調整申請へ

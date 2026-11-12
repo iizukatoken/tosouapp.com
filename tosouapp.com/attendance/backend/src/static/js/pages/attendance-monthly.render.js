@@ -438,14 +438,17 @@
       const leaveKubunSet = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
       const isRegularOffRow = !!isOff && !hasActual && (effectiveKubun === '休日' || effectiveKubun === '代替休日');
       const isLeaveApplied = !!kubunInit && leaveKubunSet.has(effectiveKubun) && !hasActual && !isRegularOffRow;
-      // 確認済み: checkIn + checkOut + memo (作業内容) がすべて揃っていれば自動で確認済み（管理者の操作は不要）
-      const isConfirmed = !approved && hasActualIn && hasActualOut && !!String(daily?.memo || '').trim();
+      // 確認済み: 出勤・退勤が揃っていれば自動で確認済み。作業内容は「現場」の日だけ必須（会社の決定 2026-11-12）
+      // ここでは下の wtVal はまだ無いので、同じ取り方（打刻行の workType → その日の workType）で 現場 かどうかを見る
+      const isSiteDay = String(seg?.workType || (allowDailyAsActual && primary ? daily?.workType : '') || '').trim() === 'satellite';
+      const memoOk = !isSiteDay || !!String(daily?.memo || '').trim();
+      const isConfirmed = !approved && hasActualIn && hasActualOut && memoOk;
       let text = '未承認';
       let cls = 'warn';
       const friendly = friendlyDayStatus({
         dateStr, kubun: effectiveKubun, hasActualIn, hasActualOut, isPlanned, isRegularOff: isRegularOffRow, isAdminView,
         leaveStatus: (detail?.leaveStatusByDate || {})[dateStr] || null,
-        hasMemo: !!String(daily?.memo || '').trim(),
+        hasMemo: memoOk,
         // 休みの日: 正社員はカレンダーの休日、パートは出勤のシフトが無い日
         isOffDay: !!isOff || (!!isPartTime && shiftRequest?.status !== 'WORKING')
       });
@@ -720,7 +723,7 @@
       </td>
       <td>
         <div class="se-status-wrap">
-          <span class="se-status ${esc(st.cls)}">${esc(st.text)}</span>
+          <span class="se-status ${esc(st.cls)}" title="${esc(st.text)}">${esc(st.text)}</span>
         </div>
       </td>
       <td ${showDateDow ? 'data-field="approver"' : ''} style="text-align:center;color:#0f172a;font-weight:800;">${showDateDow ? esc(st.approver) : '—'}</td>
@@ -1016,14 +1019,16 @@
         const isLeaveAppliedNow = !!cls && leaveKubunSetNow.has(cls) && !hasActualNow && !isRegularOffRowNow;
         // 確認済み: チェックイン・アウト・メモ (作業内容) が全て揃っていれば自動で確認済み
         const memoValNow = String(rowEl.querySelector('[data-field="memo"]')?.value || '').trim();
-        const isConfirmedNow = !monthApproved && hasActualInNow && hasActualOutNow && !!memoValNow;
+        // 作業内容は「現場」の日だけ必須
+        const memoOkNow = !rowEl.querySelector('[data-field="ckSatellite"]')?.checked || !!memoValNow;
+        const isConfirmedNow = !monthApproved && hasActualInNow && hasActualOutNow && memoOkNow;
         let stText = '未承認';
         let stCls = 'warn';
         const friendlyNow = friendlyDayStatus({
           dateStr, kubun: cls || rowEl.dataset.plannedLeaveKubun || '', hasActualIn: hasActualInNow, hasActualOut: hasActualOutNow, isPlanned,
           isRegularOff: isRegularOffRowNow, isAdminView,
           leaveStatus: (state.currentMonthDetail?.leaveStatusByDate || {})[dateStr] || null,
-          hasMemo: !!memoValNow,
+          hasMemo: memoOkNow,
           isOffDay: !!offDay || (rowEl.dataset.partTime === '1' && rowEl.dataset.shiftWorking !== '1')
         });
         if (monthApproved) {
@@ -1049,7 +1054,7 @@
         if (stText === '—') stCls = 'none';
         const stSpan = statusWrap.querySelector('span.se-status');
         if (stSpan) {
-          if (stSpan.textContent !== stText) stSpan.textContent = stText;
+          if (stSpan.textContent !== stText) { stSpan.textContent = stText; stSpan.title = stText; }
           stSpan.classList.remove('ok','warn','danger','none');
           stSpan.classList.add(stCls);
         }

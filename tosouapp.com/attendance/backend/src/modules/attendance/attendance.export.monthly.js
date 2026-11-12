@@ -518,7 +518,8 @@ exports.exportMonthXlsx = async (req, res) => {
       const leaveKubunSet = new Set(['休日', '代替休日', '有給休暇', '無給休暇', '欠勤']);
       const isRegularOffRow = isOff && !hasTime && (dailyKubun === '休日' || dailyKubun === '代替休日');
       const isLeaveApplied = !!dailyKubun && leaveKubunSet.has(dailyKubun) && !hasTime && !isRegularOffRow;
-      const isConfirmedRow = !!inHm && !!outHm && !!workContent;
+      // 作業内容は「現場」の日だけ必須（画面と同じ。会社の決定 2026-11-12）
+      const isConfirmedRow = !!inHm && !!outHm && (wt !== 'satellite' || !!workContent);
       const isAutoConfirmedNoWork = !hasTime && ds <= todayJst && (dailyKubun === '' || dailyKubun === '休日') && isOff;
       const approveStatus = (() => {
         if (monthStatus === 'approved') return '承認済み';
