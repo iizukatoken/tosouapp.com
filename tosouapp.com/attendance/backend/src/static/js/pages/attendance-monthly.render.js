@@ -739,6 +739,7 @@
       <td style="text-align:center;">
          <div style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
            ${showDateDow ? `<button type="button" class="se-icon-btn primary" data-action="add" ${(state.editableMonth && canAddMore) ? '' : 'disabled'} title="${canAddMore ? '行追加' : '1日は最大3件まで'}" style="font-weight:bold; font-size:14px; padding:0; width:22px; height:22px;">+</button>` : ''}
+           ${(isEmployee && hasActual && seg?.id) ? `<a class="se-mini-btn se-adj-btn" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(dateStr)}&attendanceId=${encodeURIComponent(seg.id)}" title="修正申請（この行の時刻の修正・削除）" aria-label="修正申請" style="display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;padding:0;font-size:13px;text-decoration:none;">✎</a>` : ''}
            ${(isEmployee && hasActual) ? '' : `<button type="button" class="se-icon-btn secondary" data-action="clear" ${state.editableMonth ? '' : 'disabled'} title="行クリア" style="padding:0; width:22px; height:22px;">×</button>`}
            ${(isAdminView && hasActualOut) ? `<button type="button" class="se-icon-btn warn" data-action="clear-checkout" ${state.editableMonth ? '' : 'disabled'} title="退勤打刻を削除（チェックインのみ残す）" style="font-size:10px; padding:0 3px; width:auto; min-width:30px; height:22px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">退勤削除</button>` : ''}
          </div>

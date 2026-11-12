@@ -450,6 +450,13 @@ async function runMigrations() {
           // 追加の行（2行目以降）の休憩（分）。1行目は従来どおり attendance_daily.break_minutes を使う
           try { await conn.query(`ALTER TABLE attendance ADD COLUMN break_minutes SMALLINT UNSIGNED NULL`); } catch (e) { /* already exists */ }
         }
+      },
+      {
+        id: '20261112_03_time_adjust_request_type',
+        up: async () => {
+          // 調整申請の種類: NULL = 時刻の修正（従来）、'delete' = その行を削除
+          try { await conn.query(`ALTER TABLE time_adjust_requests ADD COLUMN request_type VARCHAR(16) NULL`); } catch (e) { /* already exists / table not yet created */ }
+        }
       }
     ];
     for (const m of migrations) {

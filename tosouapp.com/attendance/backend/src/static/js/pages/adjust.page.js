@@ -633,6 +633,11 @@ const renderForm = async () => {
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
           </span>
         </div>
+        <!-- 1日に複数の行があるとき: 修正する行を選ぶ -->
+        <div id="adjSegWrap" style="display:none;margin-top:10px;">
+          <div style="font-size:12px;font-weight:700;color:#0b2c66;margin:0 0 4px;">修正する行</div>
+          <select id="adjSeg" style="width:100%;height:38px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;font-size:14px;background:#fff;color:#0f172a;"></select>
+        </div>
         <!-- D: ngày đã có đơn đang chờ duyệt -->
         <div id="adjDupWarn" class="adj-dup-warn" style="display:none;"></div>
         <!-- A: các ngày thiếu 出勤/退勤 (tháng này + tháng trước chưa 承認) — chạm để chọn -->
@@ -649,6 +654,10 @@ const renderForm = async () => {
           修正設定
         </div>
 
+        <div id="adjTypeWrap" style="display:none;gap:16px;margin:0 0 12px;font-size:14px;color:#0f172a;">
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="adjType" value="modify" checked> 時刻を直す</label>
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;"><input type="radio" name="adjType" value="delete"> この行を削除</label>
+        </div>
         <div class="adj-times">
           <div class="adj-time-block">
             <span class="adj-time-label in">
@@ -845,6 +854,33 @@ const renderForm = async () => {
     }
   };
 
+  // 修正する行（1日に複数あるとき）と 申請の種類
+  let daySegments = [];
+  const segLabel = (sg, i) => `${i + 1}行目  ${String(sg?.checkIn || '').slice(11, 16) || '—'}〜${String(sg?.checkOut || '').slice(11, 16) || '—'}`;
+  const adjType = () => String(document.querySelector('input[name="adjType"]:checked')?.value || 'modify');
+  const applyTypeUi = () => {
+    const del = adjType() === 'delete';
+    const times = document.querySelector('.adj-times');
+    if (times) times.style.display = del ? 'none' : '';
+  };
+  const selectSegment = (sg) => {
+    attendanceId = sg?.id || null;
+    setCurrent(sg || null);
+    try { setDateTimeValue(els.in, sg?.checkIn ? String(sg.checkIn).slice(11, 16) : ''); } catch (e) { /* silently ignored */ }
+    try { setDateTimeValue(els.out, sg?.checkOut ? String(sg.checkOut).slice(11, 16) : ''); } catch (e) { /* silently ignored */ }
+    if (els.outNext) els.outNext.checked = !!sg?.checkOut && String(sg.checkOut).slice(0, 10) > String(els.date?.value || '');
+    // 「この行を削除」は既存の行を選んでいるときだけ
+    const typeWrap = $('#adjTypeWrap');
+    if (typeWrap) typeWrap.style.display = attendanceId ? 'flex' : 'none';
+    if (!attendanceId) { const m = document.querySelector('input[name="adjType"][value="modify"]'); if (m) m.checked = true; }
+    applyTypeUi();
+  };
+  document.querySelectorAll('input[name="adjType"]').forEach((r) => r.addEventListener('change', applyTypeUi));
+  $('#adjSeg')?.addEventListener('change', (e) => {
+    const v = String(e.target.value || '');
+    selectSegment(v === 'new' ? null : daySegments.find((sg) => String(sg.id) === v));
+  });
+
   const loadDay = async () => {
     showErr('');
     const d = els.date?.value;
@@ -859,14 +895,25 @@ const renderForm = async () => {
         seg = (r?.segments || []).find(s => String(s.id) === String(initialAttendanceId));
         initialAttendanceId = null; // Only use it once
       }
-      if (!seg) seg = pickLatestSegment(r?.segments);
-
-      attendanceId = seg?.id || null;
-      setCurrent(seg);
-      // 時刻のみセット。退勤が 修正対象日 の翌日なら「翌日」にチェック
-      try { setDateTimeValue(els.in, seg?.checkIn ? String(seg.checkIn).slice(11, 16) : ''); } catch (e) { /* silently ignored */ }
-      try { setDateTimeValue(els.out, seg?.checkOut ? String(seg.checkOut).slice(11, 16) : ''); } catch (e) { /* silently ignored */ }
-      if (els.outNext) els.outNext.checked = !!seg?.checkOut && String(seg.checkOut).slice(0, 10) > d;
+      daySegments = (Array.isArray(r?.segments) ? r.segments : []).filter((sg) => sg && (sg.checkIn || sg.checkOut))
+        .sort((a, b) => String(a.checkIn || a.checkOut || '').localeCompare(String(b.checkIn || b.checkOut || '')));
+      // 既定: URL で指定された行 → 退勤のない行 → 1行目
+      if (!seg) seg = daySegments.find((sg) => sg.checkIn && !sg.checkOut) || daySegments[0] || pickLatestSegment(r?.segments);
+      // 2行以上あるときは「修正する行」を選べるようにする（打刻のない時間を足す申請は「新しい行」）
+      const segWrap = $('#adjSegWrap');
+      const segSel = $('#adjSeg');
+      if (segWrap && segSel) {
+        if (daySegments.length >= 2) {
+          segSel.innerHTML = daySegments.map((sg, i) => `<option value="${sg.id}">${segLabel(sg, i)}</option>`).join('')
+            + '<option value="new">新しい行（打刻のない時間を追加）</option>';
+          segSel.value = seg?.id ? String(seg.id) : 'new';
+          segWrap.style.display = '';
+        } else {
+          segSel.innerHTML = '';
+          segWrap.style.display = 'none';
+        }
+      }
+      selectSegment(seg);
     } catch (e) {
       attendanceId = null;
       setCurrent(null);
@@ -942,6 +989,31 @@ const renderForm = async () => {
     const d = els.date?.value;
     if (!isISODate(d)) { showErr('修正対象日を選択してください'); return; }
     if (d > todayISO()) { showErr('未来の日付は申請できません'); return; }
+    if (adjType() === 'delete') {
+      if (!attendanceId) { showErr('削除する行を選んでください'); return; }
+      const reasonDel = String(els.reason?.value || '').trim();
+      if (!reasonDel) { showErr('理由を入力してください'); return; }
+      const sgDel = daySegments.find((sg) => String(sg.id) === String(attendanceId));
+      const lbl = sgDel ? `${String(sgDel.checkIn || '').slice(11, 16) || '—'}〜${String(sgDel.checkOut || '').slice(11, 16) || '—'}` : '';
+      if (!confirm(`${fmtYmdDow(d)} の行（${lbl}）の削除を申請しますか？\n承認されると、この行は削除されます。`)) return;
+      els.submit.disabled = true;
+      showSpinner();
+      try {
+        await fetchJSONAuth('/api/adjust', { method: 'POST', body: JSON.stringify({ attendanceId, requestType: 'delete', reason: reasonDel }) });
+        if (els.status) els.status.textContent = '申請しました';
+        showToast('行の削除を申請しました');
+        if (els.reason) els.reason.value = '';
+        await refreshPendingDates();
+        renderDupWarn();
+        await renderList();
+      } catch (e) {
+        showErr(e?.message || '申請に失敗しました');
+      } finally {
+        hideSpinner();
+        els.submit.disabled = false;
+      }
+      return;
+    }
     const inHm = String(els.in?.value || '').trim();
     const outHm = String(els.out?.value || '').trim();
     const outDate = els.outNext?.checked ? addDaysISO(d, 1) : d;
@@ -1312,8 +1384,8 @@ const renderList = async () => {
             </div>
             <div class="adj-hist-col after">
               <div class="adj-hist-col-title">変更後</div>
-              <div class="adj-hist-line">出勤時刻: ${newInTime}</div>
-              <div class="adj-hist-line">退勤時刻: ${newOutTime}</div>
+              ${String(r.request_type || "") === "delete" ? '<div class="adj-hist-line" style="color:#b91c1c;font-weight:700;">この行を削除</div>' : `<div class="adj-hist-line">出勤時刻: ${newInTime}</div>
+              <div class="adj-hist-line">退勤時刻: ${newOutTime}</div>`}
             </div>
           </div>
 

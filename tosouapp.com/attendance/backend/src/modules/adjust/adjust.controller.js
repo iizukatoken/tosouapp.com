@@ -150,20 +150,30 @@ exports.create = async (req, res) => {
       return res.status(403).json({ message: 'Admin cannot create adjust requests' });
     }
     
-    const { attendanceId, requestedCheckIn, requestedCheckOut, reason } = req.body || {};
-    if (!userId || (!requestedCheckIn && !requestedCheckOut)) {
+    const { attendanceId, reason } = req.body || {};
+    let { requestedCheckIn, requestedCheckOut } = req.body || {};
+    const requestType = String(req.body?.requestType || '') === 'delete' ? 'delete' : null;
+    if (requestType === 'delete') {
+      // 「この行を削除」: 対象の行が本人のものであること。時刻は表示用にその行の時刻を入れる
+      if (!userId || !attendanceId) return res.status(400).json({ message: '削除する行を選んでください' });
+      if (!String(reason || '').trim()) return res.status(400).json({ message: '理由を入力してください' });
+      const [[row]] = await db.query('SELECT id, checkIn, checkOut FROM attendance WHERE id = ? AND userId = ? LIMIT 1', [attendanceId, userId]);
+      if (!row) return res.status(404).json({ message: '対象の行が見つかりません' });
+      requestedCheckIn = row.checkIn || null;
+      requestedCheckOut = row.checkOut || null;
+    } else if (!userId || (!requestedCheckIn && !requestedCheckOut)) {
       return res.status(400).json({ message: 'Missing fields' });
     }
-    if (await lacksNeededCheckOut({ userId, attendanceId, requestedCheckIn, requestedCheckOut })) {
+    if (!requestType && await lacksNeededCheckOut({ userId, attendanceId, requestedCheckIn, requestedCheckOut })) {
       return res.status(400).json({ message: MISSING_CHECKOUT_MESSAGE });
     }
-    const id = await repo.create({ userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenantId: req.tenantId || null });
+    const id = await repo.create({ userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenantId: req.tenantId || null, requestType });
     try {
       const userName = String(req.user?.username || req.user?.email || `user#${userId}`);
       await noticesRepo.createAdminNotification({
         kind: 'time_adjust',
-        title: '時間修正申請',
-        message: `${userName} さんが時間修正を申請しました`,
+        title: requestType === 'delete' ? '勤怠の行の削除申請' : '時間修正申請',
+        message: requestType === 'delete' ? `${userName} さんが勤怠の行の削除を申請しました` : `${userName} さんが時間修正を申請しました`,
         linkUrl: '/admin/attendance/adjust-requests',
         payload: {
           source: 'adjust',
@@ -238,7 +248,19 @@ exports.updateStatus = async (req, res) => {
       //   dùng bulkUpsertAttendance (chính là hàm màn 月次 dùng) để TẠO MỚI record
       //   cho đúng ngày, đồng thời đồng bộ attendance_daily.
       try {
-        applied = await applyApprovedTimes(reqRow, tid);
+        if (String(reqRow.request_type || '') === 'delete') {
+          // 「この行を削除」の申請: 承認でその行を削除（本人の行のみ）
+          if (!reqRow.attendanceId) {
+            applied = { ok: false, error: '削除する行が指定されていません' };
+          } else {
+            const [del] = await db.query('DELETE FROM attendance WHERE id = ? AND userId = ?', [reqRow.attendanceId, reqRow.userId]);
+            applied = Number(del?.affectedRows || 0) > 0
+              ? { ok: true, mode: 'deleted', attendanceId: reqRow.attendanceId }
+              : { ok: false, error: '削除する行が見つかりません（既に削除済みの可能性）' };
+          }
+        } else {
+          applied = await applyApprovedTimes(reqRow, tid);
+        }
       } catch (e) {
         applied = { ok: false, error: String(e && e.message || e) };
         console.error('[adjust.approve] write attendance failed:', e && e.message);
@@ -252,7 +274,7 @@ exports.updateStatus = async (req, res) => {
         });
       }
       try {
-        await recomputeDailyLateEarly(reqRow, tid);
+        if (String(reqRow.request_type || '') !== 'delete') await recomputeDailyLateEarly(reqRow, tid);
       } catch (e) {
         console.error('[adjust.approve] recompute late/early failed:', e && e.message);
       }

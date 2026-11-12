@@ -127,3 +127,25 @@ describe('調整申請の承認', () => {
     expect(res.status).toHaveBeenCalledWith(200);
   });
 });
+
+describe('「この行を削除」の申請', () => {
+  it('承認でその行（本人のもの）を削除する', async () => {
+    repo.getById.mockResolvedValue({ ...pendingRow, attendanceId: 55, request_type: 'delete' });
+    db.query.mockImplementation(async (sql) => (/DELETE FROM attendance/.test(sql) ? [{ affectedRows: 1 }] : [[]]));
+    const res = mockRes();
+    await updateStatus(makeReq(), res);
+    const del = db.query.mock.calls.find(c => /DELETE FROM attendance/.test(c[0]));
+    expect(del[1]).toEqual([55, 20]);
+    expect(attendanceRepo.bulkUpsertAttendance).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json.mock.calls[0][0].applied.mode).toBe('deleted');
+  });
+  it('行が見つからなければ承認しない（422）', async () => {
+    repo.getById.mockResolvedValue({ ...pendingRow, attendanceId: 55, request_type: 'delete' });
+    db.query.mockImplementation(async (sql) => (/DELETE FROM attendance/.test(sql) ? [{ affectedRows: 0 }] : [[]]));
+    const res = mockRes();
+    await updateStatus(makeReq(), res);
+    expect(repo.restoreStatus).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(422);
+  });
+});

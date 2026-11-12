@@ -7,13 +7,15 @@ function _tid(tenantId) {
 }
 
 module.exports = {
-  async create({ userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenantId }) {
+  async create({ userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenantId, requestType = null }) {
     const tid = _tid(tenantId);
-    const sql = `
-      INSERT INTO time_adjust_requests (userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenant_id)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `;
-    const [res] = await db.query(sql, [userId, attendanceId || null, requestedCheckIn || null, requestedCheckOut || null, reason || null, tid]);
+    // requestType: null = 時刻の修正、'delete' = その行の削除（request_type 列が必要）
+    const sql = requestType
+      ? `INSERT INTO time_adjust_requests (userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenant_id, request_type) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      : `INSERT INTO time_adjust_requests (userId, attendanceId, requestedCheckIn, requestedCheckOut, reason, tenant_id) VALUES (?, ?, ?, ?, ?, ?)`;
+    const params = [userId, attendanceId || null, requestedCheckIn || null, requestedCheckOut || null, reason || null, tid];
+    if (requestType) params.push(requestType);
+    const [res] = await db.query(sql, params);
     return res.insertId;
   },
   async listMine(userId, tenantId = null) {
@@ -245,6 +247,9 @@ module.exports.ensureSchema = async function() {
   } catch (e) { /* column may exist */ }
   try {
     await db.query(`ALTER TABLE time_adjust_requests ADD COLUMN processed_at DATETIME NULL`);
+  } catch (e) { /* column may exist */ }
+  try {
+    await db.query(`ALTER TABLE time_adjust_requests ADD COLUMN request_type VARCHAR(16) NULL`);
   } catch (e) { /* column may exist */ }
   await db.query(`
     CREATE TABLE IF NOT EXISTS time_adjust_messages (

@@ -68,6 +68,7 @@ function userFilters({ tenantId, dept, userId, q }, userCol) {
 
 // 出勤/退勤 が別の日（夜勤・申請日と違う日）なら日付も出す
 function adjustContent(r) {
+  if (String(r.request_type || '') === 'delete') return `行の削除（${fmtHm(r.requestedCheckIn) || '—'}〜${fmtHm(r.requestedCheckOut) || '—'}）`;
   const din = r.requestedCheckIn ? String(r.requestedCheckIn).slice(0, 10) : '';
   const dout = r.requestedCheckOut ? String(r.requestedCheckOut).slice(0, 10) : '';
   const md = (d) => (d ? `${d.slice(5).replace('-', '/')} ` : '');
@@ -184,8 +185,7 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths
   if (status) { adjWhere.push('tar.status = ?'); adjParams.push(status); }
   if (q) { adjWhere.push('(u.employee_code LIKE ? OR u.username LIKE ?)'); adjParams.push(`%${q}%`, `%${q}%`); }
   const [adjRows] = await db.query(`
-    SELECT tar.id, tar.userId, tar.requestedCheckIn, tar.requestedCheckOut, tar.reason, tar.status, tar.created_at,
-           tar.processed_by, tar.processed_at,
+    SELECT tar.*,
            u.employee_code AS employeeCode, u.username AS username, u.departmentId, d.name AS departmentName,
            pu.username AS processedByName
     FROM time_adjust_requests tar

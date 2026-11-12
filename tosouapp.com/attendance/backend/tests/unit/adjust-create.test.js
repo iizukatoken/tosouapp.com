@@ -71,3 +71,27 @@ describe('調整申請: 退勤忘れの日は 退勤 が必須', () => {
     expect(repo.updateFields).not.toHaveBeenCalled();
   });
 });
+
+describe('調整申請: 「この行を削除」', () => {
+  it('本人の行なら受け付け、時刻はその行の時刻を入れる', async () => {
+    db.query.mockResolvedValueOnce([[{ id: 55, checkIn: '2026-10-16 19:00:00', checkOut: '2026-10-16 22:00:00' }]]);
+    const res = mockRes();
+    await create({ user: employee, tenantId: 1, body: { attendanceId: 55, requestType: 'delete', reason: '入力ミス' } }, res);
+    expect(res.status).toHaveBeenCalledWith(201);
+    expect(repo.create).toHaveBeenCalledWith(expect.objectContaining({
+      attendanceId: 55, requestType: 'delete', requestedCheckIn: '2026-10-16 19:00:00', requestedCheckOut: '2026-10-16 22:00:00'
+    }));
+  });
+  it('他人の行・存在しない行は 404', async () => {
+    db.query.mockResolvedValueOnce([[]]);
+    const res = mockRes();
+    await create({ user: employee, tenantId: 1, body: { attendanceId: 99, requestType: 'delete', reason: 'x' } }, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(repo.create).not.toHaveBeenCalled();
+  });
+  it('理由がなければ 400', async () => {
+    const res = mockRes();
+    await create({ user: employee, tenantId: 1, body: { attendanceId: 55, requestType: 'delete', reason: '' } }, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+});
