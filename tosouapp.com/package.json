@@ -8,6 +8,7 @@
   },
   "scripts": {
     "start": "node attendance/backend/src/server.js",
+    "dev": "node --watch-preserve-output --watch-path=attendance/backend/src/modules --watch-path=attendance/backend/src/core --watch-path=attendance/backend/src/cron --watch-path=attendance/backend/src/routes --watch-path=attendance/backend/src/services --watch-path=attendance/backend/src/utils --watch-path=attendance/backend/src/config --watch-path=attendance/backend/src/workers --watch-path=attendance/backend/src/app.js --watch-path=attendance/backend/src/server.js attendance/backend/src/server.js",
     "start:prod:local": "set NODE_ENV=production&& set APP_ENV=production&& set PORT=3000&& set DISABLE_SCHEDULERS=true&& set DISABLE_CANONICAL_HOST=true&& set ENFORCE_CANONICAL_HOST=false&& node attendance/backend/src/server.js",
     "preflight:prod:local": "set NODE_ENV=production&& set APP_ENV=production&& node attendance/backend/scripts/preflight-prod.js",
     "start:staging": "set APP_ENV=staging&& set NODE_ENV=production&& set PORT=3001&& set DISABLE_SCHEDULERS=true&& node attendance/backend/src/server.js",
