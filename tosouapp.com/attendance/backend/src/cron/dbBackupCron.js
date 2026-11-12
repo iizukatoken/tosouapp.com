@@ -108,9 +108,25 @@ async function runAutoBackupOnce({ emailCopy = true } = {}) {
         let uploadedToR2 = false;
         if (s3Service.isR2Configured()) {
             try {
-                uploadedToR2 = await s3Service.uploadFileToR2(`${R2_BACKUP_PREFIX}/${backupFileName}`, backupFilePath, 'application/sql');
+                // 保存期間は R2 のライフサイクルルールで決める（コードでは消さない）:
+                //   daily/   → 35日で自動削除、monthly/ → 400日（約13か月）で自動削除
+                uploadedToR2 = await s3Service.uploadFileToR2(`${R2_BACKUP_PREFIX}/daily/${backupFileName}`, backupFilePath, 'application/sql');
                 if (uploadedToR2) {
-                    console.log(`[Cron Job] Đã lưu backup lên R2: ${R2_BACKUP_PREFIX}/${backupFileName}`);
+                    console.log(`[Cron Job] Đã lưu backup lên R2: ${R2_BACKUP_PREFIX}/daily/${backupFileName}`);
+                    // 毎月1日（JST）の分は monthly/ にも残す（長めに保管する月次の控え）
+                    const dayJST = new Date(Date.now() + 9 * 3600 * 1000).getUTCDate();
+                    if (dayJST === 1) {
+                        try {
+                            const okMonthly = await s3Service.uploadFileToR2(`${R2_BACKUP_PREFIX}/monthly/${backupFileName}`, backupFilePath, 'application/sql');
+                            if (okMonthly) console.log(`[Cron Job] Đã lưu bản tháng lên R2: ${R2_BACKUP_PREFIX}/monthly/${backupFileName}`);
+                            else {
+                                console.error('[Cron Job] Không lưu được bản tháng (monthly/) lên R2.');
+                                await sendAlertEmail('[Cảnh báo] Không lưu được backup tháng (monthly/) lên R2', '<p>Bản hằng ngày đã lưu ở daily/, nhưng bản tháng (giữ 13 tháng) không lưu được. Cần kiểm tra R2.</p>');
+                            }
+                        } catch (mErr) {
+                            console.error('[Cron Job] Lỗi khi lưu bản tháng (monthly/) lên R2:', mErr);
+                        }
+                    }
                 } else {
                     console.error('[Cron Job] uploadFileToR2 trả về false — backup CHƯA được lưu bền.');
                 }

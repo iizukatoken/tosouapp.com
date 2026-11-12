@@ -24,6 +24,22 @@ const attachMails = () => mail.sendMail.mock.calls.filter(c => Array.isArray(c[0
 beforeEach(() => { jest.clearAllMocks(); s3.uploadFileToR2.mockResolvedValue(true); });
 
 describe('毎日バックアップ', () => {
+  afterEach(() => jest.useRealTimers());
+  it('毎日の分は db-backups/daily/ に保存', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-12T18:00:00Z'), doNotFake: ['setTimeout', 'setImmediate', 'nextTick'] });
+    await runAutoBackup({ emailCopy: false });
+    const keys = s3.uploadFileToR2.mock.calls.map(c => c[0]);
+    expect(keys).toHaveLength(1);
+    expect(keys[0].startsWith('db-backups/daily/tosouapp_backup_')).toBe(true);
+  });
+  it('毎月1日（JST）は db-backups/monthly/ にも保存', async () => {
+    // 2026-11-30T18:00Z = 2026-12-01 03:00 JST
+    jest.useFakeTimers({ now: new Date('2026-11-30T18:00:00Z'), doNotFake: ['setTimeout', 'setImmediate', 'nextTick'] });
+    await runAutoBackup({ emailCopy: false });
+    const keys = s3.uploadFileToR2.mock.calls.map(c => c[0]);
+    expect(keys.some(k => k.startsWith('db-backups/daily/'))).toBe(true);
+    expect(keys.some(k => k.startsWith('db-backups/monthly/'))).toBe(true);
+  });
   it('毎日 03:00 JST に予約される', () => {
     initBackupCronJob();
     expect(cron.schedule.mock.calls[0][0]).toBe('0 3 * * *');
@@ -46,7 +62,7 @@ describe('毎日バックアップ', () => {
   });
   it('実行中に呼ばれても2回目は走らない', async () => {
     await Promise.all([runAutoBackup({ emailCopy: false }), runAutoBackup({ emailCopy: false })]);
-    expect(s3.uploadFileToR2).toHaveBeenCalledTimes(1);
+    expect(s3.uploadFileToR2.mock.calls.filter(c => c[0].includes('/daily/'))).toHaveLength(1);
   });
 });
 
