@@ -583,10 +583,11 @@ exports.exportMonthXlsx = async (req, res) => {
         const extraLoc = String(extraSeg?.location || '').trim();
         const extraMemo = String(extraSeg?.memo || '').trim();
         const extraNotes = String(extraSeg?.notes || '').trim();
-        const extraBr = holidayLock ? 0 : defaultBr;
-        const extraWorked = holidayLock ? 0 : Math.max(0, hmToMinutes(extraOut) - hmToMinutes(extraIn) - extraBr);
-        const extraShiftEndMin = shiftDef ? shiftDef.endMin : (17 * 60);
-        const extraOt = holidayLock ? 0 : Math.max(0, hmToMinutes(extraOut) - extraShiftEndMin);
+        // 追加の行: 休憩は行ごと（未設定 0）。所定は1行目で使い切る扱いなので、実働は全部 残業（サーバー集計と同じ）
+        const extraBr = holidayLock ? 0 : Math.max(0, Number(extraSeg?.break_minutes || 0));
+        const extraSpan = (() => { if (!extraIn || !extraOut) return 0; const a = hmToMinutes(extraIn); let b = hmToMinutes(extraOut); if (b <= a) b += 24 * 60; return b - a; })();
+        const extraWorked = holidayLock ? 0 : Math.max(0, extraSpan - extraBr);
+        const extraOt = extraWorked;
         if (extraIn && extraOut) {
           rowsWorkedMin += extraWorked;
           if (extraWorked > 0) rowsOtMin += extraOt;

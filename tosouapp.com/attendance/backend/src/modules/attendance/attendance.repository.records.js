@@ -447,6 +447,13 @@ module.exports = {
   // Upsert hàng loạt trong một transaction: xử lý cả attendance_daily và các segment attendance
   async bulkUpsertAttendance(userId, { updates, dailyUpdates }, { tenantId = null } = {}) {
     const tid = _tid(tenantId);
+    // 追加の行の休憩（break_minutes 列があるときだけ書く）
+    const attCols = await getAttendanceColumnSet();
+    const rowBreak = (u) => {
+      if (!attCols.has('break_minutes') || u == null || u.breakMinutes === undefined) return undefined;
+      const v = Number(u.breakMinutes);
+      return Number.isFinite(v) && v >= 0 ? Math.min(Math.round(v), 1440) : null;
+    };
     const conn = await db.getConnection();
 
     // Đổi "HH:MM" thành số phút tính từ nửa đêm
@@ -564,6 +571,7 @@ module.exports = {
             if (u.location !== undefined) { fields.push('location = ?'); vals.push(u.location || null); }
             if (u.memo !== undefined) { fields.push('memo = ?'); vals.push(u.memo || null); }
             if (u.notes !== undefined) { fields.push('notes = ?'); vals.push(u.notes || null); }
+            if (rowBreak(u) !== undefined) { fields.push('break_minutes = ?'); vals.push(rowBreak(u)); }
             
             vals.push(u.id, userId);
             await conn.query(`UPDATE attendance SET ${fields.join(', ')} WHERE id = ? AND userId = ?`, vals);
@@ -574,6 +582,7 @@ module.exports = {
             const not = u.notes || null;
             const insertCols = ['userId', 'checkIn', 'checkOut', 'work_type', 'location', 'memo', 'notes'];
             const insertVals = [userId, u.checkIn, u.checkOut||null, u.workType||null, loc, mem, not];
+            if (rowBreak(u) !== undefined) { insertCols.push('break_minutes'); insertVals.push(rowBreak(u)); }
             if (tid != null) { insertCols.push('tenant_id'); insertVals.push(tid); }
             const ph = insertCols.map(() => '?').join(', ');
             const [res] = await conn.query(

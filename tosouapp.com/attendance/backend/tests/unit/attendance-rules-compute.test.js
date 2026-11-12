@@ -62,3 +62,38 @@ describe('サーバー側の勤怠計算', () => {
     });
   });
 });
+
+describe('同じ日の追加の行（例: 退勤後 19:00〜22:00 の社内会議）', () => {
+  it('その日の休憩 1:00 を重ねて引かず、全部 残業（所定内に数えない）', async () => {
+    const res = await computeRange([
+      row(1, '2026-09-29 08:00:00', '2026-09-29 17:00:00'),
+      { ...row(2, '2026-09-29 19:00:00', '2026-09-29 22:00:00') },
+    ], 1);
+    const d = res.days[0];
+    const extra = d.items.find((x) => x.id === 2);
+    expect(extra.breakMinutes).toBe(0);
+    expect(extra.regularMinutes).toBe(0);
+    expect(extra.overtimeMinutes).toBe(180);
+    expect(d.regularMinutes).toBe(480);
+    expect(d.overtimeMinutes).toBe(180);
+  });
+  it('追加の行に休憩 0:30 を入れたら、その分だけ引く', async () => {
+    const res = await computeRange([
+      row(1, '2026-09-29 08:00:00', '2026-09-29 17:00:00'),
+      { ...row(2, '2026-09-29 19:00:00', '2026-09-29 22:00:00'), break_minutes: 30 },
+    ], 1);
+    const extra = res.days[0].items.find((x) => x.id === 2);
+    expect(extra.breakMinutes).toBe(30);
+    expect(extra.overtimeMinutes).toBe(150);
+  });
+  it('1行目の計算は変わらない', async () => {
+    const res = await computeRange([
+      row(1, '2026-09-29 08:00:00', '2026-09-29 17:00:00'),
+      row(2, '2026-09-29 19:00:00', '2026-09-29 22:00:00'),
+    ], 1);
+    const first = res.days[0].items.find((x) => x.id === 1);
+    expect(first.breakMinutes).toBe(60);
+    expect(first.regularMinutes).toBe(480);
+    expect(first.overtimeMinutes).toBe(0);
+  });
+});

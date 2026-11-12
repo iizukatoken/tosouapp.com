@@ -365,8 +365,10 @@
       // Cho phép sửa giờ checkIn/checkOut nếu:
       // 1. Không phải employee (admin/manager) HOẶC
       // 2. Là employee nhưng dòng này là dòng phụ (không phải primary) - tức là dòng mới thêm hoặc ca thứ 2, thứ 3
-      const canEditCheckTime = canEditWorkRow && (!isEmployee || !primary);
-      const canEditBreakTime = canEditWorkRow;
+      // 3. 従業員の追加の行は、保存済み（時刻あり）なら変更不可（修正は調整申請）
+      const isSavedExtraRow = !primary && !!seg?.id && hasActual;
+      const canEditCheckTime = canEditWorkRow && (!isEmployee || (!primary && !isSavedExtraRow));
+      const canEditBreakTime = canEditWorkRow && !(isEmployee && isSavedExtraRow);
 
       const shiftBrRaw = Number(shift?.break_minutes ?? 60);
       const shiftBrMin = Number.isFinite(shiftBrRaw) && shiftBrRaw >= 0 ? shiftBrRaw : 60;
@@ -391,7 +393,9 @@
       // Nếu dòng này là giờ tự động (chưa có check-in thực tế), ưu tiên dùng giờ nghỉ mặc định của ca (defaultBr)
       // Nhưng nếu user đã lưu breakMinutes thủ công, dùng giá trị đã lưu.
       // 半休: break luôn = 0 (làm nửa ngày không cần nghỉ trưa)
-      const brMin = isHankyuu ? 0 : (shouldShowDefaultShift ? (primary ? (autoIn ? (daily && daily.breakMinutes !== null && daily.breakMinutes !== undefined ? Number(daily.breakMinutes) : defaultBr) : Number(daily?.breakMinutes ?? defaultBr)) : defaultBr) : 0);
+      // 追加の行（2行目以降）の休憩は行ごと: 保存値（attendance.break_minutes）、未設定なら 0:00
+      const extraRowBr = Number.isFinite(Number(seg?.break_minutes)) && seg?.break_minutes != null ? Number(seg.break_minutes) : 0;
+      const brMin = isHankyuu ? 0 : (!primary ? extraRowBr : (shouldShowDefaultShift ? (autoIn ? (daily && daily.breakMinutes !== null && daily.breakMinutes !== undefined ? Number(daily.breakMinutes) : defaultBr) : Number(daily?.breakMinutes ?? defaultBr)) : 0));
       const nbMin = isHankyuu ? 0 : (shouldShowDefaultShift ? (primary ? (autoIn ? (daily && daily.nightBreakMinutes !== null && daily.nightBreakMinutes !== undefined ? Number(daily.nightBreakMinutes) : 0) : Number(daily?.nightBreakMinutes ?? 0)) : 0) : 0);
       const totalBmin = brMin + nbMin;
 
@@ -404,11 +408,14 @@
       // OT Calculation
       const whMin = (() => {
         let inEff = finalIn;
-        if (shiftStartOk && finalIn && finalIn < shiftStart) inEff = shiftStart;
+        // 早出の切り上げは1行目だけ（追加の行は入力どおり。例: 06:00〜07:00 の会議）
+        if (primary && shiftStartOk && finalIn && finalIn < shiftStart) inEff = shiftStart;
         const raw = diffMinutesAllowOvernight(inEff, finalOut);
         return (raw == null || raw <= 0) ? 0 : Math.max(0, raw - totalBmin);
       })();
       const otMin = (() => {
+        // 追加の行（2行目以降）は所定を1行目で使い切る扱いなので、実働が全部 超過（サーバー・Excel と同じ）
+        if (!primary) return whMin;
         const outM = parseHm(finalOut);
         const stM = parseHm(shiftStart);
         const etM = parseHm(shiftEnd);
@@ -732,7 +739,7 @@
       <td style="text-align:center;">
          <div style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
            ${showDateDow ? `<button type="button" class="se-icon-btn primary" data-action="add" ${(state.editableMonth && canAddMore) ? '' : 'disabled'} title="${canAddMore ? '行追加' : '1日は最大3件まで'}" style="font-weight:bold; font-size:14px; padding:0; width:22px; height:22px;">+</button>` : ''}
-           <button type="button" class="se-icon-btn secondary" data-action="clear" ${state.editableMonth ? '' : 'disabled'} title="行クリア" style="padding:0; width:22px; height:22px;">×</button>
+           ${(isEmployee && hasActual) ? '' : `<button type="button" class="se-icon-btn secondary" data-action="clear" ${state.editableMonth ? '' : 'disabled'} title="行クリア" style="padding:0; width:22px; height:22px;">×</button>`}
            ${(isAdminView && hasActualOut) ? `<button type="button" class="se-icon-btn warn" data-action="clear-checkout" ${state.editableMonth ? '' : 'disabled'} title="退勤打刻を削除（チェックインのみ残す）" style="font-size:10px; padding:0 3px; width:auto; min-width:30px; height:22px; background:#fef3c7; color:#92400e; border:1px solid #f59e0b;">退勤削除</button>` : ''}
          </div>
        </td>
@@ -921,7 +928,17 @@
       // Cho phép sửa giờ checkIn/checkOut nếu:
       // 1. Không phải employee (admin/manager) HOẶC
       // 2. Là employee nhưng dòng này là dòng phụ (không phải primary)
-      const canEditCheckTime = canEditWorkInputs && (!isEmployee || !isPrimaryRow);
+      // 追加の行に予定の時刻（薄い 08:00〜17:00）が入っていたら消す（追加の行は本人が入力する）
+      if (!isPrimaryRow) {
+        [inEl, outEl].forEach((el) => {
+          if (el && String(el.dataset.auto || '') === '1' && String(el.dataset.manual || '') !== '1') {
+            el.value = ''; el.dataset.auto = ''; el.dataset.autoVal = ''; el.classList.remove('is-auto');
+          }
+        });
+      }
+      // 保存済み（時刻あり）の追加の行: 従業員は変更不可（修正は調整申請）
+      const isSavedExtraRowNow = !isPrimaryRow && !!idVal && !!(String(inEl?.dataset?.actual || '') || String(outEl?.dataset?.actual || ''));
+      const canEditCheckTime = canEditWorkInputs && (!isEmployee || (!isPrimaryRow && !isSavedExtraRowNow));
       const inValNow = String(inEl?.value || '').trim();
       const outValNow = String(outEl?.value || '').trim();
       const inAutoNow = String(inEl?.dataset?.auto || '') === '1';
@@ -976,6 +993,9 @@
         }
       });
       
+      if (isEmployee && isSavedExtraRowNow) {
+        [brSel, nbSel].forEach((el) => { if (el) el.setAttribute('disabled', ''); });
+      }
       if (canAutoKubunByWorkType && !canEditWorkInputs) {
         [ckOn, ckRe, ckSa].forEach((el) => {
           if (!el) return;
@@ -1290,12 +1310,14 @@
       const whMin = (() => {
         if (!isWorkDay) return 0;
         let inEff = inVal;
-        if (dayShiftInfo?.st && inVal && inVal < dayShiftInfo.st) inEff = dayShiftInfo.st;
+        if (isPrimaryRow && dayShiftInfo?.st && inVal && inVal < dayShiftInfo.st) inEff = dayShiftInfo.st;
         const raw = diffMinutesAllowOvernight(inEff, outVal);
         return (raw == null || raw <= 0) ? 0 : Math.max(0, raw - totalBmin);
       })();
       const otMin = (() => {
         if (!isWorkDay) return 0;
+        // 追加の行は実働が全部 超過
+        if (!isPrimaryRow) return whMin;
         const outM = parseHm(outVal);
         const stM = dayShiftInfo?.stM;
         const etM = dayShiftInfo?.etM;

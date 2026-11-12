@@ -443,6 +443,13 @@ async function runMigrations() {
           // シフト提出を承認・差戻しした人（申請一覧の「処理者」）。これより前の承認は記録がないので空のまま
           try { await conn.query(`ALTER TABLE shift_month_status ADD COLUMN processed_by BIGINT UNSIGNED NULL`); } catch (e) { /* already exists */ }
         }
+      },
+      {
+        id: '20261112_02_attendance_row_break_minutes',
+        up: async () => {
+          // 追加の行（2行目以降）の休憩（分）。1行目は従来どおり attendance_daily.break_minutes を使う
+          try { await conn.query(`ALTER TABLE attendance ADD COLUMN break_minutes SMALLINT UNSIGNED NULL`); } catch (e) { /* already exists */ }
+        }
       }
     ];
     for (const m of migrations) {

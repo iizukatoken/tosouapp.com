@@ -909,6 +909,50 @@
         showErr('入力内容を確認してください（赤枠の項目）');
         throw new Error('入力内容を確認してください（赤枠の項目）');
       }
+      // 追加の行（2行目以降）のチェック。問題があれば保存しない
+      {
+        const hm = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(String(v || '').trim()); return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null; };
+        const realVal = (el) => (el && String(el.dataset.auto || '') !== '1') ? String(el.value || '').trim() : '';
+        const span = (tr) => {
+          const a = hm(realVal(tr.querySelector('input.se-time[data-field="checkIn"]')));
+          let b = hm(realVal(tr.querySelector('input.se-time[data-field="checkOut"]')));
+          if (a == null || b == null) return null;
+          if (b <= a) b += 24 * 60; // 日をまたぐ
+          return [a, b];
+        };
+        const isEmp = String(ctx.profile?.role || state?.profile?.role || '').toLowerCase() === 'employee';
+        const rows = Array.from(ctx.tableHost?.querySelectorAll?.('[data-row="1"][data-date]') || []);
+        const problems = [];
+        const toConfirm = [];
+        for (const tr of rows) {
+          if (String(tr.dataset.primary || '') === '1') continue;
+          const inEl = tr.querySelector('input.se-time[data-field="checkIn"]');
+          const outEl = tr.querySelector('input.se-time[data-field="checkOut"]');
+          const inV = realVal(inEl);
+          const outV = realVal(outEl);
+          if (!inV && !outV) continue;
+          const saved = !!(String(inEl?.dataset?.actual || '') || String(outEl?.dataset?.actual || ''));
+          if (saved) continue; // 保存済みの行はここでは見ない（変更は調整申請）
+          const ds = String(tr.dataset.date || '').slice(0, 10);
+          const label = ds.slice(5).replace('-', '/');
+          if (!inV || !outV) { problems.push(`${label}: 追加の行は 開始時間 と 終了時間 の両方を入力してください`); continue; }
+          const sp = span(tr);
+          if (!sp || sp[1] - sp[0] <= 0) { problems.push(`${label}: 追加の行の時間が正しくありません`); continue; }
+          const others = rows.filter(o => o !== tr && String(o.dataset.date || '').slice(0, 10) === ds).map(span).filter(Boolean);
+          if (others.some(([a, b]) => sp[0] < b && a < sp[1])) { problems.push(`${label}: 追加の行（${inV}〜${outV}）が同じ日の他の時間と重なっています`); continue; }
+          const memo = String(tr.querySelector('[data-field="memo"]')?.value || '').trim();
+          if (!memo) { problems.push(`${label}: 追加の行（${inV}〜${outV}）は 作業内容（例: 社内会議）を入力してください`); continue; }
+          const br = String(tr.querySelector('select[data-field="break"]')?.value || '0:00');
+          toConfirm.push(`${label}  ${inV}〜${outV}（休憩 ${br}）${memo}`);
+        }
+        if (problems.length) {
+          showErr(problems.join(' / '));
+          throw new Error(problems[0]);
+        }
+        if (isEmp && toConfirm.length && !confirm(`次の時間を登録します。登録後は変更できません（修正は調整申請から）。\n\n${toConfirm.join('\n')}\n\nよろしいですか？`)) {
+          return;
+        }
+      }
       showSpinner('save');
       const payload = collectUpdates(ctx.tableHost, ym, ctx.actingUserId || null, { includeAll: true });
       try {
@@ -1354,6 +1398,8 @@
         tr.dataset.clientId = clientId;
       }
       
+      // 追加の行（2行目以降）: その日の共通データ（dailyUpdates）は送らない。休憩は行ごと
+      const isExtraRowSave = String(tr.dataset.primary || '') !== '1';
       const updates = [];
       if (idRaw) {
         const xid = parseInt(idRaw, 10);
@@ -1369,11 +1415,11 @@
             }
           }
         } else if (inDt) {
-          updates.push({ id: xid, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes });
+          updates.push({ id: xid, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes, ...(isExtraRowSave ? { breakMinutes } : {}) });
         }
         // inDt なし・時間編集なし → updates は空のまま続行（現場・作業内容だけの保存を許可）
       } else if (inDt) {
-        updates.push({ clientId, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes });
+        updates.push({ clientId, checkIn: inDt, checkOut: outDt, workType: wt || null, location, memo, notes, ...(isExtraRowSave ? { breakMinutes } : {}) });
       }
       
       try {
@@ -1403,13 +1449,13 @@
       const hasDailyMeaningful = !!(effectiveKubun || wt || location || reason || memo || breakMinutes !== 60 || nightBreakMinutes !== 0
         || locationChanged || memoChanged || notesChanged);
       // Important: allow saving daily-only edits (kubun/work/location/memo) even when no time updates.
-      if (!updates.length && !hasDailyMeaningful) return;
+      if (!updates.length && (isExtraRowSave || !hasDailyMeaningful)) return;
       const payload = {
         year: y, 
         month: m, 
         userId: ctx.actingUserId || undefined, 
         updates, 
-        dailyUpdates: [
+        dailyUpdates: isExtraRowSave ? [] : [
           {
             date: dateStr,
             kubun: effectiveKubun || null,

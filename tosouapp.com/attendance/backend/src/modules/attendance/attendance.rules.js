@@ -219,6 +219,10 @@ async function computeRecord(rec, ctx = null) {
     breakMin = Number(dailyRec.break_minutes);
     shift = { ...shift, breakMinutes: breakMin };
   }
+  // 同じ日の2行目以降（追加の行。例: 退勤後の社内会議）: その日の休憩は1行目で引いているので重ねて引かず、
+  // 行ごとの休憩（attendance.break_minutes、未設定=0）だけを引く。所定時間は1行目で使い切る扱いで、全部 残業。
+  const isExtraRow = !!(ctx?.extraRowIds && ctx.extraRowIds.has(String(rec.id)));
+  if (isExtraRow) breakMin = Math.max(0, Number(rec.break_minutes || 0));
 
   let worked = 0;
   let inJ = null;
@@ -314,7 +318,7 @@ async function computeRecord(rec, ctx = null) {
     isOff = ['休日', '法定休日', '欠勤'].includes(dailyRec.kubun);
   }
 
-  const scheduled = isOff ? 0 : Math.max(0, minutesBetween(shift.start, shift.end) - breakMin);
+  const scheduled = (isOff || isExtraRow) ? 0 : Math.max(0, minutesBetween(shift.start, shift.end) - breakMin);
 
   // Dựa trên giá trị đã làm tròn để tính công chuẩn và tăng ca
   let workedRounded = 0;
@@ -456,7 +460,24 @@ async function computeRange(rows, tenantId = 0) {
       }
     }));
   }
-  const ctx = { cfg, userCache, deptCache, shiftCache, offDayCache, goOutCache, dailyCache, tenantId };
+  // 社員・日ごとに一番早い出勤の行が1行目。それ以外は追加の行
+  const extraRowIds = new Set();
+  {
+    const firstByDay = new Map();
+    for (const r of rows) {
+      if (!r || !r.checkIn || r.id == null) continue;
+      const key = `${r.userId}|${getJSTDateStr(r.checkIn)}`;
+      const cur = firstByDay.get(key);
+      const t = String(r.checkIn);
+      if (!cur || t < String(cur.checkIn) || (t === String(cur.checkIn) && Number(r.id) < Number(cur.id))) firstByDay.set(key, r);
+    }
+    for (const r of rows) {
+      if (!r || !r.checkIn || r.id == null) continue;
+      const first = firstByDay.get(`${r.userId}|${getJSTDateStr(r.checkIn)}`);
+      if (first && String(first.id) !== String(r.id)) extraRowIds.add(String(r.id));
+    }
+  }
+  const ctx = { cfg, userCache, deptCache, shiftCache, offDayCache, goOutCache, dailyCache, tenantId, extraRowIds };
   const computedItems = await Promise.all(
     rows
       .filter((r) => r.checkOut)
