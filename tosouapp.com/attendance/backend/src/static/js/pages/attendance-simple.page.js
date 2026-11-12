@@ -1966,12 +1966,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (e) { /* silently ignored */ }
   };
 
+  // 打刻はその場でサーバーに記録する（時刻はサーバーの現在時刻。確定 ボタンは不要）
+  const stampErrorText = (e) => String(e?.message || e || '').trim();
   const doStartStamp = async () => {
     if (startStampInFlight) return;
     showErr('');
-    // Strict lock: once started, do not allow re-stamping from simple screen.
     if (state.hasStartedToday && !state.plannedStampAttendanceId) {
-      showErr('開始打刻は1日1回までです。修正は月次勤怠入力で行ってください。');
+      showErr('開始打刻は1日1回までです。修正は調整申請から依頼してください。');
       return;
     }
     if (!String($('#workType')?.value || '').trim()) {
@@ -1982,89 +1983,73 @@ document.addEventListener('DOMContentLoaded', async () => {
       showErr('本日のみ打刻できます');
       return;
     }
-    
-    const hmNow = nowHmJST();
-    const st = $('#startTime');
-    if (st) {
-      st.value = hmNow;
-      clearAutoTime(st);
-      st.dataset.touched = '1';
-    }
-    
+    startStampInFlight = true;
     const btnIn = $('#btnStartStamp');
-    const btnOut = $('#btnEndStamp');
-    if (btnIn) {
-      // Đổi chữ ngay khi bấm
-      const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 700px)').matches;
-      btnIn.textContent = isMobile ? `開始済 (${hmNow})` : `開始打刻済 (${hmNow})`;
-      btnIn.disabled = true;
-    }
-    if (btnOut) { 
-      btnOut.disabled = false; 
-      // Vô hiệu hóa tính năng tự nhảy về 17:00 nếu đang ở chế độ chờ bấm checkOut (mới bấm checkIn)
-      const et = $('#endTime');
-      if (et) {
-         et.value = '';
-         clearAutoTime(et);
-         try { delete et.dataset.actual; } catch (e) { /* silently ignored */ }
+    if (btnIn) btnIn.disabled = true;
+    try {
+      const wt = String($('#workType')?.value || '').trim();
+      const r = await fetchJSONAuth('/api/attendance/checkin', { method: 'POST', body: JSON.stringify({ workType: wt || null }) });
+      // 休日出勤 など、画面で選んだ区分があれば合わせて保存（サーバーは打刻時に 出勤 を入れるため）
+      try {
+        const kubun = String($('#kubun')?.value || '').trim();
+        if (kubun && kubun !== '出勤' && !kubun.includes('予定')) {
+          await fetchJSONAuth(`/api/attendance/date/${encodeURIComponent(state.date)}/daily`, { method: 'PUT', body: JSON.stringify({ kubun, workType: wt || null }) });
+        }
+      } catch (e) { /* 区分は 確定 でも保存できる */ }
+      const hm = String(r?.checkIn || '').slice(11, 16) || nowHmJST();
+      await load(state.date);
+      showToast(`出勤を記録しました（${hm}）`, 'success');
+    } catch (e) {
+      const m = stampErrorText(e);
+      if (/Already checked in|409/.test(m)) {
+        await load(state.date);
+        showErr('すでに出勤が記録されています。');
+      } else {
+        showErr(`出勤を記録できませんでした: ${m || '通信エラー'}`);
+        if (btnIn) btnIn.disabled = false;
       }
+    } finally {
+      startStampInFlight = false;
     }
-    
-    // Đánh dấu là có thay đổi chưa lưu
-    markAsUnsaved();
-    
-    applyHolidayShortShiftBreak();
-    renderWorkMinutes();
-    calculateLateEarly();
-    showToast('確定ボタンを押して保存してください', 'success');
   };
-  
+
   const doEndStamp = async () => {
     showErr('');
     if (state.hasEndedToday) {
-      showErr('終了打刻は1日1回までです。修正は月次勤怠入力で行ってください。');
-      return;
-    }
-    if (!String($('#workType')?.value || '').trim()) {
-      showErr('先に勤務区分を選択してください');
+      showErr('終了打刻は1日1回までです。修正は調整申請から依頼してください。');
       return;
     }
     if (state.date !== todayJST()) {
       showErr('本日のみ打刻できます');
       return;
     }
-
     const hmNow = nowHmJST();
-    // 誤打刻防止: 出勤から30分未満なら確認（押し間違いの多くはここで止まる）
-    {
-      const stHm = String($('#startTime')?.dataset?.actual || $('#startTime')?.value || '').trim();
+    const stHm = String($('#startTime')?.dataset?.actual || '').trim() || (state.hasStartedToday ? String($('#startTime')?.value || '').trim() : '');
+    if (!state.hasStartedToday || !stHm) {
+      // 出勤を忘れた日: 退勤だけ記録し、出勤時刻は 調整申請 で申請してもらう
+      if (!confirm('出勤が打刻されていません。\n退勤だけ記録しますか？\n（出勤時刻は 調整申請 で申請してください）')) return;
+    } else {
+      // 誤打刻防止: 出勤から30分未満なら確認（押し間違いの多くはここで止まる）
       const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
       const a = toMin(stHm); const b = toMin(hmNow);
       if (a != null && b != null && b >= a && b - a < 30
         && !confirm(`出勤（${stHm}）から${b - a}分しか経っていません。\n退勤しますか？`)) return;
     }
-    const et = $('#endTime');
-    if (et) {
-      et.value = hmNow;
-      clearAutoTime(et);
-      et.dataset.actual = hmNow; // Bắt buộc lưu lại là thời gian thực tế người dùng bấm
-      et.dataset.touched = '1';
-    }
-    
     const btnOut = $('#btnEndStamp');
-    if (btnOut) {
-      const isMobile = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 700px)').matches;
-      btnOut.textContent = isMobile ? `終了済 (${hmNow})` : `終了打刻済 (${hmNow})`;
-      btnOut.disabled = true;
+    if (btnOut) btnOut.disabled = true;
+    try {
+      const r = await fetchJSONAuth('/api/attendance/checkout', { method: 'POST', body: JSON.stringify({}) });
+      const hm = String(r?.checkOut || '').slice(11, 16) || hmNow;
+      await load(state.date);
+      if (!state.hasStartedToday || !stHm) {
+        showErr(`退勤を記録しました（${hm}）。出勤が未打刻のため、調整申請 で出勤時刻を申請してください。`);
+      } else {
+        showToast(`退勤を記録しました（${hm}）`, 'success');
+      }
+    } catch (e) {
+      showErr(`退勤を記録できませんでした: ${stampErrorText(e) || '通信エラー'}`);
+      if (btnOut) btnOut.disabled = false;
     }
-    
-    // Đánh dấu là có thay đổi chưa lưu
-    markAsUnsaved();
-    
-    applyHolidayShortShiftBreak();
-    renderWorkMinutes();
-    calculateLateEarly();
-    showToast('確定ボタンを押して保存してください', 'success');
   };
   $('#btnStartStamp')?.addEventListener('click', doStartStamp);
   $('#btnEndStamp')?.addEventListener('click', doEndStamp);
