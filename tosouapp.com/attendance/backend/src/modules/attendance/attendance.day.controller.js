@@ -31,6 +31,7 @@ const {
   getMonthStatusValue,   // Lấy trạng thái tháng (draft/submitted/approved)
   assertMonthWritable,   // Chặn sửa nếu tháng đã approved/locked
 } = require('./attendance.utils');
+const { isEmployee, changesSavedTime, hasSavedTime, LOCK_MESSAGE } = require('./attendance.punchLock');
 
 // ─── Helper nội bộ: Gửi thông báo admin khi có punch mới ─────────────────────
 async function notifyPunch(userId, timeStr, type) {
@@ -133,6 +134,12 @@ exports.putDay = async (req, res) => {
     if (!row || String(row.userId) !== String(userId)) {
       return res.status(404).json({ message: 'Attendance not found' });
     }
+    // 改ざん防止: 従業員は保存済みの時刻を変更・消去できない（空欄を埋めるのは可）
+    if (isEmployee(req) && changesSavedTime(row,
+      typeof checkIn === 'undefined' ? undefined : (checkIn || null),
+      typeof checkOut === 'undefined' ? undefined : (checkOut || null))) {
+      return res.status(403).json({ message: LOCK_MESSAGE });
+    }
     const nextIn  = typeof checkIn  === 'undefined' ? row.checkIn  : (checkIn  || null);
     const nextOut = typeof checkOut === 'undefined' ? row.checkOut : (checkOut || null);
     const inChanged  = nextIn  && (!row.checkIn  || new Date(nextIn).getTime()  !== new Date(row.checkIn).getTime());
@@ -202,6 +209,10 @@ exports.deleteSegment = async (req, res) => {
     const row = await repo.getById(id);
     if (!row || String(row.userId) !== String(userId)) {
       return res.status(404).json({ message: 'Attendance not found' });
+    }
+    // 改ざん防止: 従業員は時刻が入った行を削除できない
+    if (isEmployee(req) && hasSavedTime(row)) {
+      return res.status(403).json({ message: LOCK_MESSAGE });
     }
     // Kiểm tra tháng có thể sửa không
     const ds = String(row.checkIn || row.checkOut || '').slice(0, 10);

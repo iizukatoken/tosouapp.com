@@ -1,4 +1,5 @@
 'use strict';
+const { changesSavedTime, hasSavedTime, LOCK_MESSAGE } = require('./attendance.punchLock');
 
 const repo = require('./attendance.repository');
 const { reportSwallowed } = require('../../core/errorReporter');
@@ -175,6 +176,27 @@ exports.putMonthBulk = async (req, res) => {
     } catch (e) { reportSwallowed('attendance.bulk.findExistingCheckIns', e); }
 
     const cleanedUpdates = normalizedUpdates.filter(Boolean);
+
+    // 改ざん防止: 従業員は保存済みの時刻を変更・消去できず、時刻の入った行も削除できない（空欄を埋める・新しい行は可）
+    if (req.user.role === 'employee') {
+      const ids = cleanedUpdates.filter(u => u && u.id).map(u => Number(u.id));
+      if (ids.length) {
+        const [curRows] = await db.query(
+          `SELECT id, checkIn, checkOut FROM attendance WHERE userId = ? AND id IN (${ids.map(() => '?').join(',')})`,
+          [userId, ...ids]
+        );
+        const curById = new Map((curRows || []).map(r => [Number(r.id), r]));
+        for (const u of cleanedUpdates) {
+          const cur = u && u.id ? curById.get(Number(u.id)) : null;
+          if (!cur) continue;
+          const locked = u.delete === true
+            ? hasSavedTime(cur)
+            // 一括保存では送られなかった時刻は「空にする」扱い（repo が null で上書きする）
+            : changesSavedTime(cur, u.checkIn || null, u.checkOut || null);
+          if (locked) return res.status(403).json({ message: LOCK_MESSAGE });
+        }
+      }
+    }
 
     let result = null;
     try {
