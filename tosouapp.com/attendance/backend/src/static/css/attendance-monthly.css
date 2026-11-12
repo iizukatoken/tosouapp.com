@@ -3781,3 +3781,27 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   #workingStart .se-employee-bar .se-mp-step { display: none !important; }
   #workingStart .se-employee-bar .se-mp-current { min-width: 120px; padding: 0 14px !important; }
 }
+
+/* ---- 2026-11 確定済みの値の見た目をそろえる ----
+ * 変更できない欄（disabled）で値が入っているもの（出勤・退勤・休憩・深夜休憩）は、
+ * どれも「薄いグレーの地・紺の太字」で同じに見せる（以前は 時刻=白い入力欄、休憩=ブラウザ既定の薄い灰色 でバラバラだった）。
+ * 予定（まだ打刻のない日）の時刻は従来どおり薄い灰色のまま。 */
+#monthTable input.se-time[disabled]:not(.is-auto):not([data-actual=""]),
+#monthTable select.se-select[disabled]:not(.is-auto):not(.se-kubun-select) {
+  background: #f1f5f9 !important;
+  border-color: #d5dde8 !important;
+  color: #0b2c66 !important;
+  -webkit-text-fill-color: #0b2c66 !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
+  cursor: default;
+}
+#monthTable input.se-time[disabled]:not(.is-auto):not([data-actual=""])::-webkit-datetime-edit,
+#monthTable input.se-time[disabled]:not(.is-auto):not([data-actual=""])::-webkit-datetime-edit-fields-wrapper {
+  color: #0b2c66 !important;
+  -webkit-text-fill-color: #0b2c66 !important;
+  font-weight: 700 !important;
+  background: transparent !important;
+}
+/* 変更できない選択欄は ▼ を出さない（押せるように見えないように） */
+#monthTable select.se-select[disabled]:not(.se-kubun-select) { -webkit-appearance: none; appearance: none; text-align: center; text-align-last: center; }
