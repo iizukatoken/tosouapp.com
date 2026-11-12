@@ -84,6 +84,15 @@ router.use(resolveTenant);
 router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
   try {
     const date = isISODate(req.query?.date) ? String(req.query.date) : todayJST();
+    res.status(200).json(await buildDailyRoster(req, date));
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// 勤怠記録（日別）の一覧。画面（GET /）と Excel/PDF 出力（/export-daily）で同じものを使う
+async function buildDailyRoster(req, date) {
+  {
 
     const [dY] = date.split('-').map(n => parseInt(n, 10));
 
@@ -322,11 +331,10 @@ router.get('/', authorize('admin', 'manager', 'employee'), async (req, res) => {
     const submitted = requiredItems.filter(i => !!i.report).length;
     const missing = requiredItems.filter(i => !i.report).length;
     
-    res.status(200).json({ date, summary: { submitted, required, missing }, items });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
+    return { date, summary: { submitted, required, missing }, items };
   }
-});
+}
+router.buildDailyRoster = buildDailyRoster;
 
 router.post('/backfill-worktype',
   rateLimitNamed('workreports_backfill_worktype', { windowMs: 60_000, max: 10 }),
