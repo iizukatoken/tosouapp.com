@@ -55,17 +55,17 @@
     "express-validator": "^7.3.1",
     "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
+    "knex": "^3.1.0",
     "multer": "^2.1.0",
     "mysql2": "^3.22.5",
     "mysqldump": "^3.2.0",
     "node-cron": "^4.2.1",
-    "nodemailer": "^9.0.0",
+    "nodemailer": "^10.5.0",
     "pdfkit": "^0.17.2",
     "pg": "^8.21.0",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
-    "xss": "^1.0.15",
-    "knex": "^3.1.0"
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "@playwright/test": "^1.43.0",
