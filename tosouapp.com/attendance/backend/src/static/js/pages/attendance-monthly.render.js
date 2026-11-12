@@ -1204,17 +1204,18 @@
         const shiftStart = String(dayShift?.start_time || '08:00').trim();
         const shiftEnd = String(dayShift?.end_time || '17:00').trim();
 
-        if (inEl && !String(inEl.value || '').trim() && !inManual) {
+        // 予定の時刻（薄い表示）は1行目だけ。追加の行（2行目以降）は本人が入力するので入れない
+        if (isPrimaryRow && inEl && !String(inEl.value || '').trim() && !inManual) {
           inEl.value = shiftStart;
           inEl.dataset.auto = '1';
           inEl.dataset.autoVal = shiftStart;
         }
-        if (outEl && !String(outEl.value || '').trim() && !outManual) {
+        if (isPrimaryRow && outEl && !String(outEl.value || '').trim() && !outManual) {
           outEl.value = shiftEnd;
           outEl.dataset.auto = '1';
           outEl.dataset.autoVal = shiftEnd;
         }
-        if (brSel && (!brSel.value || brSel.dataset.auto === '1') && brSel.dataset.manual !== '1') {
+        if (isPrimaryRow && brSel && (!brSel.value || brSel.dataset.auto === '1') && brSel.dataset.manual !== '1') {
           let rawBr = 60;
           if (dayShift && dayShift.break_minutes != null) {
             rawBr = Number(dayShift.break_minutes);
