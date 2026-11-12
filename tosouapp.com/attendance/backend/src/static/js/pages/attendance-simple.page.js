@@ -2035,6 +2035,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     const hmNow = nowHmJST();
+    // 誤打刻防止: 出勤から30分未満なら確認（押し間違いの多くはここで止まる）
+    {
+      const stHm = String($('#startTime')?.dataset?.actual || $('#startTime')?.value || '').trim();
+      const toMin = (v) => { const m = /^(\d{1,2}):(\d{2})/.exec(v); return m ? Number(m[1]) * 60 + Number(m[2]) : null; };
+      const a = toMin(stHm); const b = toMin(hmNow);
+      if (a != null && b != null && b >= a && b - a < 30
+        && !confirm(`出勤（${stHm}）から${b - a}分しか経っていません。\n退勤しますか？`)) return;
+    }
     const et = $('#endTime');
     if (et) {
       et.value = hmNow;
