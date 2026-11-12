@@ -706,7 +706,8 @@
         }
         return txt;
       })()}</td>
-      <td>
+      <td style="position:relative;">
+        ${!showDateDow ? '<span class="se-extra-tag" title="退勤後の会議など、その日に追加した勤務の行です（全部 残業）" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:11px;font-weight:700;color:#64748b;white-space:nowrap;pointer-events:auto;">追加勤務</span>' : ''}
         <div style="${!showDateDow ? 'visibility:hidden;' : ''}">
           <select id="reason_${dateStr}_${rowId}" name="reason_${dateStr}_${rowId}" class="se-select" data-field="reason" ${state.editableMonth ? '' : 'disabled'} style="width:100%;box-sizing:border-box;${(effectiveKubun === '欠勤' || effectiveKubun === '半休' || effectiveKubun === '半休(有給)' || effectiveKubun === '遅刻' || effectiveKubun === '早退' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || (!isFlexUser && (Number(daily?.lateMinutes || daily?.late_minutes || 0) > 0 || Number(daily?.earlyMinutes || daily?.early_minutes || 0) > 0 || (isWorkDay && finalIn && shiftStartOk && parseHm(finalIn) != null && parseHm(shiftStart) != null && parseHm(finalIn) > parseHm(shiftStart))))) ? '' : 'visibility:hidden;'}">
             <option value=""></option>
@@ -1386,7 +1387,10 @@
       }
 
       // Update reason visibility/disability based on kubun and updated lateEarlyText
-      if (reasonSel) {
+      if (reasonSel && !isPrimaryRow) {
+        reasonSel.style.visibility = 'hidden';
+        reasonSel.disabled = true;
+      } else if (reasonSel) {
         const lateEarlyText = lateEarly ? lateEarly.textContent : '—';
         // 半休/半休(有給) も理由を選べるようにする（午前・午後どちらを休むか等）
         const showReason = effectiveKubun === '欠勤' || effectiveKubun === '半休' || effectiveKubun === '半休(有給)' || effectiveKubun === '有給休暇' || effectiveKubun === '無給休暇' || effectiveKubun === '代替休日' || (lateEarlyText && lateEarlyText !== '—');
