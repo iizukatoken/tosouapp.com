@@ -7,38 +7,44 @@ import { api } from '../../shared/api/client.js';
 import { escapeHtml as esc } from '../_shared/dom.js';
 
 const CSS = `
-.pe-bg{position:fixed;inset:0;background:rgba(15,23,42,.25);z-index:9998}
-.pe-panel{position:fixed;top:0;right:0;bottom:0;width:440px;max-width:100vw;background:#fff;border-left:1px solid #c3cdda;box-shadow:-8px 0 24px rgba(15,23,42,.18);z-index:9999;font-family:'Meiryo UI','Yu Gothic UI',sans-serif;color:#1f2937;display:flex;flex-direction:column}
-.pe-hd{background:#0b2c66;color:#fff;padding:10px 14px;display:flex;align-items:center;gap:10px}
-.pe-hd b{font-size:14px}.pe-hd span{font-size:12px;opacity:.9}
-.pe-x{margin-left:auto;background:none;border:0;color:#fff;font-size:20px;line-height:1;cursor:pointer;opacity:.85}
-.pe-body{flex:1;overflow:auto}
-.pe-sec{padding:10px 14px;border-bottom:1px solid #e2e8f0}
-.pe-sec h4{margin:0 0 6px;font-size:12px;color:#0b2c66;border-left:3px solid #0b2c66;padding-left:6px}
-.pe-t{width:100%;border-collapse:collapse;font-size:12px}
-.pe-t th{background:#eef2f7;border:1px solid #c3cdda;padding:4px 6px;text-align:left;font-weight:700}
-.pe-t td{border:1px solid #d5dde8;padding:4px 6px;vertical-align:middle}
-.pe-t tr.void td{background:#f8fafc;color:#94a3b8}
-.pe-b{display:inline-block;height:24px;line-height:22px;padding:0 9px;border:1px solid #c3cdda;background:#fff;font-size:11.5px;font-weight:700;color:#334155;margin:1px 3px 1px 0;cursor:pointer;font-family:inherit}
-.pe-b:hover{background:#f1f5f9}.pe-b:disabled{opacity:.5;cursor:default}
-.pe-b.del{border-color:#e5a3a3;color:#b91c1c}.pe-b.pri{background:#0b2c66;border-color:#0b2c66;color:#fff}.pe-b.danger{background:#b91c1c;border-color:#b91c1c;color:#fff}
-.pe-tag{display:inline-block;padding:0 6px;font-size:11px;font-weight:700;border:1px solid}
-.pe-in{color:#166534;border-color:#86efac;background:#f0fdf4}.pe-out{color:#0b2c66;border-color:#9cb6e0;background:#e6effc}.pe-off{color:#94a3b8;border-color:#cbd5e1}
-.pe-void{display:inline-block;margin-top:2px;padding:0 6px;font-size:10.5px;font-weight:700;color:#b91c1c;border:1px solid #e5a3a3;background:#fef2f2}
-.pe-hist{font-size:12px;line-height:1.6}.pe-hist div{padding:4px 0;border-bottom:1px dashed #e2e8f0}
-.pe-hist .who{color:#0b2c66;font-weight:700}.pe-hist .why{color:#64748b}
-.pe-foot{padding:10px 14px;border-top:1px solid #e2e8f0;font-size:11.5px;color:#64748b}
-.pe-msg{padding:8px 14px;font-size:12px}.pe-msg.ok{background:#f0fdf4;color:#166534;border-bottom:1px solid #bbf7d0}.pe-msg.err{background:#fef2f2;color:#991b1b;border-bottom:1px solid #fecaca}
-.pe-mbg{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:10000}
-.pe-modal{position:fixed;top:120px;right:40px;width:380px;max-width:calc(100vw - 32px);background:#fff;border:1px solid #c3cdda;z-index:10001;font-family:'Meiryo UI','Yu Gothic UI',sans-serif;box-shadow:0 12px 32px rgba(15,23,42,.25)}
-.pe-modal .pe-hd.red{background:#b91c1c}
-.pe-row{padding:8px 14px;font-size:12.5px}
-.pe-sel,.pe-inp{height:32px !important;min-height:32px !important;line-height:normal !important;box-sizing:border-box !important;border:1px solid #94a3b8;font-size:13px !important;padding:0 8px !important;font-family:inherit;color:#1f2937 !important;background:#fff}
+.pe-bg{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:9998}
+.pe-panel{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(760px,calc(100vw - 32px));max-height:86vh;background:#fff;border:1px solid #d5dde8;border-radius:6px;box-shadow:0 18px 48px rgba(15,23,42,.22);z-index:9999;font-family:'Meiryo UI','Yu Gothic UI',sans-serif;color:#1f2937;display:flex;flex-direction:column;overflow:hidden}
+.pe-hd{background:#fff;color:#0b2c66;padding:14px 18px 10px;display:flex;align-items:baseline;gap:12px;border-bottom:2px solid #0b2c66}
+.pe-hd b{font-size:16px;font-weight:700}.pe-hd span{font-size:12.5px;color:#475569}
+.pe-x{margin-left:auto;align-self:center;background:none;border:0;color:#94a3b8;font-size:22px;line-height:1;cursor:pointer;padding:0 2px}
+.pe-x:hover{color:#334155}
+.pe-body{flex:1;overflow:auto;padding:6px 18px 4px}
+.pe-sec{padding:10px 0}
+.pe-sec h4{margin:0 0 8px;font-size:12.5px;font-weight:700;color:#0b2c66;background:#f1f5f9;border-left:3px solid #0b2c66;padding:5px 8px}
+.pe-t{width:100%;border-collapse:collapse;font-size:13px}
+.pe-t th{background:#f8fafc !important;color:#475569 !important;border:1px solid #e2e8f0 !important;padding:6px 10px !important;text-align:left;font-weight:600;font-size:12px}
+.pe-t td{border:1px solid #e2e8f0 !important;padding:7px 10px !important;vertical-align:middle;color:#1f2937}
+.pe-t tr.void td{background:#fafbfc;color:#94a3b8 !important}
+.pe-b{display:inline-block;height:26px;line-height:24px;padding:0 10px;border:1px solid #cbd5e1;border-radius:3px;background:#fff;font-size:12px;font-weight:600;color:#334155;margin:1px 4px 1px 0;cursor:pointer;font-family:inherit}
+.pe-b:hover{background:#f1f5f9;border-color:#94a3b8}.pe-b:disabled{opacity:.5;cursor:default}
+.pe-b.del{color:#b91c1c;border-color:#f1c4c4}.pe-b.del:hover{background:#fef2f2}
+.pe-b.pri{background:#0b2c66;border-color:#0b2c66;color:#fff}.pe-b.pri:hover{background:#163d82}
+.pe-b.danger{background:#b91c1c;border-color:#b91c1c;color:#fff}.pe-b.danger:hover{background:#991b1b}
+.pe-b.add{color:#0b2c66;border-style:dashed;border-color:#9cb6e0;background:#f8fbff}
+.pe-tag{display:inline-block;padding:1px 8px;font-size:11.5px;font-weight:600;border:1px solid;border-radius:3px}
+.pe-in{color:#166534;border-color:#bbf7d0;background:#f0fdf4}.pe-out{color:#0b2c66;border-color:#c7d7f0;background:#eef4ff}.pe-off{color:#94a3b8;border-color:#e2e8f0;background:#fff}
+.pe-void{display:inline-block;margin-right:6px;padding:0 6px;font-size:11px;font-weight:600;color:#b91c1c;border:1px solid #f1c4c4;background:#fef2f2;border-radius:3px}
+.pe-hist{font-size:12.5px;line-height:1.7}.pe-hist div{padding:6px 2px;border-bottom:1px solid #f1f5f9}
+.pe-hist .who{color:#0b2c66;font-weight:600}.pe-hist .why{color:#64748b;font-size:12px}
+.pe-foot{padding:9px 18px;border-top:1px solid #e2e8f0;background:#f8fafc;font-size:11.5px;color:#64748b}
+.pe-msg{margin:10px 18px 0;padding:8px 12px;font-size:12.5px;border-radius:4px}.pe-msg.ok{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0}.pe-msg.err{background:#fef2f2;color:#991b1b;border:1px solid #fecaca}
+.pe-mbg{position:fixed;inset:0;background:rgba(15,23,42,.25);z-index:10000}
+.pe-modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(420px,calc(100vw - 32px));background:#fff;border:1px solid #d5dde8;border-radius:6px;z-index:10001;font-family:'Meiryo UI','Yu Gothic UI',sans-serif;box-shadow:0 18px 48px rgba(15,23,42,.28);overflow:hidden}
+.pe-modal .pe-hd{padding:12px 16px 8px}.pe-modal .pe-hd b{font-size:15px}
+.pe-modal .pe-hd.red{color:#b91c1c;border-bottom-color:#b91c1c}
+.pe-row{padding:10px 16px;font-size:13px;line-height:1.6;color:#1f2937}
+.pe-sel,.pe-inp{height:34px !important;min-height:34px !important;line-height:normal !important;box-sizing:border-box !important;border:1px solid #cbd5e1 !important;border-radius:3px;font-size:13px !important;padding:0 8px !important;font-family:inherit;color:#1f2937 !important;background:#fff}
+.pe-sel:focus,.pe-inp:focus,.pe-ta:focus{outline:none;border-color:#0b2c66 !important;box-shadow:0 0 0 2px rgba(11,44,102,.12)}
 .pe-sel{width:100%;margin-top:4px}
-.pe-ta{width:100%;height:46px;border:1px solid #94a3b8;font-size:12.5px;padding:4px 6px;margin-top:6px;box-sizing:border-box;font-family:inherit}
+.pe-ta{width:100%;height:52px;border:1px solid #cbd5e1;border-radius:3px;font-size:13px;padding:6px 8px;margin-top:8px;box-sizing:border-box;font-family:inherit;resize:vertical}
 .pe-note{font-size:11.5px;color:#64748b;margin-top:6px}
 .pe-err{color:#b91c1c;font-size:12px;margin-top:6px;min-height:0}
-@media (max-width:600px){.pe-modal{right:16px;top:80px}}
+.pe-mfoot{text-align:right;border-top:1px solid #e2e8f0;background:#f8fafc;padding:10px 16px}
 `;
 
 const hm = (v) => (v ? String(v).slice(11, 16) : '');
@@ -75,7 +81,7 @@ function askReason({ title, danger, html, okLabel, reasons, extraHtml, readExtra
         <div class="pe-note">内容は 編集履歴 と 監査ログ に残り、本人に通知されます。</div>
         <div class="pe-err"></div>
       </div>
-      <div class="pe-row" style="text-align:right;border-top:1px solid #e2e8f0;">
+      <div class="pe-mfoot">
         <button type="button" class="pe-b" data-k="cancel">キャンセル</button>
         <button type="button" class="pe-b ${danger ? 'danger' : 'pri'}" data-k="ok">${esc(okLabel)}</button>
       </div>`;
@@ -156,8 +162,7 @@ export async function openPunchEdit({ userId, date, name = '', code = '', onChan
         const t = l.part === 'in' ? '出勤' : '退勤';
         const restorable = l.v.action === 'void_row' ? l.part === 'in' || !l.v.before?.row?.checkIn : true;
         return `<tr class="void"><td><span class="pe-tag pe-off">${t}</span></td><td><s>${esc(hm(l.at))}</s></td>
-          <td><s>${esc(srcLabel(l.part === 'in' ? l.v.before?.row?.in_locationSource : (l.v.before?.outSource || l.v.before?.row?.out_locationSource)))}</s><br>
-            <span class="pe-void">取消済み</span> <span style="font-size:11px;">${esc(l.v.createdByName)} ${esc(when(l.v.createdAt))}</span></td>
+          <td><s>${esc(srcLabel(l.part === 'in' ? l.v.before?.row?.in_locationSource : (l.v.before?.outSource || l.v.before?.row?.out_locationSource)))}</s><div style="margin-top:3px;"><span class="pe-void">取消済み</span><span style="font-size:11.5px;">${esc(l.v.createdByName)} ${esc(when(l.v.createdAt))}</span></div></td>
           <td>${restorable ? `<button type="button" class="pe-b" data-act="restore" data-edit="${l.v.id}">元に戻す</button>` : ''}</td></tr>`;
       }
       const p = l.p;
@@ -189,7 +194,7 @@ export async function openPunchEdit({ userId, date, name = '', code = '', onChan
       <div class="pe-sec"><h4>打刻データ（原本は消さずに残します）</h4>
         ${lines.length ? `<table class="pe-t"><thead><tr><th style="width:52px;">種類</th><th style="width:70px;">時刻</th><th>打刻元</th><th style="width:112px;">操作</th></tr></thead><tbody>${lines.map(rowHtml).join('')}</tbody></table>`
         : '<div style="font-size:12px;color:#94a3b8;">この日の打刻はありません</div>'}
-        <div style="margin-top:8px;"><button type="button" class="pe-b" data-act="add">＋ 打刻を追加</button></div>
+        <div style="margin-top:8px;"><button type="button" class="pe-b add" data-act="add">＋ 打刻を追加</button></div>
       </div>
       <div class="pe-sec"><h4>編集履歴</h4>
         <div class="pe-hist">${hist || '<div style="color:#94a3b8;">この日の管理者による編集はまだありません</div>'}</div>
