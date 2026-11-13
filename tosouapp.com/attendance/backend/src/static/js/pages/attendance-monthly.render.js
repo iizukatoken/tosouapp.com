@@ -585,7 +585,8 @@
       tr.dataset.actualOut = hasActualOut ? outHm : '';
 
       const kubunOptionsHtml = `
-      <option value="" ${disablePlanned ? 'disabled' : ''} ${kubunInit === '' ? 'selected' : ''}>${esc(plannedLabel)}</option>
+      <option value="" ${disablePlanned ? 'disabled' : ''} ${kubunInit === '' ? 'selected' : ''}>${esc(kubunInit === '' ? plannedLabel : (offDay ? '【休日予定】' : '【出勤予定】'))}</option>
+      <option value="__sep__" disabled aria-hidden="true"></option>
       ${kubunOptions.map((k) => {
         let disabledOpt = '';
         let optStyle = '';
