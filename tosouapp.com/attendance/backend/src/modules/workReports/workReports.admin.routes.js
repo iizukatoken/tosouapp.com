@@ -326,6 +326,19 @@ async function buildDailyRoster(req, date) {
       };
     });
 
+    // 管理者・マネージャーが打刻編集した社員に ✎（説明文はマウスを乗せたとき・Excel/PDF の注記）
+    try {
+      const punchEdit = require('../attendance/attendance.punchEdit');
+      const edits = await punchEdit.editedMap({ tenantId: req.tenantId ?? null, from: date, to: date });
+      for (const it of items) {
+        const list = edits.get(`${it.userId}|${date}`);
+        if (!list || !list.length) continue;
+        it.punchEdits = punchEdit.describeEdits(list);
+        it.editedIn = list.some(e => ['edit_in', 'void_row', 'add'].includes(e.action));
+        it.editedOut = list.some(e => e.action !== 'edit_in');
+      }
+    } catch (e) { /* ✎ が出ないだけ */ }
+
     const requiredItems = items.filter(i => i.status === 'checked_out');
     const required = requiredItems.length;
     const submitted = requiredItems.filter(i => !!i.report).length;
