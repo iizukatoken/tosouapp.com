@@ -3862,3 +3862,8 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 
 /* 区分の警告（例: 有給休暇なのに打刻あり）は 区分 の下に出し、区分の選択欄を縮めない */
 .se-kubun-wrap .se-kubun-select { flex-shrink: 0; }
+
+/* 区分の選択リスト: 「予定」の日でも リストは他の日と同じ見た目（選択欄の青い色をリストに持ち込まない） */
+#monthTable .se-kubun-select option { background-color: #fff !important; font-weight: 700; }
+#monthTable .se-kubun-select option:not([value=""]):not([style*="color"]) { color: #0f172a !important; }
+#monthTable .se-kubun-select option[value=""] { color: #94a3b8 !important; }
