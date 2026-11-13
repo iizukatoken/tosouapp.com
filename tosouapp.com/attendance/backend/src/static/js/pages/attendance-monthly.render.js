@@ -110,7 +110,7 @@
       <th>備考</th>
       <th>ステータス</th>
         <th>承認者</th>
-      <th style="width: 60px !important; min-width: 60px !important; max-width: 60px !important; text-align: center; box-sizing: border-box; padding-left: 0; padding-right: 0;">行操作</th>
+      <th style="width: 46px !important; min-width: 46px !important; max-width: 46px !important; text-align: center; box-sizing: border-box; padding: 0 !important; font-size: 10px; letter-spacing: -1px;">行操作</th>
       <th style="width:34px !important;min-width:34px !important;max-width:34px !important;padding:0 !important;text-align:center;font-size:10px;letter-spacing:-1px;">履歴</th>
       </tr>
     </thead>
@@ -810,15 +810,23 @@
         }
         
         const defaultWidths = [
-          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 45, 80, 100, 150, 62, 80, 50, 34
+          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 45, 80, 100, 150, 62, 80, 46, 34
         ]; // 20 columns (出社/在宅/現場・休憩/深夜休憩/勤務時間/超過時間/ステータス は狭く。表の min-width も同じ比率で縮めている — CSS #monthTable.se-table table)
         
+        // 行操作（19列目）・履歴（20列目）はボタンだけなので幅を固定。表の最小幅との差は他の列で分ける
+        const fixedIdx = new Set([18, 19]);
+        const sumAll = defaultWidths.reduce((x, y) => x + y, 0);
+        const sumFixed = defaultWidths.reduce((x, y, i) => x + (fixedIdx.has(i) ? y : 0), 0);
+        let minW = 0;
+        try { minW = parseFloat(getComputedStyle(table).minWidth) || 0; } catch (e) { /* ignore */ }
+        const target = Math.max(minW, sumAll);
+        const k = (target - sumFixed) / Math.max(1, sumAll - sumFixed);
         const cg = document.createElement('colgroup');
-        for (const w of defaultWidths) {
+        defaultWidths.forEach((w, i) => {
           const col = document.createElement('col');
-          col.style.width = `${w}px`;
+          col.style.width = `${fixedIdx.has(i) ? w : Math.floor(w * k)}px`;
           cg.appendChild(col);
-        }
+        });
         table.querySelector('colgroup')?.remove();
         table.insertAdjacentElement('afterbegin', cg);
         table.style.tableLayout = 'fixed';

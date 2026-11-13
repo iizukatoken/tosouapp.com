@@ -1600,7 +1600,7 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
 }
 #monthTable.se-table table {
   /* 2300px から 出社/在宅/現場・休憩/深夜休憩/勤務時間 を狭めた分を引いた幅 (他の列の表示幅は従来どおり) */
-  min-width: 2126px;
+  min-width: 2082px; /* 履歴・行操作 を狭めた分（-44px） */
   width: max-content;
   table-layout: auto;
   border-collapse: collapse;
@@ -1671,9 +1671,9 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
 }
 #monthTable thead th:nth-child(19),
 #monthTable tbody td:nth-child(19) {
-  min-width: 52px !important;
-  width: 52px !important;
-  max-width: 52px !important;
+  min-width: 46px !important;
+  width: 46px !important;
+  max-width: 46px !important;
   padding-left: 0 !important;
   padding-right: 0 !important;
   box-sizing: border-box !important;
@@ -3841,3 +3841,18 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   line-height: 10px !important;
   pointer-events: none;
 }
+
+/* 行操作: 小さな四角いボタン（履歴のアイコンと同じ見た目）。列は最小幅 */
+#monthTable tbody td:nth-child(19) { padding: 0 !important; }
+#monthTable tbody td:nth-child(19) > div { gap: 2px !important; flex-wrap: nowrap !important; }
+#monthTable tbody td:nth-child(19) :is(.se-icon-btn, .se-adj-btn) {
+  display: inline-flex !important; align-items: center; justify-content: center;
+  width: 20px !important; min-width: 20px !important; height: 20px !important; padding: 0 !important;
+  border-radius: 0 !important; box-shadow: none !important; line-height: 1 !important;
+  font-size: 13px !important; font-weight: 700 !important; text-decoration: none !important;
+  background: #fff !important; border: 1px solid #9aa8ba !important; color: #0b2c66 !important;
+}
+#monthTable tbody td:nth-child(19) .se-icon-btn.secondary { color: #64748b !important; }
+#monthTable tbody td:nth-child(19) .se-adj-btn { font-size: 11px !important; }
+#monthTable tbody td:nth-child(19) :is(.se-icon-btn, .se-adj-btn):not(:disabled):hover { background: #e9eef4 !important; }
+#monthTable tbody td:nth-child(19) .se-icon-btn:disabled { opacity: .35 !important; }
