@@ -803,7 +803,7 @@ router.get('/export-daily',
       const { buildDailyRoster } = require('./workReports.admin.routes');
       const { items } = await buildDailyRoster(req, qDate);
       const dailyExport = require('./workReports.dailyExport');
-      const { rows, counts } = dailyExport.toRows(items || [], qDate);
+      const { rows, counts, notes } = dailyExport.toRows(items || [], qDate);
       let companyName = '';
       try {
         if (req.tenantId) {
@@ -811,8 +811,8 @@ router.get('/export-daily',
           companyName = String(t?.name || '');
         }
       } catch (e) { /* 会社名は無くても出力する */ }
-      if (format === 'xlsx') return await dailyExport.writeXlsx(res, { date: qDate, rows, counts, companyName });
-      return dailyExport.writePdf(res, { date: qDate, rows, counts, companyName });
+      if (format === 'xlsx') return await dailyExport.writeXlsx(res, { date: qDate, rows, counts, companyName, notes });
+      return dailyExport.writePdf(res, { date: qDate, rows, counts, companyName, notes });
     } catch (err) {
       console.error('[export-daily] error:', err);
       if (!res.headersSent) res.status(500).json({ message: err.message || 'export failed' });

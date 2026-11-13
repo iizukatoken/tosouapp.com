@@ -50,6 +50,7 @@ function statusOf(it, date) {
 function toRows(items, date) {
   const rows = [];
   const counts = { total: 0, working: 0, done: 0, late: 0, notIn: 0, off: 0, extra: 0 };
+  const notes = [];
   let no = 0;
   for (const it of items) {
     const st = statusOf(it, date);
@@ -75,12 +76,22 @@ function toRows(items, date) {
       status: st,
       in: isOffRow ? '' : hm(it.attendance?.checkIn),
       out: isOffRow ? '' : hm(it.attendance?.checkOut),
+      mark: '',
       lateEarly,
       site: String(it.report?.site || ''),
       work: String(it.report?.work || ''),
       reason: String(it.reason || ''),
       notes: String(it.notes || '')
     });
+    // 管理者・マネージャーが打刻編集した社員: 時刻に ※N、表の下に注記
+    if (Array.isArray(it.punchEdits) && it.punchEdits.length) {
+      const mark = `※${notes.length + 1}`;
+      const r = rows[rows.length - 1];
+      r.mark = mark;
+      if (it.editedIn || !it.editedOut) r.in = `${r.in}${mark}`;
+      if (it.editedOut) r.out = `${r.out}${mark}`;
+      notes.push(`${mark}　${it.username || ''}　${it.punchEdits.join('／')}`);
+    }
     for (const ex of Array.isArray(it.extraRows) ? it.extraRows : []) {
       counts.extra++;
       rows.push({
@@ -92,8 +103,10 @@ function toRows(items, date) {
       });
     }
   }
-  return { rows, counts };
+  return { rows, counts, notes };
 }
+
+const NOTE_FOOT = '※ 管理者・マネージャーが修正・取消した打刻です（原本は編集履歴に保存）。詳しくは 監査ログ を参照してください。';
 
 const COLUMNS = [
   { key: 'no', label: 'No', xw: 5, pw: 22, align: 'center' },
@@ -102,8 +115,8 @@ const COLUMNS = [
   { key: 'dept', label: '部署', xw: 11, pw: 52, align: 'left' },
   { key: 'workType', label: '勤務区分', xw: 9, pw: 44, align: 'center' },
   { key: 'status', label: '状態', xw: 11, pw: 56, align: 'center' },
-  { key: 'in', label: '出勤', xw: 7, pw: 34, align: 'center' },
-  { key: 'out', label: '退勤', xw: 7, pw: 34, align: 'center' },
+  { key: 'in', label: '出勤', xw: 8, pw: 42, align: 'center' },
+  { key: 'out', label: '退勤', xw: 8, pw: 42, align: 'center' },
   { key: 'lateEarly', label: '遅刻/早退', xw: 11, pw: 52, align: 'center' },
   { key: 'site', label: '現場', xw: 14, pw: 70, align: 'left' },
   { key: 'work', label: '作業内容', xw: 28, pw: 0, align: 'left' }, // PDF は残りの幅
@@ -119,7 +132,7 @@ function dateLabel(date) {
 const nowLabel = () => new Date().toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 const summaryText = (c, date) => `対象 ${c.total}名　出勤中 ${c.working}名　退勤済 ${c.done}名　遅刻 ${c.late}名　${String(date || '') < todayJST() ? '打刻なし' : '未出勤'} ${c.notIn}名　休日・休暇 ${c.off}名${c.extra ? `　追加勤務 ${c.extra}件` : ''}`;
 
-async function writeXlsx(res, { date, rows, counts, companyName }) {
+async function writeXlsx(res, { date, rows, counts, companyName, notes = [] }) {
   const ExcelJS = require('exceljs');
   const wb = new ExcelJS.Workbook();
   wb.creator = 'スマートE勤怠';
@@ -197,7 +210,7 @@ async function writeXlsx(res, { date, rows, counts, companyName }) {
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${t.bg}` } };
       }
       if (c.key === 'lateEarly' && r.lateEarly) cell.font = font({ bold: true, color: { argb: 'FFC2410C' } });
-      if ((c.key === 'in' || c.key === 'out') && cell.value) cell.font = font({ bold: true, color: { argb: `FF${NAVY}` } });
+      if ((c.key === 'in' || c.key === 'out') && cell.value) cell.font = font({ bold: true, color: { argb: String(cell.value).includes('※') ? 'FFB45309' : `FF${NAVY}` } });
       if (c.key === 'workType' && r.kind === 'extra') cell.font = font({ bold: true, color: { argb: 'FF475569' } });
     });
     row.height = 18;
@@ -208,6 +221,18 @@ async function writeXlsx(res, { date, rows, counts, companyName }) {
     ws.getCell(6, 1).alignment = { horizontal: 'center' };
   }
   ws.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: lastCol } };
+  if (notes.length) {
+    let nr = 6 + Math.max(rows.length, 1) + 1;
+    for (const t of [...notes, NOTE_FOOT]) {
+      ws.mergeCells(nr, 1, nr, lastCol);
+      const cell = ws.getCell(nr, 1);
+      cell.value = t;
+      cell.font = font({ size: 8.5, color: { argb: 'FF475569' } });
+      cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+      ws.getRow(nr).height = 16;
+      nr++;
+    }
+  }
 
   const encoded = encodeURIComponent(`勤怠記録_${date}.xlsx`);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -216,7 +241,7 @@ async function writeXlsx(res, { date, rows, counts, companyName }) {
   res.end();
 }
 
-function writePdf(res, { date, rows, counts, companyName }) {
+function writePdf(res, { date, rows, counts, companyName, notes = [] }) {
   const PDFDocument = require('pdfkit');
   const fontPath = [
     path.join(__dirname, '../../static/fonts/NotoSansJP-Regular.ttf'),
@@ -296,7 +321,7 @@ function writePdf(res, { date, rows, counts, companyName }) {
         doc.fillColor(r.kind === 'extra' ? '#475569' : '#1f2937').fontSize(FS).text(v, x + PAD, y + 4, { width: c.w - PAD * 2, height: h - 6, align: c.align });
       } else {
         let color = r.kind === 'extra' ? '#475569' : '#1f2937';
-        if ((c.key === 'in' || c.key === 'out') && v) color = hex(NAVY);
+        if ((c.key === 'in' || c.key === 'out') && v) color = v.includes('※') ? '#b45309' : hex(NAVY);
         if (c.key === 'lateEarly' && v) color = '#c2410c';
         doc.fillColor(color).fontSize(FS).text(v, x + PAD, y + (h - FS) / 2 - 0.5, { width: c.w - PAD * 2, align: c.align, lineBreak: false, ellipsis: true });
       }
@@ -311,6 +336,16 @@ function writePdf(res, { date, rows, counts, companyName }) {
     y += h;
   }
   if (!rows.length) doc.fillColor('#64748b').fontSize(10).text('該当データがありません', ML, y + 14, { width: totalW, align: 'center' });
+  if (notes.length) {
+    y += 8;
+    doc.fontSize(7.5);
+    for (const t of [...notes, NOTE_FOOT]) {
+      const h = doc.heightOfString(t, { width: totalW }) + 3;
+      if (y + h > bottom) { doc.addPage(); y = MT; }
+      doc.fillColor('#475569').fontSize(7.5).text(t, ML, y, { width: totalW });
+      y += h;
+    }
+  }
 
   // フッター（全ページ）
   const range = doc.bufferedPageRange();

@@ -283,10 +283,10 @@ async function editedMap({ tenantId = null, userIds = null, from, to }) {
   try {
     await ensureSchema();
     const params = [from, to];
-    let sql = 'SELECT user_id AS userId, work_date AS d, action, before_json, after_json, reason, created_at FROM attendance_punch_edits WHERE work_date BETWEEN ? AND ?';
-    if (tenantId != null) { sql += ' AND (tenant_id = ? OR tenant_id IS NULL)'; params.push(tenantId); }
-    if (Array.isArray(userIds) && userIds.length) { sql += ` AND user_id IN (${userIds.map(() => '?').join(',')})`; params.push(...userIds); }
-    sql += ' ORDER BY created_at ASC, id ASC';
+    let sql = 'SELECT e.user_id AS userId, e.work_date AS d, e.action, e.before_json, e.after_json, e.reason, e.created_at, u.username AS byName FROM attendance_punch_edits e LEFT JOIN users u ON u.id = e.created_by WHERE e.work_date BETWEEN ? AND ?';
+    if (tenantId != null) { sql += ' AND (e.tenant_id = ? OR e.tenant_id IS NULL)'; params.push(tenantId); }
+    if (Array.isArray(userIds) && userIds.length) { sql += ` AND e.user_id IN (${userIds.map(() => '?').join(',')})`; params.push(...userIds); }
+    sql += ' ORDER BY e.created_at ASC, e.id ASC';
     const [rows] = await db.query(sql, params);
     const map = new Map();
     for (const r of rows) {
@@ -295,7 +295,7 @@ async function editedMap({ tenantId = null, userIds = null, from, to }) {
       if (!map.has(key)) map.set(key, []);
       let before = null; let after = null;
       try { before = r.before_json ? JSON.parse(r.before_json) : null; after = r.after_json ? JSON.parse(r.after_json) : null; } catch (e) { /* ignore */ }
-      map.get(key).push({ action: r.action, label: ACTION_LABEL[r.action] || r.action, reason: r.reason, before, after });
+      map.get(key).push({ action: r.action, label: ACTION_LABEL[r.action] || r.action, reason: r.reason, before, after, by: r.byName || '', at: r.created_at || null });
     }
     return map;
   } catch (e) {
@@ -305,15 +305,21 @@ async function editedMap({ tenantId = null, userIds = null, from, to }) {
 
 /** ✎ の説明文（例: 「退勤の取消: 08:08（本人から誤打刻の連絡）」） */
 function describeEdits(list) {
+  const stamp = (e) => {
+    const t = e.at ? String(e.at instanceof Date ? new Date(e.at.getTime() + 9 * 3600 * 1000).toISOString() : e.at).replace('T', ' ') : '';
+    const when = t ? `${Number(t.slice(5, 7))}/${Number(t.slice(8, 10))} ${t.slice(11, 16)} ` : '';
+    return `（${when}${e.by ? e.by + '：' : ''}${e.reason}）`;
+  };
   return (list || []).map(e => {
     const b = e.before || {}; const a = e.after || {};
-    if (e.action === 'void_out') return `退勤 ${hm(b.checkOut)} を取消（${e.reason}）`;
-    if (e.action === 'void_row') return `打刻 ${hm(b.row?.checkIn) || '—'}〜${hm(b.row?.checkOut) || '—'} を取消（${e.reason}）`;
-    if (e.action === 'edit_in') return `出勤 ${hm(b.checkIn) || 'なし'} → ${hm(a.checkIn)}（${e.reason}）`;
-    if (e.action === 'edit_out') return `退勤 ${hm(b.checkOut) || 'なし'} → ${hm(a.checkOut)}（${e.reason}）`;
-    if (e.action === 'add') return `打刻を追加 ${hm(a.checkIn) || '—'}〜${hm(a.checkOut) || '—'}（${e.reason}）`;
-    if (e.action === 'restore') return `取消を元に戻す（${e.reason}）`;
-    return `${e.label}（${e.reason}）`;
+    const why = stamp(e);
+    if (e.action === 'void_out') return `退勤 ${hm(b.checkOut)} を取消${why}`;
+    if (e.action === 'void_row') return `打刻 ${hm(b.row?.checkIn) || '—'}〜${hm(b.row?.checkOut) || '—'} を取消${why}`;
+    if (e.action === 'edit_in') return `出勤 ${hm(b.checkIn) || 'なし'} → ${hm(a.checkIn)} に修正${why}`;
+    if (e.action === 'edit_out') return `退勤 ${hm(b.checkOut) || 'なし'} → ${hm(a.checkOut)} に修正${why}`;
+    if (e.action === 'add') return `打刻を追加 ${hm(a.checkIn) || '—'}〜${hm(a.checkOut) || '—'}${why}`;
+    if (e.action === 'restore') return `取消を元に戻す${why}`;
+    return `${e.label}${why}`;
   });
 }
 
