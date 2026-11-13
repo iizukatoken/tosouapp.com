@@ -431,11 +431,26 @@ exports.getMonthDetail = async (req, res) => {
     let defaultApproverName = '';
     try { defaultApproverName = await resolveDefaultApproverName(u, userId, tid); } catch (e) { /* 表示用 */ }
 
+    // 管理者・マネージャーが打刻編集した日（画面の ✎ と、マウスを乗せたときの原本の説明）
+    const punchEditsByDate = {};
+    try {
+      const punchEdit = require('./attendance.punchEdit');
+      const map = await punchEdit.editedMap({ tenantId: tid || null, userIds: [userId], from, to });
+      for (const [key, list] of map) {
+        punchEditsByDate[key.split('|')[1]] = {
+          lines: punchEdit.describeEdits(list),
+          in: list.some(e => ['edit_in', 'void_row', 'add'].includes(e.action)),
+          out: list.some(e => e.action !== 'edit_in')
+        };
+      }
+    } catch (e) { /* ✎ が出ないだけ */ }
+
     // Trả kết quả
     res.status(200).json({
       year: y, month: m, from, to,
       user,
       leaveStatusByDate,
+      punchEditsByDate,
       shiftMonthStatus,
       monthStatus: {
         status:      monthStatus,
