@@ -367,12 +367,14 @@
         bar.style.cssText = 'position:fixed;z-index:190;overflow-x:auto;overflow-y:hidden;height:16px;background:#f8fafc;border-top:1px solid #dfe5ee;display:none;';
         bar.innerHTML = '<div style="height:1px;"></div>';
         document.body.appendChild(bar);
+        // 動かしている側が主。もう片方は追従するだけ（相互に書き戻さない＝ガタつかない）
         bar.addEventListener('scroll', () => {
           const w = document.querySelector('.se-month-scroll');
-          if (!w || bar.__syncing) return;
-          w.__syncingFromBar = true;
-          w.scrollLeft = bar.scrollLeft;
-          requestAnimationFrame(() => { w.__syncingFromBar = false; });
+          if (!w) return;
+          const now = performance.now();
+          if (window.__seHsDriver === 'table' && now - (window.__seHsAt || 0) < 150) return;
+          window.__seHsDriver = 'bar'; window.__seHsAt = now;
+          if (Math.abs(w.scrollLeft - bar.scrollLeft) >= 1) w.scrollLeft = bar.scrollLeft;
         }, { passive: true });
       }
       if (!wrapEl || !table || document.body.classList.contains('view-plan')) { bar.style.display = 'none'; return; }
@@ -380,10 +382,11 @@
         wrapEl.dataset.stickyHsBound = '1';
         wrapEl.addEventListener('scroll', () => {
           const b = document.getElementById('seStickyHScroll');
-          if (!b || wrapEl.__syncingFromBar) return;
-          b.__syncing = true;
-          b.scrollLeft = wrapEl.scrollLeft;
-          requestAnimationFrame(() => { b.__syncing = false; });
+          if (!b) return;
+          const now = performance.now();
+          if (window.__seHsDriver === 'bar' && now - (window.__seHsAt || 0) < 150) return;
+          window.__seHsDriver = 'table'; window.__seHsAt = now;
+          if (Math.abs(b.scrollLeft - wrapEl.scrollLeft) >= 1) b.scrollLeft = wrapEl.scrollLeft;
         }, { passive: true });
       }
       const wr = wrapEl.getBoundingClientRect();
@@ -397,8 +400,11 @@
       bar.style.left = wr.left + 'px';
       bar.style.width = wr.width + 'px';
       bar.style.top = (bbTop - 16) + 'px';
-      bar.firstChild.style.width = wrapEl.scrollWidth + 'px';
-      if (Math.abs(bar.scrollLeft - wrapEl.scrollLeft) > 1) { bar.__syncing = true; bar.scrollLeft = wrapEl.scrollLeft; requestAnimationFrame(() => { bar.__syncing = false; }); }
+      // 動かせる量を表とぴったり同じにする（ずれると端で引っぱり合う）
+      const range = Math.max(0, wrapEl.scrollWidth - wrapEl.clientWidth);
+      bar.firstChild.style.width = (bar.clientWidth + range) + 'px';
+      const busy = performance.now() - (window.__seHsAt || 0) < 150;
+      if (!busy && Math.abs(bar.scrollLeft - wrapEl.scrollLeft) >= 1) bar.scrollLeft = wrapEl.scrollLeft;
     } catch (e) { /* silently ignored */ }
   };
 
