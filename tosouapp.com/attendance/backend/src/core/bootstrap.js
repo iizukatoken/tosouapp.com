@@ -464,6 +464,13 @@ async function runMigrations() {
           // 追加勤務の行（2行目以降）の理由（社内会議・研修・顧客対応 など）
           try { await conn.query(`ALTER TABLE attendance ADD COLUMN extra_reason VARCHAR(32) NULL`); } catch (e) { /* already exists */ }
         }
+      },
+      {
+        id: '20261113_01_attendance_daily_half_period',
+        up: async () => {
+          // 半休・半休(有給) の 午前休('am') / 午後休('pm')。NULL = 未選択（これまでのデータ）
+          try { await conn.query(`ALTER TABLE attendance_daily ADD COLUMN half_period VARCHAR(2) NULL`); } catch (e) { /* already exists */ }
+        }
       }
     ];
     for (const m of migrations) {

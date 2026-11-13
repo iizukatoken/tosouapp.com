@@ -18,6 +18,37 @@
     showErr
   } = core;
 
+  // 半休の 午前休(am) / 午後休(pm): 勤務する半日の時間帯。区切りは 所定時間の半分
+  // （日勤 08:00〜17:00・休憩60分 → 午前 08:00〜12:00 / 午後 13:00〜17:00）
+  const halfWindow = (startHm, endHm, breakMin, half) => {
+    const st = parseHm(startHm); let et = parseHm(endHm);
+    if (st == null || et == null || (half !== 'am' && half !== 'pm')) return null;
+    if (et <= st) et += 24 * 60;
+    const std = Math.max(0, et - st - Math.max(0, Number(breakMin || 0)));
+    const halfStd = Math.round(std / 2);
+    const hm = (m) => `${String(Math.floor((m % 1440) / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+    // 午前休 → 午後に勤務（終了から半分戻る）／ 午後休 → 午前に勤務（開始から半分）
+    return half === 'am' ? { start: hm(et - halfStd), end: hm(et), startMin: et - halfStd, endMin: et }
+      : { start: hm(st), end: hm(st + halfStd), startMin: st, endMin: st + halfStd };
+  };
+  const selectedHalf = (tr) => {
+    const sel = tr && tr.querySelector ? tr.querySelector('select[data-field="classification"]') : null;
+    if (!sel || !/^半休/.test(String(sel.value || ''))) return '';
+    const opt = sel.selectedOptions && sel.selectedOptions[0];
+    return String(opt?.dataset?.half || '');
+  };
+  // 一括保存・自動保存で dailyUpdates に足す値（半休でなければ halfPeriod を消す）
+  globalThis.__seHalfFields = (tr) => {
+    try {
+      const sel = tr.querySelector('select[data-field="classification"]');
+      if (!sel || !/^半休/.test(String(sel.value || ''))) return { halfPeriod: null };
+      const half = selectedHalf(tr);
+      if (!half) return {};
+      const w = halfWindow(tr.dataset.shiftStart || '08:00', tr.dataset.shiftEnd || '17:00', Number(tr.dataset.shiftBreak || 60), half);
+      return w ? { halfPeriod: half, halfStart: w.start, halfEnd: w.end } : { halfPeriod: half };
+    } catch (e) { return {}; }
+  };
+
   // 出勤しない日を自動で「確認済み」とするか (その日が終わってから＝昨日までの日のみ、実績が無い日):
   // - 会社/部署カレンダーの休日 (土日祝・工事部の第4土曜など) で区分が 未設定/休日 → 正社員・パート共通で確認済み
   // - パートはシフトが不定期なので、出勤予定 (シフト登録 WORKING) の無い日で区分が 未設定/休日 → 確認済み
@@ -512,6 +543,9 @@
       tr.dataset.primary = primary ? '1' : '0';
       tr.dataset.kubunConfirmed = kubunConfirmed ? '1' : '';
       tr.dataset.shiftStart = shiftStartOk ? shiftStart : '08:00';
+      tr.dataset.shiftEnd = /^\d{1,2}:\d{2}/.test(shiftEnd) ? String(shiftEnd).slice(0, 5) : '17:00';
+      tr.dataset.halfBase = String(daily?.halfPeriod || '');
+      tr.dataset.shiftBreak = String(shift?.break_minutes ?? 60);
       tr.dataset.lateMinutes = String(daily?.lateMinutes || daily?.late_minutes || '');
       tr.dataset.earlyMinutes = String(daily?.earlyMinutes || daily?.early_minutes || '');
       tr.dataset.reasonBase = String(daily?.reason || (shiftRequest && !isPartTime && shiftRequest.status === 'LEAVE' ? shiftRequest.reason : ''));
@@ -592,6 +626,12 @@
         if (k === '休日' || k === '代替休日') optStyle = 'color:#e11d48; font-weight:bold;';
         else if (k === '欠勤') optStyle = 'color:#ea580c; font-weight:bold;';
         
+        if (k === '半休' || k === '半休(有給)') {
+          const hp = String(daily?.halfPeriod || '');
+          const legacy = kubunInit === k && !hp
+            ? `<option value="${esc(k)}" selected title="午前・午後を選んでください">${esc(k)}</option>` : '';
+          return legacy + ['am', 'pm'].map((h) => `<option value="${esc(k)}" data-half="${h}" ${kubunInit === k && hp === h ? 'selected' : ''}>${esc(k)}・${h === 'am' ? '午前' : '午後'}</option>`).join('');
+        }
         return `<option value="${esc(k)}" ${kubunInit === k ? 'selected' : ''} ${disabledOpt} style="${optStyle}">${esc(k)}</option>`;
       }).join('')}
     `;
@@ -670,8 +710,17 @@
         if (!isWorkDay) return '—';
         // フレックス勤務の社員は 遅刻・早退 を出さない（保存済みの値も表示しない）
         if (isFlexUser) return '—';
-        // 半休/半休(有給) は半日休みが正規のため遅刻・早退を計上しない
-        if (isHankyuu) return '—';
+        // 半休/半休(有給): 午前休・午後休 が決まっていれば その半日の時間帯で判定。未選択（これまでのデータ）は出さない
+        if (isHankyuu) {
+          const w = halfWindow(String(shiftStart).slice(0, 5), String(shiftEnd).slice(0, 5), shift?.break_minutes ?? 60, String(daily?.halfPeriod || ''));
+          if (!w || !primary) return '—';
+          const a = parseHm(finalIn); const b2 = parseHm(finalOut);
+          const lm = a != null && a > w.startMin ? a - w.startMin : 0;
+          const em = b2 != null && a != null && b2 > a && b2 < w.endMin ? w.endMin - b2 : 0;
+          if (!lm && !em) return '—';
+          const t = lm && em ? '遅刻/早退' : lm ? '遅刻' : '早退';
+          return `<div>${t}</div><div style="font-size:10px; color:#ef4444; line-height:1.2; margin-top:2px;">${[lm ? `遅刻:${lm}分` : '', em ? `早退:${em}分` : ''].filter(Boolean).join('<br>')}</div>`;
+        }
         // Không tính đi muộn / về sớm cho các ca làm thêm (dòng phụ)
         if (!primary) return '—';
         
@@ -1394,7 +1443,16 @@
         // Chỉ tính toán đi muộn/về sớm cho dòng chính (primary row)
         // 半休/半休(有給) は半日休みが正規のため遅刻・早退を計上しない。フレックスの社員も出さない
         const isFlexNow = Number(state.currentMonthDetail?.user?.is_flex || 0) === 1;
-        if (isPrimaryRow && !isHankyuu && !isFlexNow) {
+        const halfNow = isHankyuu ? selectedHalf(rowEl) : '';
+        if (isPrimaryRow && isHankyuu && halfNow && !isFlexNow) {
+          const w = halfWindow(rowEl.dataset.shiftStart || '08:00', rowEl.dataset.shiftEnd || '17:00', Number(rowEl.dataset.shiftBreak || 60), halfNow);
+          const a = parseHm(inVal); const b2 = parseHm(outVal);
+          if (w && a != null) {
+            const late = a > w.startMin;
+            const early = b2 != null && b2 > a && b2 < w.endMin;
+            text = late && early ? '遅刻/早退' : late ? '遅刻' : early ? '早退' : '—';
+          }
+        } else if (isPrimaryRow && !isHankyuu && !isFlexNow) {
           const a = parseHm(inVal);
           const b2 = parseHm(outVal);
           if (isWorkDay && a != null && b2 != null) {
@@ -1446,6 +1504,7 @@
   };
 
   const mod = { renderTableFull, renderTable, markRowSaved, recomputeRow };
+  mod.halfWindow = halfWindow;
   root.Render = mod;
   globalThis.AttendanceMonthly = root;
   globalThis.MonthlyMonthlyRender = mod;

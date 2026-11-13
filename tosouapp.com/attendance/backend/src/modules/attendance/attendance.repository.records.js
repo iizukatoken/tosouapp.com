@@ -624,8 +624,8 @@ module.exports = {
         // Lấy sẵn giờ checkIn cho những ngày chưa có trong map payload
         const datesToLookup = [];
         for (const { date, raw: d } of validDaily) {
-          if (checkInByDate.has(date)) continue;
-          if (d.checkInTime) continue;
+          // 半休 の 早退 判定には 退勤 も要るので、出勤が分かっていても退勤が無ければ読む
+          if ((checkInByDate.has(date) || d.checkInTime) && checkOutByDate.has(date)) continue;
           datesToLookup.push(date);
         }
         const dbCheckInByDate = new Map();
@@ -649,6 +649,13 @@ module.exports = {
           } catch (e) { /* bỏ qua */ }
         }
 
+        // 半休の 午前休・午後休 列（移行前の DB では無い）
+        let hasHalfCol = false;
+        try {
+          const [hc] = await conn.query("SHOW COLUMNS FROM attendance_daily LIKE 'half_period'");
+          hasHalfCol = Array.isArray(hc) && hc.length > 0;
+        } catch (e) { /* 列が無い扱い */ }
+
         // Batch fetch existing attendance_daily để merge (1 câu SELECT thay vì N câu)
         const existingByDate = new Map();
         if (validDaily.length) {
@@ -660,7 +667,7 @@ module.exports = {
             const [existRows] = await conn.query(
               `SELECT date, kubun, kubun_confirmed, work_type, location, reason, memo, notes,
                       late_minutes, early_minutes, break_minutes, night_break_minutes,
-                      furikae_holiday_date
+                      furikae_holiday_date${hasHalfCol ? ', half_period' : ''}
                FROM attendance_daily
                WHERE userId = ? ${tenantSql} AND date IN (${ph})`,
               [userId, ...tenantParams, ...allDates]
@@ -790,10 +797,30 @@ module.exports = {
               }
             } catch (e) { /* giữ nguyên 遅刻 đã lưu */ }
           }
-          // 半休 / 半休(有給) の日は 遅刻・早退 を持たない（午前・午後どちらの出勤でもよい）
-          if (['半休', '半休(有給)', '半休（有給）'].includes(String(kubun || '').trim())) {
-            late_minutes = null;
-            early_minutes = null;
+          // 半休 / 半休(有給): 午前休・午後休 が決まっていれば その半日の時間帯 で 遅刻・早退 を判定する。
+          // 決まっていない（これまでのデータ）ときは従来どおり 遅刻・早退 を持たない。
+          const isHalfKubun = ['半休', '半休(有給)', '半休（有給）'].includes(String(kubun || '').trim());
+          let halfPeriod = existing?.half_period ?? null;
+          if (Object.prototype.hasOwnProperty.call(d, 'halfPeriod')) {
+            const hp = String(d.halfPeriod || '').trim();
+            halfPeriod = hp === 'am' || hp === 'pm' ? hp : null;
+          }
+          if (!isHalfKubun) halfPeriod = null;
+          if (isHalfKubun) {
+            const hs = hmToMin(String(d.halfStart || '').trim());
+            const he = hmToMin(String(d.halfEnd || '').trim());
+            const hasWindow = !!halfPeriod && hs != null && he != null && he > hs;
+            // 時間帯が送られてこない保存（備考だけ等）で 午前・午後 が決まっている日は、保存済みの 遅刻・早退 をそのまま残す
+            if (!(halfPeriod && !hasWindow)) {
+              late_minutes = null;
+              early_minutes = null;
+            }
+            if (hasWindow) {
+              const firstIn = hmToMin(checkInByDate.get(date) || d.checkInTime || dbCheckInByDate.get(date) || '');
+              const lastOut = hmToMin(checkOutByDate.get(date) || dbCheckOutByDate.get(date) || '');
+              if (firstIn != null && firstIn > hs) late_minutes = firstIn - hs;
+              if (lastOut != null && firstIn != null && lastOut > firstIn && lastOut < he) early_minutes = he - lastOut;
+            }
           }
 
           // Skip INSERT/UPDATE nếu existing tồn tại và KHÔNG có field nào thay đổi (performance)
@@ -809,7 +836,8 @@ module.exports = {
               String(existing.late_minutes ?? '') === String(late_minutes ?? '') &&
               String(existing.early_minutes ?? '') === String(early_minutes ?? '') &&
               String(existing.break_minutes ?? '') === String(breakMin ?? '') &&
-              String(existing.night_break_minutes ?? '') === String(nightBreakMin ?? '');
+              String(existing.night_break_minutes ?? '') === String(nightBreakMin ?? '') &&
+              String(existing.half_period ?? '') === String(halfPeriod ?? '');
             if (unchanged) { dailySaved++; continue; }
           }
 
@@ -831,8 +859,8 @@ module.exports = {
 
           await conn.query(
             `
-            INSERT INTO attendance_daily (userId, date, kubun, kubun_confirmed, work_type, location, reason, memo, notes, late_minutes, early_minutes, break_minutes, night_break_minutes, status, furikae_holiday_date, tenant_id)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO attendance_daily (userId, date, kubun, kubun_confirmed, work_type, location, reason, memo, notes, late_minutes, early_minutes, break_minutes, night_break_minutes, status, furikae_holiday_date, tenant_id${hasHalfCol ? ', half_period' : ''})
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${hasHalfCol ? ', ?' : ''})
             ON DUPLICATE KEY UPDATE
               kubun = VALUES(kubun),
               kubun_confirmed = VALUES(kubun_confirmed),
@@ -846,14 +874,15 @@ module.exports = {
               break_minutes = VALUES(break_minutes),
               night_break_minutes = VALUES(night_break_minutes),
               status = VALUES(status),
-              furikae_holiday_date = VALUES(furikae_holiday_date)
+              furikae_holiday_date = VALUES(furikae_holiday_date)${hasHalfCol ? ',\n              half_period = VALUES(half_period)' : ''}
           `,
             [
               userId, date, kubun, kubunConfirmed, workType, location, reason, memo, notes,
               late_minutes, early_minutes,
               Number.isFinite(breakMin) ? breakMin : null,
               Number.isFinite(nightBreakMin) ? nightBreakMin : null,
-              status, furikaeHolidayDate, tid
+              status, furikaeHolidayDate, tid,
+              ...(hasHalfCol ? [halfPeriod] : [])
             ]
           );
           dailySaved++;

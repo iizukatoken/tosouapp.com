@@ -187,6 +187,8 @@ exports.getMonthDetail = async (req, res) => {
         breakMinutes:      r.break_minutes       == null ? null : Number(r.break_minutes),
         nightBreakMinutes: r.night_break_minutes == null ? null : Number(r.night_break_minutes),
         status:            r.status   || null,
+        // 半休の 午前休(am) / 午後休(pm)。未選択は null
+        halfPeriod:        (r.half_period === 'am' || r.half_period === 'pm') ? r.half_period : null,
       });
     }
     // Điền thêm từ workReport cho ngày không có daily record
