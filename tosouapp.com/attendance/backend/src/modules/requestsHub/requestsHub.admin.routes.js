@@ -176,24 +176,6 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths
     WHERE ${leaveWhere.join(' AND ')}
   `, leaveParams);
 
-  // 半休 の 午前休・午後休（月次勤怠の区分 → シフト申請 の順で見る）。列が無い DB では出さない
-  const halfByKey = new Map();
-  try {
-    const halfRows = (leaveRows || []).filter(r => r.type === 'paid_half' || r.type === 'half');
-    if (halfRows.length) {
-      const ymd = (v) => (v instanceof Date ? new Date(v.getTime() + 9 * 3600 * 1000).toISOString() : String(v || '')).slice(0, 10);
-      const keys = halfRows.map(r => [r.userId, ymd(r.startDate)]);
-      const where = keys.map(() => '(userId = ? AND date = ?)').join(' OR ');
-      const flat = keys.flat();
-      for (const table of ['shift_requests', 'attendance_daily']) {
-        try {
-          const [hr] = await db.query(`SELECT userId, date, half_period FROM ${table} WHERE half_period IN ('am', 'pm') AND (${where})`, flat);
-          for (const h of hr || []) halfByKey.set(`${h.userId}|${ymd(h.date)}`, h.half_period);
-        } catch (e) { /* 列が無い */ }
-      }
-    }
-  } catch (e) { /* 表示用 */ }
-
   // 調整申請 は作成日の月で数える（従来の 調整申請一覧・Excel出力 と同じ）
   const adjWhere = allMonths ? ['1 = 1'] : ['DATE(tar.created_at) BETWEEN ? AND ?'];
   const adjParams = allMonths ? [] : [start, end];
@@ -318,7 +300,7 @@ async function fetchMerged({ tenantId, month, dept, userId, status, q, allMonths
       requestId: r.id,
       ...base(r),
       targetDate: sameDay ? s : `${s}〜${e}`,
-      content: `${label}${sameDay && !['paid_half', 'half'].includes(r.type) ? '（全日）' : ''}${(() => { const hp = halfByKey.get(`${r.userId}|${s}`); return ['paid_half', 'half'].includes(r.type) && hp ? (hp === 'am' ? '・午前休' : '・午後休') : ''; })()}`,
+      content: `${label}${sameDay && !['paid_half', 'half'].includes(r.type) ? '（全日）' : ''}`,
       reason: fromShift ? 'シフト提出より' : (fromKubun ? '月次勤怠の区分より' : (r.reason || '')),
       source: fromShift ? 'shift' : (fromKubun ? 'kubun' : 'request'),
       status: r.status,

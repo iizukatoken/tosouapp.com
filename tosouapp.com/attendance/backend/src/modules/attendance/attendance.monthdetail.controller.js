@@ -81,7 +81,7 @@ exports.getMonthDetail = async (req, res) => {
       repo.listDailyBetween(userId, from, to).catch(() => []),
       repo.listPlanBetween(userId, from, to).catch(() => []),
       db.query(
-        'SELECT * FROM shift_requests WHERE userId = ? AND date BETWEEN ? AND ?',
+        'SELECT date, status, leaveType, reason, detail FROM shift_requests WHERE userId = ? AND date BETWEEN ? AND ?',
         [userId, from, to]
       ).then(r => r[0]).catch(() => []),
       workReportRepo.listByUserMonth(userId, `${y}-${pad(m)}`).catch(() => []),
@@ -111,7 +111,7 @@ exports.getMonthDetail = async (req, res) => {
         ? dStr.slice(0, 10)
         : (r.date instanceof Date ? r.date.toISOString().slice(0, 10) : dStr.slice(0, 10));
       if (d && ['WORKING', 'OFF', 'LEAVE'].includes(r.status)) {
-        shiftReqMap.set(d, { status: r.status, leaveType: r.leaveType, reason: r.reason, detail: r.detail || null, halfPeriod: (r.half_period === 'am' || r.half_period === 'pm') ? r.half_period : null });
+        shiftReqMap.set(d, { status: r.status, leaveType: r.leaveType, reason: r.reason, detail: r.detail || null });
       }
     }
 
@@ -187,8 +187,6 @@ exports.getMonthDetail = async (req, res) => {
         breakMinutes:      r.break_minutes       == null ? null : Number(r.break_minutes),
         nightBreakMinutes: r.night_break_minutes == null ? null : Number(r.night_break_minutes),
         status:            r.status   || null,
-        // 半休の 午前休(am) / 午後休(pm)。未選択は null
-        halfPeriod:        (r.half_period === 'am' || r.half_period === 'pm') ? r.half_period : null,
       });
     }
     // Điền thêm từ workReport cho ngày không có daily record

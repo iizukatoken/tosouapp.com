@@ -1173,7 +1173,7 @@
                 day.daily.breakMinutes = (() => { const p = br.split(':'); return p.length === 2 ? (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0) : 60; })();
                 day.daily.nightBreakMinutes = (() => { const p = nb.split(':'); return p.length === 2 ? (parseInt(p[0], 10) || 0) * 60 + (parseInt(p[1], 10) || 0) : 0; })();
                 try {
-                  tr.dataset.kubunBase = v || ''; try { tr.dataset.halfBase = String((globalThis.__seHalfFields ? globalThis.__seHalfFields(tr) : {}).halfPeriod || ''); } catch (e) { /* ignore */ }
+                  tr.dataset.kubunBase = v || '';
                   tr.dataset.workTypeBase = wt || '';
                   tr.dataset.locationBase = String(loc || '');
                   tr.dataset.memoBase = String(memo || '');
@@ -1286,8 +1286,7 @@
           memo,
           notes,
           breakMinutes,
-          nightBreakMinutes,
-          ...(globalThis.__seHalfFields ? globalThis.__seHalfFields(tr) : {})
+          nightBreakMinutes
         }]
       };
       const r = await fetchJSONAuth('/api/attendance/month/bulk', { method: 'PUT', body: JSON.stringify(payload) }, 120000);
@@ -1313,7 +1312,7 @@
           day.daily.nightBreakMinutes = nightBreakMinutes;
         }
         try {
-          tr.dataset.kubunBase = kubunVal || ''; try { tr.dataset.halfBase = String((globalThis.__seHalfFields ? globalThis.__seHalfFields(tr) : {}).halfPeriod || ''); } catch (e) { /* ignore */ }
+          tr.dataset.kubunBase = kubunVal || '';
           tr.dataset.workTypeBase = (wt === 'onsite' || wt === 'remote' || wt === 'satellite') ? wt : '';
           tr.dataset.locationBase = loc || '';
           tr.dataset.reasonBase = reason || '';
@@ -1484,8 +1483,7 @@
             breakMinutes,
             nightBreakMinutes,
             shiftStart: String(tr.dataset.shiftStart || '08:00').trim(),
-            checkInTime: rawIn || null,
-            ...(globalThis.__seHalfFields ? globalThis.__seHalfFields(tr) : {})
+            checkInTime: rawIn || null
           }
         ] 
       };
@@ -1582,7 +1580,7 @@
       try { draft?.clear?.(ctx, ym); } catch (e) { /* silently ignored */ }
       try {
         tr.dataset.kubunConfirmed = effectiveKubun ? '1' : '';
-        tr.dataset.kubunBase = effectiveKubun || ''; try { tr.dataset.halfBase = String((globalThis.__seHalfFields ? globalThis.__seHalfFields(tr) : {}).halfPeriod || ''); } catch (e) { /* ignore */ }
+        tr.dataset.kubunBase = effectiveKubun || '';
         if (sel && effectiveKubun && String(sel.value || '').trim() !== effectiveKubun) sel.value = effectiveKubun;
       } catch (e) { /* silently ignored */ }
       // Preserve scroll position to prevent page jumping after save

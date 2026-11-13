@@ -72,7 +72,7 @@ function toRows(items, date) {
       code: it.employeeCode || `EMP${String(it.userId).padStart(3, '0')}`,
       name: it.username || '',
       dept: it.departmentName || '',
-      workType: (leaveLike ? kubun : wtLabel(String(it.workType || it.report?.workType || '').trim())) + (/^半休/.test(kubun) && it.halfPeriod ? (it.halfPeriod === 'am' ? '・午前休' : '・午後休') : ''),
+      workType: leaveLike ? kubun : wtLabel(String(it.workType || it.report?.workType || '').trim()),
       status: st,
       in: isOffRow ? '' : hm(it.attendance?.checkIn),
       out: isOffRow ? '' : hm(it.attendance?.checkOut),

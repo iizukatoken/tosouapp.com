@@ -1917,12 +1917,9 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
   white-space: nowrap;
 }
 .se-kubun-select {
-  /* 「半休(有給)・午前」が切れない幅 */
-  width: 152px;
-  min-width: 152px;
-  max-width: 152px;
-  padding-left: 6px !important;
-  padding-right: 18px !important;
+  width: 110px;
+  min-width: 110px;
+  max-width: 110px;
   box-sizing: border-box;
 }
 #monthTable tbody tr .se-kubun-select.is-planned {

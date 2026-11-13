@@ -213,21 +213,6 @@ async function buildDailyRoster(req, date) {
     }));
     const isOffForUser = (deptName) => isOffTodayByDept.get(deptName || '') || false;
 
-    // 半休の 午前休・午後休（月次勤怠の区分 → シフト申請）。列が無い DB では出さない
-    const halfByUser = new Map();
-    try {
-      const ids = (rows || []).map(r => r.userId).filter(Boolean);
-      if (ids.length) {
-        const ph = ids.map(() => '?').join(',');
-        for (const table of ['shift_requests', 'attendance_daily']) {
-          try {
-            const [hr] = await db.query(`SELECT userId, half_period FROM ${table} WHERE date = ? AND half_period IN ('am', 'pm') AND userId IN (${ph})`, [date, ...ids]);
-            for (const h of hr || []) halfByUser.set(String(h.userId), h.half_period);
-          } catch (e) { /* 列が無い */ }
-        }
-      }
-    } catch (e) { /* 表示用 */ }
-
     const items = (rows || []).map(r => {
       const hasIn = !!r.checkIn;
       // 追加勤務の行がまだ退勤前なら 勤務中 として扱う
@@ -241,9 +226,8 @@ async function buildDailyRoster(req, date) {
       const offKubun = new Set(['休日', '代替休日']);
       const leaveKubun = new Set(['有給休暇', '無給休暇', '欠勤']);
       const workKubun = new Set(['出勤', '休日出勤', '代替出勤', '半休', '半休(有給)']);
-      // 半休: 午前休・午後休 が決まっていれば、保存時に その半日で判定した 遅刻・早退 を出す。未選択なら出さない
-      const halfPeriod = (kubun === '半休' || kubun === '半休(有給)') ? (halfByUser.get(String(r.userId)) || null) : null;
-      const isHalfDay = (kubun === '半休' || kubun === '半休(有給)') && !halfPeriod;
+      // 半休: 午前・午後どちらに出勤してもよいので 遅刻・早退 にしない
+      const isHalfDay = kubun === '半休' || kubun === '半休(有給)';
       // フレックス勤務の社員は 遅刻・早退 にしない（社員管理で設定）
       const isFlex = Number(r.is_flex || 0) === 1;
       const isOff = isOffForUser(r.departmentName);
@@ -327,7 +311,6 @@ async function buildDailyRoster(req, date) {
         dailyKubun: kubunOut || null,
         // 終日の休暇（有給・無給・欠勤）なのに打刻がある → 管理画面で要確認
         kubunConflict: leaveKubun.has(kubun) && (hasIn || hasOut),
-        halfPeriod,
         lateMinutes: (isHolidayWork || isHalfDay || isFlex) ? 0 : (r.late_minutes || 0),
         earlyMinutes: (isHolidayWork || isHalfDay || isFlex) ? 0 : (r.early_minutes || 0),
         isFlex,
