@@ -146,6 +146,8 @@
           if (t.dataset.tab === 'plan') {
             document.body.classList.add('view-plan');
             document.body.classList.remove('view-round');
+            // 予定 は実績の表とは別の「勤務予定表」を出す（attendance-monthly.plan.js）
+            try { globalThis.MonthlyPlanView?.render?.(); } catch (err) { console.error('plan view', err); }
             const table = document.getElementById('monthTableReal');
             if (table) {
               const cg = table.querySelector('colgroup');
@@ -154,6 +156,7 @@
               table.style.width = '';
             }
           } else if (t.dataset.tab === 'actual') {
+            try { globalThis.MonthlyPlanView?.hide?.(); } catch (err) { /* ignore */ }
             // Only restore if coming from round mode
             if (document.body.classList.contains('view-round')) {
               document.body.classList.remove('view-round');
@@ -192,6 +195,7 @@
               table.style.width = '';
             }
           } else if (t.dataset.tab === 'round') {
+            try { globalThis.MonthlyPlanView?.hide?.(); } catch (err) { /* ignore */ }
             document.body.classList.remove('view-plan');
             document.body.classList.add('view-round');
             // Apply rounding to existing table values (run batches sequentially)

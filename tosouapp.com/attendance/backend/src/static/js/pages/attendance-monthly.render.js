@@ -880,6 +880,7 @@
   const renderTable = (host, detail, profile) => {
     bindPunchEditMarks(profile);
     renderTableFull(host, detail, profile);
+    try { if (document.body.classList.contains('view-plan')) globalThis.MonthlyPlanView?.render?.(); } catch (e) { /* silently ignored */ }
   };
 
   const markRowSaved = (rowEl) => {
