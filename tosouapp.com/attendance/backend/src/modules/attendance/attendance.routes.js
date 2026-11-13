@@ -203,6 +203,14 @@ router.get('/ledger/export.xlsx',
   authenticate, authorize('manager', 'admin'),
   require('./attendance.ledger.controller').exportXlsx);
 
+// 打刻編集（管理者・マネージャー）: 取消は原本を残す。理由必須・編集履歴と監査ログに残す・本人に通知
+const punchEdit = require('./attendance.punchEdit');
+router.get('/admin/punches', authenticate, authorize('manager', 'admin'), punchEdit.getDay);
+router.post('/admin/punches/void', authenticate, authorize('manager', 'admin'), punchEdit.voidPunch);
+router.post('/admin/punches/restore', authenticate, authorize('manager', 'admin'), punchEdit.restorePunch);
+router.post('/admin/punches/edit', authenticate, authorize('manager', 'admin'), punchEdit.editPunch);
+router.post('/admin/punches/add', authenticate, authorize('manager', 'admin'), punchEdit.addPunch);
+
 // 36協定 月次サマリー (monthly_summaries) — 手動実行は重いので admin のみ
 const summaryCtrl = require('./attendance.summary.controller');
 router.post('/summary/recompute', authenticate, authorize('admin'), summaryCtrl.recompute);
