@@ -573,5 +573,5 @@ module.exports = {
   REASONS, ACTION_LABEL, ensureSchema, editedMap, describeEdits,
   listAudit: wrap(listAudit), exportAuditXlsx, dayHistory: wrap(dayHistory),
   getDay: wrap(getDay), voidPunch: wrap(voidPunch), restorePunch: wrap(restorePunch), editPunch: wrap(editPunch), addPunch: wrap(addPunch),
-  _impl: { getDay, voidPunch, restorePunch, editPunch, addPunch }
+  _impl: { getDay, voidPunch, restorePunch, editPunch, addPunch, dayHistory }
 };

@@ -142,6 +142,27 @@ describe('締め済みの月', () => {
   });
 });
 
+describe('dayHistory（履歴 › 表示）', () => {
+  const histReq = (role, userId, uid = 5) => ({ user: { id: uid, role }, tenantId: 1, query: { userId, date: '2026-11-13' } });
+  it('本人は他の社員の履歴を見られない', async () => {
+    fakeDb([userQ]);
+    await expect(pe._impl.dayHistory(histReq('employee', 23))).rejects.toMatchObject({ status: 403 });
+  });
+  it('本人の打刻・管理者の修正・承認した調整申請を新しい順に', async () => {
+    fakeDb([
+      userQ,
+      [/FROM audit_logs/, () => [[{ action: 'checkin', created_at: '2026-11-13 08:19:08', afterData: JSON.stringify({ result: { checkIn: '2026-11-13 08:19:08' } }) }]]],
+      [/FROM attendance_punch_edits e LEFT JOIN users/, () => [[{ action: 'edit_in', reason: '本人から誤打刻の連絡', before_json: JSON.stringify({ checkIn: '2026-11-13 08:19:08' }), after_json: JSON.stringify({ checkIn: '2026-11-13 08:00:00' }), created_at: '2026-11-13 09:45:26', byName: '鈴木', byRole: 'manager' }]]],
+      [/FROM time_adjust_requests/, () => [[]]]
+    ]);
+    const r = await pe._impl.dayHistory(histReq('manager', 23));
+    expect(r.events.map(e => [e.kind, e.at])).toEqual([['admin', '2026-11-13 09:45'], ['self', '2026-11-13 08:19']]);
+    expect(r.events[0].text).toBe('出勤 08:19 → 08:00 に修正');
+    expect(r.events[1].time).toBe('08:19');
+    expect(r.changeCount).toBe(1);
+  });
+});
+
 describe('describeEdits', () => {
   it('✎ の説明文', () => {
     expect(pe.describeEdits([{ action: 'void_out', reason: '二重打刻', before: { checkOut: '2026-11-12 08:08:00' } }]))
