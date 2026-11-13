@@ -361,6 +361,83 @@ function describeEdits(list) {
   });
 }
 
+/**
+ * GET /day-history?userId=&date= : 月次勤怠入力「履歴 › 表示」用。
+ * 本人の打刻（監査ログ）・管理者の打刻編集・承認した調整申請 を時刻順に。本人は自分の分だけ見られる。
+ */
+async function dayHistory(req) {
+  const date = String(req.query?.date || '').slice(0, 10);
+  if (!isDate(date)) throw httpError(400, '日付が正しくありません');
+  const role = String(req.user?.role || '').toLowerCase();
+  const selfId = parseInt(String(req.user?.id || ''), 10);
+  const uid = parseInt(String(req.query?.userId || selfId || ''), 10);
+  if (!uid) throw httpError(400, '社員が指定されていません');
+  if (!['admin', 'manager'].includes(role) && uid !== selfId) throw httpError(403, '他の社員の履歴は見られません');
+  {
+    const params = [uid];
+    let sql = 'SELECT id FROM users WHERE id = ?';
+    if (req.tenantId != null) { sql += ' AND tenant_id = ?'; params.push(req.tenantId); }
+    const [[u]] = await db.query(sql + ' LIMIT 1', params);
+    if (!u) throw httpError(404, '社員が見つかりません');
+  }
+  await ensureSchema();
+  const events = [];
+  const parse = (s) => { try { return s ? (typeof s === 'string' ? JSON.parse(s) : s) : null; } catch (e) { return null; } };
+
+  // 本人の打刻（出勤・退勤ボタン）
+  try {
+    const [rows] = await db.query(
+      `SELECT action, created_at, afterData FROM audit_logs
+        WHERE userId = ? AND action IN ('checkin', 'checkout', 'offline_checkin', 'offline_checkout')
+          AND created_at >= ? AND created_at < ? ORDER BY id`,
+      [uid, `${date} 00:00:00`, `${addDay(date, 2)} 00:00:00`]
+    );
+    for (const r of rows) {
+      const a = parse(r.afterData) || {};
+      const isIn = /checkin/.test(r.action);
+      const t = isIn ? (a.result?.checkIn || a.time) : (a.result?.checkOut || a.time);
+      const at = t ? String(t).replace('T', ' ') : fmtAt(r.created_at);
+      if (!String(at).startsWith(date) && !(!isIn && String(at).startsWith(addDay(date, 1)))) continue;
+      events.push({ at: String(at).slice(0, 16), kind: 'self', label: isIn ? '出勤を打刻' : '退勤を打刻', time: hm(at.length >= 16 ? at : `${date} ${at}`), source: a.locationSource || a.result?.in_locationSource || null });
+    }
+  } catch (e) { /* 監査ログがない環境 */ }
+
+  // 管理者・マネージャーの打刻編集
+  const [edits] = await db.query(
+    `SELECT e.*, u.username AS byName, u.role AS byRole FROM attendance_punch_edits e LEFT JOIN users u ON u.id = e.created_by
+      WHERE e.user_id = ? AND e.work_date = ? ORDER BY e.created_at, e.id`,
+    [uid, date]
+  );
+  const lines = describeEdits(edits.map(e => ({ action: e.action, reason: e.reason, before: parse(e.before_json), after: parse(e.after_json) })));
+  edits.forEach((e, i) => {
+    events.push({
+      at: fmtAt(e.created_at), kind: 'admin', action: e.action, label: ACTION_LABEL[e.action] || e.action,
+      text: lines[i].replace(/（[^（）]*）$/, ''), by: e.byName || '', byRole: e.byRole || '',
+      reason: e.reason, note: e.reason_note || '', restored: !!e.restored_at
+    });
+  });
+
+  // 承認した調整申請
+  try {
+    const [reqs] = await db.query(
+      `SELECT t.*, u.username AS byName, u.role AS byRole FROM time_adjust_requests t LEFT JOIN users u ON u.id = t.processed_by
+        WHERE t.userId = ? AND t.status = 'approved' AND DATE(COALESCE(t.requestedCheckIn, t.requestedCheckOut)) = ? ORDER BY t.processed_at, t.id`,
+      [uid, date]
+    );
+    for (const r of reqs) {
+      const del = String(r.request_type || '') === 'delete';
+      events.push({
+        at: fmtAt(r.processed_at || r.updated_at), kind: 'request', label: del ? '調整申請（行の削除）を承認' : '調整申請を承認',
+        text: del ? `${hm(r.requestedCheckIn) || '—'}〜${hm(r.requestedCheckOut) || '—'} の行を削除` : `出勤 ${hm(r.requestedCheckIn) || '—'}／退勤 ${hm(r.requestedCheckOut) || '—'} に修正`,
+        by: r.byName || '', byRole: r.byRole || '', reason: r.reason ? String(r.reason).slice(0, 200) : '', note: '', requestId: r.id
+      });
+    }
+  } catch (e) { /* 調整申請のテーブルがない環境 */ }
+
+  events.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { date, userId: uid, events, changeCount: events.filter(e => e.kind !== 'self').length };
+}
+
 const AUDIT_KINDS = {
   void: ['void_out', 'void_row'], edit: ['edit_in', 'edit_out'], add: ['add'], restore: ['restore']
 };
@@ -494,7 +571,7 @@ const wrap = (fn) => async (req, res) => {
 
 module.exports = {
   REASONS, ACTION_LABEL, ensureSchema, editedMap, describeEdits,
-  listAudit: wrap(listAudit), exportAuditXlsx,
+  listAudit: wrap(listAudit), exportAuditXlsx, dayHistory: wrap(dayHistory),
   getDay: wrap(getDay), voidPunch: wrap(voidPunch), restorePunch: wrap(restorePunch), editPunch: wrap(editPunch), addPunch: wrap(addPunch),
   _impl: { getDay, voidPunch, restorePunch, editPunch, addPunch }
 };

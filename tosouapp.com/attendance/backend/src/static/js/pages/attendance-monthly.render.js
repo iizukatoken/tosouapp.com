@@ -635,13 +635,11 @@
       <td><textarea id="memo_${dateStr}_${rowId}" name="memo_${dateStr}_${rowId}" class="se-input" data-field="memo" rows="1" style="resize:vertical; min-height:28px; ${hideCheckboxStyle}" ${!canEditWorkRow ? 'disabled' : ''}>${esc(finalMemo)}</textarea></td>
       <td class="se-time-cell">
         <div class="se-time-wrap" style="position:relative;">
-          ${(showDateDow && (detail?.punchEditsByDate || {})[dateStr]?.in) ? `<span class="se-pe-mark" data-pe-date="${esc(dateStr)}" data-pe-uid="${esc(String(detail?.user?.id || ''))}" data-pe-name="${esc(String(detail?.user?.username || ''))}" data-pe-code="${esc(String(detail?.user?.employeeCode || ''))}" title="${esc(((detail.punchEditsByDate[dateStr].lines || []).join('\n')) + (isAdminView ? '\n（クリックで打刻編集）' : ''))}" style="position:absolute;top:1px;right:1px;font-size:11px;line-height:13px;padding:0 2px;background:#fff7ed;border:1px solid #fdba74;border-radius:2px;color:#b45309;font-weight:700;font-family:sans-serif;cursor:${isAdminView ? 'pointer' : 'help'};z-index:2;">✎</span>` : ''}
           <input id="checkIn_${dateStr}_${rowId}" name="checkIn_${dateStr}_${rowId}" class="se-time ${inAutoCls}" data-field="checkIn" type="time" value="${esc(finalIn)}" ${!canEditCheckTime ? 'disabled data-fixed-disabled="1"' : ''} data-auto="${autoIn ? '1' : ''}" data-auto-val="${esc(autoIn ? shiftStart : '')}" data-manual="${isManualIn ? '1' : ''}" data-actual="${esc(inHm)}">
         </div>
       </td>
       <td class="se-time-cell">
         <div class="se-time-wrap" style="position:relative;">
-          ${(showDateDow && (detail?.punchEditsByDate || {})[dateStr]?.out) ? `<span class="se-pe-mark" data-pe-date="${esc(dateStr)}" data-pe-uid="${esc(String(detail?.user?.id || ''))}" data-pe-name="${esc(String(detail?.user?.username || ''))}" data-pe-code="${esc(String(detail?.user?.employeeCode || ''))}" title="${esc(((detail.punchEditsByDate[dateStr].lines || []).join('\n')) + (isAdminView ? '\n（クリックで打刻編集）' : ''))}" style="position:absolute;top:1px;right:1px;font-size:11px;line-height:13px;padding:0 2px;background:#fff7ed;border:1px solid #fdba74;border-radius:2px;color:#b45309;font-weight:700;font-family:sans-serif;cursor:${isAdminView ? 'pointer' : 'help'};z-index:2;">✎</span>` : ''}
           <input id="checkOut_${dateStr}_${rowId}" name="checkOut_${dateStr}_${rowId}" class="se-time ${outAutoCls}" data-field="checkOut" type="time" value="${esc(finalOut)}" ${!canEditCheckTime ? 'disabled data-fixed-disabled="1"' : ''} data-auto="${autoOut ? '1' : ''}" data-auto-val="${esc(autoOut ? shiftEnd : '')}" data-manual="${isManualOut ? '1' : ''}" data-actual="${esc(outHm)}">
         </div>
       </td>
@@ -750,7 +748,7 @@
            <!-- 退勤削除 ボタンは廃止（誤打刻は 調整申請 → 承認、または管理者が時刻を直接修正） -->
          </div>
        </td>
-      <td style="text-align:center;">${showDateDow ? `<button type="button" class="se-mini-btn" data-action="history">表示</button>` : ''}</td>
+      <td style="text-align:center;">${showDateDow ? (() => { const _n = Number((detail?.changeCountByDate || {})[dateStr] || 0); return _n > 0 ? `<button type="button" class="se-mini-btn" data-action="history" title="この日は ${_n} 件の修正があります（クリックで履歴）" style="background:#fff7ed !important;border-color:#fdba74 !important;color:#b45309 !important;font-weight:700;">表示 <span style="display:inline-block;min-width:14px;height:14px;line-height:14px;padding:0 3px;border-radius:7px;background:#b45309;color:#fff;font-size:10px;text-align:center;">${_n}</span></button>` : `<button type="button" class="se-mini-btn" data-action="history">表示</button>`; })() : ''}</td>
     `;
       return tr;
     };

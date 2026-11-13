@@ -2055,91 +2055,134 @@
     return true;
   };
 
-  const tableHistory = (dateStr) => {
+  // 履歴 › 表示: いまの打刻 ＋ 変更履歴（本人の打刻・管理者の打刻編集・承認した調整申請）。
+  // 管理者・マネージャーは「打刻編集を開く」、本人は「調整申請」へ。
+  const tableHistory = async (dateStr) => {
     const days = Array.isArray(state.currentMonthDetail?.days) ? state.currentMonthDetail.days : [];
     const day = days.find(d => String(d?.date || '') === dateStr);
     const segs = Array.isArray(day?.segments) ? day.segments : [];
     const daily = day?.daily || null;
     const dowJa = core.dowJa || (() => '');
+    const user = state.currentMonthDetail?.user || {};
+    const role = String(ctx.profile?.role || ctx.role || '').toLowerCase();
+    const isManager = role === 'admin' || role === 'manager';
+    const edited = (state.currentMonthDetail?.punchEditsByDate || {})[dateStr] || null;
 
-    // ── モーダル生成 ──────────────────────────────────────────────────
     const existing = document.getElementById('historyModal');
     if (existing) existing.remove();
+    if (!document.getElementById('hm-css')) {
+      const st = document.createElement('style');
+      st.id = 'hm-css';
+      st.textContent = `
+#historyModal{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
+#historyModal .hm{width:min(760px,calc(100vw - 32px));max-height:86vh;display:flex;flex-direction:column;background:#fff;border:1px solid #d5dde8;border-radius:6px;box-shadow:0 18px 48px rgba(15,23,42,.22);font-family:'Meiryo UI','Yu Gothic UI',sans-serif;color:#1f2937;overflow:hidden}
+#historyModal .hm-hd{padding:14px 18px 10px;display:flex;align-items:baseline;gap:12px;border-bottom:2px solid #0b2c66;color:#0b2c66}
+#historyModal .hm-hd b{font-size:16px}#historyModal .hm-hd span{font-size:12.5px;color:#475569}
+#historyModal .hm-x{margin-left:auto;align-self:center;background:none;border:0;color:#94a3b8;font-size:22px;line-height:1;cursor:pointer}
+#historyModal .hm-x:hover{color:#334155}
+#historyModal .hm-body{flex:1;overflow:auto;padding:6px 18px 4px}
+#historyModal .hm-meta{display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;color:#475569;padding:10px 0 2px}#historyModal .hm-meta b{color:#1f2937}
+#historyModal .hm-sec{padding:10px 0}
+#historyModal .hm-sec h4{margin:0 0 8px;font-size:12.5px;font-weight:700;color:#0b2c66;background:#f1f5f9;border-left:3px solid #0b2c66;padding:5px 8px;display:flex;align-items:center}
+#historyModal .hm-t{width:100%;border-collapse:collapse;font-size:13px}
+#historyModal .hm-t th{background:#f8fafc !important;color:#475569 !important;border:1px solid #e2e8f0 !important;padding:6px 10px !important;text-align:left;font-weight:600;font-size:12px}
+#historyModal .hm-t td{border:1px solid #e2e8f0 !important;padding:7px 10px !important;color:#1f2937}
+#historyModal .hm-ed{color:#b45309;font-weight:700;margin-left:4px;font-size:12px;cursor:help}
+#historyModal .hm-tl{margin-left:6px;padding-left:16px;border-left:2px solid #e2e8f0}
+#historyModal .hm-it{position:relative;padding:4px 0 10px;font-size:12.5px;line-height:1.6}
+#historyModal .hm-it:before{content:'';position:absolute;left:-23px;top:8px;width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #94a3b8}
+#historyModal .hm-it.admin:before{border-color:#b45309;background:#fff7ed}#historyModal .hm-it.request:before{border-color:#0b2c66;background:#eef4ff}
+#historyModal .hm-it .t{color:#64748b;font-size:12px}#historyModal .hm-it .who{color:#0b2c66;font-weight:600}#historyModal .hm-it .why{color:#64748b;font-size:12px}
+#historyModal .hm-tag{display:inline-block;padding:0 6px;font-size:11px;font-weight:600;border:1px solid;border-radius:3px;margin-right:4px}
+#historyModal .hm-tag.admin{color:#b45309;border-color:#fdba74;background:#fff7ed}#historyModal .hm-tag.request{color:#0b2c66;border-color:#c7d7f0;background:#eef4ff}#historyModal .hm-tag.self{color:#166534;border-color:#bbf7d0;background:#f0fdf4}
+#historyModal .hm-foot{padding:10px 18px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;gap:8px;font-size:11.5px;color:#64748b}
+#historyModal .hm-b{display:inline-block;height:30px;line-height:28px;padding:0 14px;border:1px solid #cbd5e1;border-radius:3px;background:#fff;font-size:12.5px;font-weight:600;color:#334155;cursor:pointer;font-family:inherit;text-decoration:none}
+#historyModal .hm-b:hover{background:#f1f5f9}
+#historyModal .hm-b.pri{background:#0b2c66;border-color:#0b2c66;color:#fff}#historyModal .hm-b.pri:hover{background:#163d82}`;
+      document.head.appendChild(st);
+    }
+
+    const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const dateFmt = dateStr ? `${Number(dateStr.slice(5, 7))}/${Number(dateStr.slice(8, 10))}（${dowJa(dateStr)}）` : '—';
+    const code = user.employee_code || user.employeeCode || '';
+    const editTitle = esc((edited?.lines || []).join('\n'));
+
+    const segRows = segs.length ? segs.map((s, i) => {
+      const inHm = fromDateTime(s?.checkIn) || '—';
+      const outHm = fromDateTime(s?.checkOut) || '—';
+      const mark = (on) => (on && i === 0 && edited) ? `<span class="hm-ed" title="${editTitle}">✎</span>` : '';
+      return `<tr>
+        <td style="text-align:center;width:36px;">${i + 1}</td>
+        <td><b>${esc(inHm)}</b>${mark(edited?.in)}</td>
+        <td><b>${esc(outHm)}</b>${mark(edited?.out)}</td>
+        <td>${esc(workTypeLabel(s?.workType) || '—')}</td>
+        <td>${esc(String(s?.location || (i === 0 ? daily?.location : '') || '').trim() || '—')}</td>
+        <td style="max-width:220px;word-break:break-word;">${esc(String(s?.memo || (i === 0 ? daily?.memo : '') || '').trim() || '—')}</td></tr>`;
+    }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;">打刻データがありません</td></tr>';
+
+    const kubun = String(daily?.kubun || '').trim() || '—';
+    const breakM = daily?.breakMinutes != null ? `${Math.floor(daily.breakMinutes / 60)}:${String(daily.breakMinutes % 60).padStart(2, '0')}` : '—';
+    let statusText = '—';
+    try { statusText = String(document.querySelector(`#monthTable tr[data-date="${dateStr}"] .se-status`)?.textContent || '').trim() || '—'; } catch (e) { /* ignore */ }
 
     const backdrop = document.createElement('div');
     backdrop.id = 'historyModal';
-    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
-
-    const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-    const dow = dowJa(dateStr);
-    const dateFmt = dateStr ? `${dateStr.slice(5).replace('-','/')}（${dow}）` : '—';
-
-    // 打刻セグメント行
-    const segRows = segs.length ? segs.map((s, i) => {
-      const inHm  = fromDateTime(s?.checkIn)  || '—';
-      const outHm = fromDateTime(s?.checkOut) || '—';
-      const wt    = workTypeLabel(s?.workType) || '—';
-      const loc   = String(s?.location || daily?.location || '').trim() || '—';
-      const memo  = String(s?.memo || daily?.memo || '').trim() || '—';
-      return `
-        <tr style="background:${i % 2 ? '#f8fafc' : '#fff'};">
-          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;font-weight:600;color:#334155;">${i + 1}</td>
-          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;font-family:monospace;color:#0f172a;">${esc(inHm)}</td>
-          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;font-family:monospace;color:#0f172a;">${esc(outHm)}</td>
-          <td style="padding:7px 10px;border:1px solid #e2e8f0;text-align:center;color:#475569;">${esc(wt)}</td>
-          <td style="padding:7px 10px;border:1px solid #e2e8f0;color:#475569;">${esc(loc)}</td>
-          <td style="padding:7px 10px;border:1px solid #e2e8f0;color:#334155;max-width:220px;word-break:break-word;">${esc(memo)}</td>
-        </tr>`;
-    }).join('') : `<tr><td colspan="6" style="padding:16px;text-align:center;color:#94a3b8;border:1px solid #e2e8f0;">打刻データがありません</td></tr>`;
-
-    // daily 情報
-    const kubun   = String(daily?.kubun   || '').trim() || '—';
-    const status  = String(daily?.status  || '').trim() || '—';
-    const breakM  = daily?.breakMinutes  != null ? `${daily.breakMinutes}分` : '—';
-    const statusColor = status === '確認済み' ? '#16a34a' : status === '承認済み' ? '#0369a1' : '#64748b';
-
-    const panel = document.createElement('div');
-    panel.style.cssText = 'background:#fff;border-radius:10px;box-shadow:0 20px 50px rgba(0,0,0,.25);width:min(680px,96vw);max-height:88vh;overflow-y:auto;';
-    panel.innerHTML = `
-      <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid #e2e8f0;background:#0f2c62;border-radius:10px 10px 0 0;">
-        <div style="font-size:15px;font-weight:700;color:#fff;">📋 履歴 — ${esc(dateFmt)}</div>
-        <button id="historyClose" style="background:transparent;border:none;color:#fff;font-size:20px;cursor:pointer;line-height:1;padding:0 4px;">&times;</button>
-      </div>
-      <div style="padding:14px 18px 6px;">
-        <div style="display:flex;gap:24px;flex-wrap:wrap;font-size:13px;color:#334155;margin-bottom:12px;">
-          <span>勤務区分：<strong>${esc(kubun)}</strong></span>
-          <span>ステータス：<strong style="color:${statusColor};">${esc(status)}</strong></span>
-          <span>休憩：<strong>${esc(breakM)}</strong></span>
+    const firstSeg = segs.find(s => s && s.id) || null;
+    const footer = isManager
+      ? `<span>修正・取消・追加は 打刻編集 から（理由は必須）</span><span style="margin-left:auto"></span><button type="button" class="hm-b" data-hm="close">閉じる</button><button type="button" class="hm-b pri" data-hm="edit">✎ 打刻編集を開く</button>`
+      : `<span>時刻が違うときは 調整申請 を出してください</span><span style="margin-left:auto"></span><button type="button" class="hm-b" data-hm="close">閉じる</button>${firstSeg ? `<a class="hm-b pri" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(dateStr)}&attendanceId=${encodeURIComponent(firstSeg.id)}">調整申請</a>` : ''}`;
+    backdrop.innerHTML = `<div class="hm" role="dialog" aria-label="履歴">
+      <div class="hm-hd"><b>履歴</b><span>${esc(dateFmt)}　${esc(user.username || '')}${code ? `（${esc(code)}）` : ''}</span><button type="button" class="hm-x" data-hm="close" aria-label="閉じる">×</button></div>
+      <div class="hm-body">
+        <div class="hm-meta"><span>勤務区分：<b>${esc(kubun)}</b></span><span>休憩：<b>${esc(breakM)}</b></span><span>状態：<b>${esc(statusText)}</b></span></div>
+        <div class="hm-sec"><h4>いまの打刻</h4>
+          <table class="hm-t"><thead><tr><th>No</th><th>開始</th><th>終了</th><th>勤務形態</th><th>現場</th><th>作業内容</th></tr></thead><tbody>${segRows}</tbody></table>
         </div>
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr style="background:#0f2c62;">
-              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;width:32px;">No</th>
-              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">開始時間</th>
-              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">終了時間</th>
-              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">勤務形態</th>
-              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">現場</th>
-              <th style="padding:7px 10px;border:1px solid #e2e8f0;color:#fff;text-align:center;">作業内容</th>
-            </tr>
-          </thead>
-          <tbody>${segRows}</tbody>
-        </table>
+        <div class="hm-sec"><h4>変更履歴<span style="margin-left:auto;font-weight:400;color:#64748b;font-size:11.5px;">新しい順</span></h4>
+          <div class="hm-tl" id="hmTimeline"><div style="color:#94a3b8;font-size:12.5px;padding:4px 0 8px;">読み込み中…</div></div>
+        </div>
       </div>
-      <div style="padding:10px 18px 14px;display:flex;justify-content:flex-end;">
-        <button id="historyCloseBtn" style="padding:6px 20px;background:#0f2c62;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">閉じる</button>
-      </div>
-    `;
-
-    backdrop.appendChild(panel);
+      <div class="hm-foot">${footer}</div>
+    </div>`;
     document.body.appendChild(backdrop);
 
-    const close = () => { try { backdrop.remove(); } catch {} };
-    panel.querySelector('#historyClose')?.addEventListener('click', close);
-    panel.querySelector('#historyCloseBtn')?.addEventListener('click', close);
-    backdrop.addEventListener('click', e => { if (e.target === backdrop) close(); });
-    document.addEventListener('keydown', function onEsc(e) {
-      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); }
+    const onEsc = (e) => { if (e.key === 'Escape') close(); };
+    const close = () => { try { backdrop.remove(); } catch (e) { /* ignore */ } document.removeEventListener('keydown', onEsc); };
+    document.addEventListener('keydown', onEsc);
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) { close(); return; }
+      const b = e.target.closest('[data-hm]');
+      if (!b) return;
+      if (b.dataset.hm === 'close') close();
+      if (b.dataset.hm === 'edit') {
+        close();
+        import('/static/js/admin/attendance/punch-edit.panel.js?v=20261113-pe4')
+          .then((m) => m.openPunchEdit({ userId: Number(user.id), date: dateStr, name: user.username || '', code, onChanged: () => setMonth(String(state.currentYM || dateStr.slice(0, 7)), true, { spinner: false, forceReload: true }).catch(() => {}) }))
+          .catch((err) => alert('打刻編集を開けませんでした: ' + (err && err.message || err)));
+      }
     });
+
+    const roleJa = (r) => ({ admin: '管理者', manager: 'マネージャー' }[String(r || '').toLowerCase()] || '');
+    const SRC = { gps: '位置情報あり', ip: 'IP', manual: '手入力' };
+    const tl = backdrop.querySelector('#hmTimeline');
+    try {
+      const uidQ = user.id ? `&userId=${encodeURIComponent(user.id)}` : '';
+      const r = await fetchJSONAuth(`/api/attendance/day-history?date=${encodeURIComponent(dateStr)}${uidQ}`);
+      const ev = Array.isArray(r?.events) ? r.events : [];
+      const when = (v) => { const s = String(v || ''); return s.length >= 16 ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))} ${s.slice(11, 16)}` : s; };
+      tl.innerHTML = ev.length ? ev.map((x) => {
+        if (x.kind === 'self') {
+          return `<div class="hm-it self"><span class="t">${esc(when(x.at))}</span>　<span class="hm-tag self">本人</span><span class="who">${esc(user.username || '')}</span>　${esc(x.label)} <b>${esc(x.time || '')}</b>${x.source && SRC[x.source] ? `<span style="color:#64748b;">（${esc(SRC[x.source])}）</span>` : ''}</div>`;
+        }
+        const tag = x.kind === 'admin' ? '<span class="hm-tag admin">管理者</span>' : '<span class="hm-tag request">申請</span>';
+        const rj = roleJa(x.byRole) === String(x.by || '') ? '' : roleJa(x.byRole);
+        const text = esc(x.text || x.label).replace(/(\d{1,2}:\d{2})/g, '<b>$1</b>').replace('取消', '<b style="color:#b91c1c;">取消</b>');
+        return `<div class="hm-it ${x.kind}"><span class="t">${esc(when(x.at))}</span>　${tag}<span class="who">${esc(x.by || '')}${rj ? `（${rj}）` : ''}</span>　${text}${x.kind === 'admin' && /取消/.test(x.label) ? '（原本は保存）' : ''}${x.restored ? ' <span style="color:#64748b;font-size:11.5px;">（元に戻し済み）</span>' : ''}
+          ${x.reason || x.note ? `<br><span class="why">${x.kind === 'request' ? '申請理由' : '理由'}：${esc(x.reason || '')}${x.note ? `（${esc(x.note)}）` : ''}</span>` : ''}</div>`;
+      }).join('') : '<div style="color:#94a3b8;font-size:12.5px;padding:4px 0 8px;">この日の記録はありません</div>';
+    } catch (e) {
+      tl.innerHTML = `<div style="color:#991b1b;font-size:12.5px;padding:4px 0 8px;">${esc(String(e?.message || '履歴を読み込めませんでした'))}</div>`;
+    }
   };
 
   const addSegmentRow = async (dateStr) => {

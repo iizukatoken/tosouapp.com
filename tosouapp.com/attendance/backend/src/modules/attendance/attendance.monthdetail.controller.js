@@ -445,12 +445,24 @@ exports.getMonthDetail = async (req, res) => {
       }
     } catch (e) { /* ✎ が出ないだけ */ }
 
+    // 履歴 › 表示 の件数（打刻編集 ＋ 承認した調整申請）。0件の日は普通の 表示 ボタン
+    const changeCountByDate = {};
+    for (const [d, v] of Object.entries(punchEditsByDate)) changeCountByDate[d] = (v.lines || []).length;
+    try {
+      const [ar] = await db.query(
+        "SELECT DATE_FORMAT(COALESCE(requestedCheckIn, requestedCheckOut), '%Y-%m-%d') AS d, COUNT(*) AS n FROM time_adjust_requests WHERE userId = ? AND status = 'approved' AND DATE(COALESCE(requestedCheckIn, requestedCheckOut)) BETWEEN ? AND ? GROUP BY d",
+        [userId, from, to]
+      );
+      for (const r of ar || []) changeCountByDate[r.d] = (changeCountByDate[r.d] || 0) + Number(r.n || 0);
+    } catch (e) { /* 調整申請のテーブルがない環境 */ }
+
     // Trả kết quả
     res.status(200).json({
       year: y, month: m, from, to,
       user,
       leaveStatusByDate,
       punchEditsByDate,
+      changeCountByDate,
       shiftMonthStatus,
       monthStatus: {
         status:      monthStatus,
