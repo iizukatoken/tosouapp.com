@@ -2044,6 +2044,68 @@
       });
     }
 
+    // 自動更新: 20秒ごとに「この社員・この月のデータが変わったか」をサーバーに聞き、変わっていたら最新を読み直す。
+    // 管理者の打刻編集・承認・保存などが、本人の画面にページの読み込み直しなしで出る（逆も同じ）。
+    // 入力中の行がある・保存中・打刻編集/履歴の画面を開いている・タブが裏にあるときは読み直さない。
+    if (!window.__seMonthlyLivePoll) {
+      window.__seMonthlyLivePoll = true;
+      const stamps = new Map();
+      // この画面（タブ）から保存した直後の変化は 自分の変更なので 読み直し・お知らせをしない
+      try {
+        const origFetch = window.fetch.bind(window);
+        window.fetch = (input, init) => {
+          try {
+            const url = typeof input === 'string' ? input : String(input?.url || '');
+            const method = String(init?.method || (typeof input === 'object' && input?.method) || 'GET').toUpperCase();
+            if (method !== 'GET' && /\/api\/attendance\//.test(url)) window.__seLastWriteAt = Date.now();
+          } catch (e) { /* silently ignored */ }
+          return origFetch(input, init);
+        };
+      } catch (e) { /* silently ignored */ }
+      const toast = (msg) => {
+        try {
+          let el = document.getElementById('seLiveToast');
+          if (!el) {
+            el = document.createElement('div');
+            el.id = 'seLiveToast';
+            el.style.cssText = 'position:fixed;right:16px;bottom:72px;z-index:9000;background:#0b2c66;color:#fff;font-size:12.5px;font-weight:600;padding:7px 14px;border-radius:4px;box-shadow:0 6px 18px rgba(15,23,42,.25);transition:opacity .3s;';
+            document.body.appendChild(el);
+          }
+          el.textContent = msg;
+          el.style.opacity = '1';
+          clearTimeout(el._t);
+          el._t = setTimeout(() => { el.style.opacity = '0'; }, 3500);
+        } catch (e) { /* silently ignored */ }
+      };
+      const tick = async () => {
+        try {
+          if (document.hidden) return;
+          if (ctx.autoSaveInFlight) return;
+          if (ctx.role !== 'employee' && !ctx.actingUserId) return;
+          if (document.querySelector('#historyModal, .pe-panel, .pe-modal')) return;
+          const ym = String(state.currentYM || ctx.initialYM || '').slice(0, 7);
+          if (!/^\d{4}-\d{2}$/.test(ym) || !state.currentMonthDetail) return;
+          const [y, m] = ym.split('-').map((x) => parseInt(x, 10));
+          const uid = ctx.actingUserId ? String(ctx.actingUserId) : 'self';
+          const key = `${uid}:${ym}`;
+          const r = await fetchJSONAuth(`/api/attendance/month/stamp?year=${y}&month=${m}${ctx.actingUserId ? `&userId=${encodeURIComponent(ctx.actingUserId)}` : ''}`);
+          const stamp = String(r?.stamp || '');
+          if (!stamp) return;
+          const prev = stamps.get(key);
+          stamps.set(key, stamp);
+          if (!prev || prev === stamp) return;
+          // 自分の保存の直後は 読み直すだけ（お知らせは出さない）。同じ間に管理者の変更があっても取りこぼさない
+          const own = Date.now() - Number(window.__seLastWriteAt || 0) < 30000;
+          // 入力中（未保存）の行があるときは上書きしない。保存したあと次の確認で反映される
+          if (ctx.tableHost && ctx.tableHost.querySelector('[data-dirty="1"]')) { stamps.set(key, prev); return; }
+          await setMonth(ym, true, { spinner: false, forceReload: true });
+          if (!own) toast('最新の内容に更新しました');
+        } catch (e) { /* 次の確認で */ }
+      };
+      setInterval(tick, 20000);
+      setTimeout(tick, 3000);
+    }
+
     // Do not block first month rendering on employee-list fetch.
     initUserPicker().then(() => {
       try { root.Events?.bindUserPicker?.(); } catch (e) { /* silently ignored */ }
