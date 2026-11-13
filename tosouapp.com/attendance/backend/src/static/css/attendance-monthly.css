@@ -3867,3 +3867,7 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 #monthTable .se-kubun-select option { background-color: #fff !important; font-weight: 400; }
 #monthTable .se-kubun-select option:not([value=""]):not([style*="color"]) { color: #334155 !important; }
 #monthTable .se-kubun-select option[value=""] { color: #94a3b8 !important; }
+
+/* 開始・終了時間の入力欄を少し短く（列は 78px で固定） */
+#monthTable input.se-time[data-field="checkIn"],
+#monthTable input.se-time[data-field="checkOut"] { width: 70px !important; min-width: 70px !important; max-width: 70px !important; }

@@ -811,11 +811,11 @@
         }
         
         const defaultWidths = [
-          75, 120, 32, 32, 32, 120, 150, 92, 92, 45, 45, 45, 45, 80, 100, 150, 62, 80, 46, 34
+          75, 120, 32, 32, 32, 120, 150, 78, 78, 45, 45, 45, 45, 80, 100, 150, 62, 80, 46, 34
         ]; // 20 columns (出社/在宅/現場・休憩/深夜休憩/勤務時間/超過時間/ステータス は狭く。表の min-width も同じ比率で縮めている — CSS #monthTable.se-table table)
         
         // 行操作（19列目）・履歴（20列目）はボタンだけなので幅を固定。表の最小幅との差は他の列で分ける
-        const fixedIdx = new Set([1, 7, 8, 18, 19]); // 勤務区分（選択欄 110px）・開始/終了時間（入力欄 84px）も ＋余白 で固定
+        const fixedIdx = new Set([1, 7, 8, 18, 19]); // 勤務区分（選択欄 110px）・開始/終了時間（入力欄 70px）も ＋余白 で固定
         const sumAll = defaultWidths.reduce((x, y) => x + y, 0);
         const sumFixed = defaultWidths.reduce((x, y, i) => x + (fixedIdx.has(i) ? y : 0), 0);
         let minW = 0;
