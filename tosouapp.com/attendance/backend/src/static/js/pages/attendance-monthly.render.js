@@ -57,7 +57,7 @@
     // 今日 出勤済み・まだ退勤前: 勤務中
     if (hasActualIn && !hasActualOut && String(dateStr || '') === todayStr) return { text: '勤務中', cls: 'none' };
     // 過去の日で退勤の打刻がない → 調整申請へ
-    if (hasActualIn && !hasActualOut && String(dateStr || '') < todayStr) return { text: '退勤未打刻（調整申請）', cls: 'warn' };
+    if (hasActualIn && !hasActualOut && String(dateStr || '') < todayStr) return { text: '退勤未打刻', cls: 'warn', fix: true };
     // 出勤・退勤はあるが作業内容がまだ → 入力を促す（Excel の承認ステータスと同じ条件）
     if (hasActualIn && hasActualOut && !hasMemo) return { text: '作業内容未入力', cls: 'warn' };
     return null;
@@ -487,6 +487,7 @@
       const st = {
         text,
         cls,
+        fix: !!(friendly && friendly.fix && text === friendly.text),
         approver: approved ? (approverName || '—') : (text === '確認済み' ? (defaultApproverName || '—') : '—')
       };
 
@@ -736,7 +737,7 @@
       </td>
       <td>
         <div class="se-status-wrap">
-          <span class="se-status ${esc(st.cls)}" title="${esc(st.text)}">${esc(st.text)}</span>
+          ${st.fix ? (isAdminView ? `<span class="se-status ${esc(st.cls)} se-pe-mark" role="button" tabindex="0" data-pe-date="${esc(dateStr)}" data-pe-uid="${esc(String(detail?.user?.id || ''))}" data-pe-name="${esc(String(detail?.user?.username || ''))}" data-pe-code="${esc(String(detail?.user?.employeeCode || detail?.user?.employee_code || ''))}" title="退勤の打刻がありません。クリックで 打刻編集（退勤を追加）" style="cursor:pointer;">${esc(st.text)} ›</span>` : `<a class="se-status ${esc(st.cls)}" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(dateStr)}${seg?.id ? `&attendanceId=${encodeURIComponent(seg.id)}` : ''}" title="退勤の打刻がありません。クリックで 調整申請" style="cursor:pointer;text-decoration:none;">${esc(st.text)} ›</a>`) : `<span class="se-status ${esc(st.cls)}" title="${esc(st.text)}">${esc(st.text)}</span>`}
         </div>
       </td>
       <td ${showDateDow ? 'data-field="approver"' : ''} style="text-align:center;color:#0f172a;font-weight:800;">${showDateDow ? esc(st.approver) : '—'}</td>
