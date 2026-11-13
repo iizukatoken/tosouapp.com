@@ -3888,3 +3888,26 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 
 /* 承認者の名前: 紺・少し小さく */
 #monthTable tbody td[data-field="approver"] { font-size: 11.5px !important; color: #0b2c66 !important; font-weight: 800 !important; letter-spacing: -0.2px; }
+
+/* ===== 対象年月: 1月〜12月の帯（attendance-monthly.month-picker.js） ===== */
+#workingStart .se-ms { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+#workingStart .se-ms-strip { display: inline-flex; align-items: stretch; border: 1px solid #c3cedc; background: #fff; height: 36px; box-sizing: border-box; }
+#workingStart .se-ms-year { display: inline-flex; align-items: center; gap: 2px; padding: 0 6px; border-right: 1px solid #c3cedc; background: #f6f8fb; }
+#workingStart .se-ms-ytext { font-size: 13.5px; font-weight: 700; color: #0b2c66; padding: 0 4px; white-space: nowrap; }
+#workingStart .se-ms-ybtn { width: 20px; height: 24px; border: 0; background: transparent; color: #64748b; font-size: 15px; font-weight: 700; cursor: pointer; padding: 0; font-family: inherit; }
+#workingStart .se-ms-ybtn:hover { color: #0b2c66; background: #e8eef7; }
+#workingStart .se-ms-months { display: inline-flex; }
+#workingStart .se-ms-m { position: relative; width: 42px; border: 0; border-right: 1px solid #eef1f5; background: #fff; color: #334155; font-size: 12.5px; font-weight: 600; cursor: pointer; font-family: inherit; padding: 4px 0 0; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 3px; line-height: 1.1; }
+#workingStart .se-ms-m:last-child { border-right: 0; }
+#workingStart .se-ms-m:hover { background: #f1f5fb; }
+#workingStart .se-ms-m.is-today:not(.is-selected) { color: #0b2c66; font-weight: 800; box-shadow: inset 0 -2px 0 #0b2c66; }
+#workingStart .se-ms-m.is-selected { background: #0b2c66; color: #fff; font-weight: 700; }
+#workingStart .se-ms-m.is-selected::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-top-color: #0b2c66; border-bottom: 0; }
+#workingStart .se-ms i, #workingStart .se-ms-legend i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; }
+#workingStart .se-ms i.st-approved { background: #16a34a; }
+#workingStart .se-ms i.st-submitted { background: #f59e0b; }
+#workingStart .se-ms i.st-draft { background: #3b82f6; }
+#workingStart .se-ms i.st-none { background: #e2e8f0; }
+#workingStart .se-ms-m.is-selected i { box-shadow: 0 0 0 1.5px #fff; }
+#workingStart .se-ms-legend { display: flex; gap: 10px; font-size: 10.5px; color: #64748b; }
+#workingStart .se-ms-legend span { display: inline-flex; align-items: center; gap: 3px; }

@@ -197,6 +197,7 @@ router.get('/month/closure-summary',
 
 // 月次勤怠入力の自動更新: データが変わったかの指紋（20秒ごとに画面が聞く）
 router.get('/month/stamp', authenticate, authorize('employee', 'manager', 'admin', 'payroll'), require('./attendance.monthStamp').getStamp);
+router.get('/month/statuses', authenticate, authorize('employee', 'manager', 'admin', 'payroll'), require('./attendance.monthStamp').getStatuses);
 
 router.get('/ledger/month',
   authenticate, authorize('manager', 'admin'),
