@@ -1260,6 +1260,8 @@
             e.target.classList.toggle('is-holiday', val === '休日' || val === '代替休日');
             e.target.classList.toggle('is-absence', val === '欠勤');
             e.target.classList.toggle('is-planned', !val);
+            // 区分を選んだら 【出勤予定】 は選べないようにする（表示は残す）
+            try { const ph = e.target.querySelector('option[value=""]'); if (ph && val) ph.disabled = true; } catch (err) { /* ignore */ }
           }
           recomputeRow(tr);
         try { draft?.schedule?.(controller.ctx, controller.ctx?.picker?.value || controller.ctx?.initialYM); } catch (e) { /* silently ignored */ }
