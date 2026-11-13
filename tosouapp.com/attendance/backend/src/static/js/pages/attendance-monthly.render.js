@@ -864,7 +864,7 @@
       if (!mk) return;
       ev.preventDefault();
       ev.stopPropagation();
-      import('/static/js/admin/attendance/punch-edit.panel.js?v=20261113-pe1')
+      import('/static/js/admin/attendance/punch-edit.panel.js?v=20261113-pe2')
         .then((m) => m.openPunchEdit({ userId: Number(mk.dataset.peUid), date: mk.dataset.peDate, name: mk.dataset.peName || '', code: mk.dataset.peCode || '', onChanged: () => window.location.reload() }))
         .catch((e) => alert('打刻編集を開けませんでした: ' + (e && e.message || e)));
     }, true);

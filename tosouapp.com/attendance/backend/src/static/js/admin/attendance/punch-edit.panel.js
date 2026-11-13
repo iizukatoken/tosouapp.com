@@ -33,7 +33,7 @@ const CSS = `
 .pe-modal{position:fixed;top:120px;right:40px;width:380px;max-width:calc(100vw - 32px);background:#fff;border:1px solid #c3cdda;z-index:10001;font-family:'Meiryo UI','Yu Gothic UI',sans-serif;box-shadow:0 12px 32px rgba(15,23,42,.25)}
 .pe-modal .pe-hd.red{background:#b91c1c}
 .pe-row{padding:8px 14px;font-size:12.5px}
-.pe-sel,.pe-inp{height:28px;border:1px solid #94a3b8;font-size:12.5px;padding:0 6px;font-family:inherit}
+.pe-sel,.pe-inp{height:32px !important;min-height:32px !important;line-height:normal !important;box-sizing:border-box !important;border:1px solid #94a3b8;font-size:13px !important;padding:0 8px !important;font-family:inherit;color:#1f2937 !important;background:#fff}
 .pe-sel{width:100%;margin-top:4px}
 .pe-ta{width:100%;height:46px;border:1px solid #94a3b8;font-size:12.5px;padding:4px 6px;margin-top:6px;box-sizing:border-box;font-family:inherit}
 .pe-note{font-size:11.5px;color:#64748b;margin-top:6px}
