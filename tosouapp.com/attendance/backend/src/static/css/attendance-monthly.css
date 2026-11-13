@@ -1600,7 +1600,7 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
 }
 #monthTable.se-table table {
   /* 2300px から 出社/在宅/現場・休憩/深夜休憩/勤務時間 を狭めた分を引いた幅 (他の列の表示幅は従来どおり) */
-  min-width: 1903px; /* 列幅を詰めた合計（作業内容 300px） */
+  min-width: 1813px; /* 列幅の合計（作業内容 200px）。画面に入らない分は横スクロール */
   width: max-content;
   table-layout: auto;
   border-collapse: collapse;
