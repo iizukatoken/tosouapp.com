@@ -1000,6 +1000,14 @@
         try { row.dataset.dirty = '1'; } catch (e) { /* silently ignored */ } 
         
         const kubunSel = e.target?.closest?.('select[data-field="classification"]');
+        // 区分を選んだら 【出勤予定】 は残したまま選べなくする。空欄を選んだら 区分を外して 【出勤予定】 の表示に戻す
+        if (kubunSel) {
+          try {
+            const ph = kubunSel.querySelector('option[value=""]');
+            if (ph && kubunSel.value) ph.disabled = true;
+            if (ph && !kubunSel.value) { ph.disabled = false; ph.selected = true; }
+          } catch (err) { /* ignore */ }
+        }
         const timeEl = e.target?.closest?.('input.se-time[data-field="checkIn"], input.se-time[data-field="checkOut"]');
         const otherEl = e.target?.closest?.('select[data-field], input[type="text"][data-field], textarea[data-field]');
         
@@ -1261,7 +1269,6 @@
             e.target.classList.toggle('is-absence', val === '欠勤');
             e.target.classList.toggle('is-planned', !val);
             // 区分を選んだら 【出勤予定】 は選べないようにする（表示は残す）
-            try { const ph = e.target.querySelector('option[value=""]'); if (ph && val) ph.disabled = true; } catch (err) { /* ignore */ }
           }
           recomputeRow(tr);
         try { draft?.schedule?.(controller.ctx, controller.ctx?.picker?.value || controller.ctx?.initialYM); } catch (e) { /* silently ignored */ }

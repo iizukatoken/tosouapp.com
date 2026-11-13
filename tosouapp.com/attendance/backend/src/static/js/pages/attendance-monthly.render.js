@@ -586,7 +586,7 @@
 
       const kubunOptionsHtml = `
       <option value="" ${(disablePlanned || kubunInit !== '') ? 'disabled' : ''} ${kubunInit === '' ? 'selected' : ''}>${esc(kubunInit === '' ? plannedLabel : (offDay ? '【休日予定】' : '【出勤予定】'))}</option>
-      <option value="__sep__" disabled aria-hidden="true"></option>
+      <option value="" title="区分を外す（予定に戻す）" ${disablePlanned ? 'disabled' : ''}></option>
       ${kubunOptions.map((k) => {
         let disabledOpt = '';
         let optStyle = '';
