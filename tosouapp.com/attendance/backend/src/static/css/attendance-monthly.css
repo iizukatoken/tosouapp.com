@@ -3874,3 +3874,6 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 
 /* 遅刻/早退 の列は 66px（「遅刻/早退」が入る最小幅） */
 #monthTable td[data-field="lateEarly"] { width: 66px !important; min-width: 66px !important; max-width: 66px !important; padding-left: 2px !important; padding-right: 2px !important; box-sizing: border-box !important; }
+
+/* 日付 の列は 72px（「11/01(日)」が入る幅） */
+#monthTable thead th.sticky-col-1, #monthTable tbody td.sticky-col-1 { width: 72px !important; min-width: 72px !important; max-width: 72px !important; padding-left: 2px !important; padding-right: 2px !important; box-sizing: border-box !important; text-align: center; white-space: nowrap; }
