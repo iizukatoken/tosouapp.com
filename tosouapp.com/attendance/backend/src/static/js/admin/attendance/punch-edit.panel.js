@@ -124,7 +124,13 @@ export async function openPunchEdit({ userId, date, name = '', code = '', onChan
     <div class="pe-foot">「取消」は削除しません。原本は灰色の取り消し線で残り、「元に戻す」で復元できます。修正・取消・追加は理由が必要です。</div>`;
   document.body.append(bg, panel);
   let changed = false;
-  const close = () => { bg.remove(); panel.remove(); document.removeEventListener('keydown', onKey); if (changed && typeof onChanged === 'function') onChanged(); };
+  const close = () => {
+    bg.remove(); panel.remove(); document.removeEventListener('keydown', onKey);
+    if (!changed) return;
+    // 月次勤怠入力の「未保存の下書き」（この端末）に古い時刻が残っていると、開いたときに上書きして戻してしまうので消す
+    try { localStorage.removeItem(`se.attMonthlyDraft.v2:${userId}:${String(date).slice(0, 7)}`); } catch (e) { /* ignore */ }
+    if (typeof onChanged === 'function') onChanged();
+  };
   const onKey = (e) => { if (e.key === 'Escape' && !document.querySelector('.pe-modal')) close(); };
   document.addEventListener('keydown', onKey);
   panel.querySelector('.pe-x').onclick = close;

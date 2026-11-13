@@ -2014,6 +2014,25 @@
       setMonth(ctx.initialYM, true, { spinner: false }).catch(()=>{});
     }
 
+    // 別のタブ・画面で 打刻編集 や承認があったとき、古い時刻のまま保存して上書きしないように、
+    // このタブに戻ってきたら（20秒以上離れていて、入力中の行がなければ）最新を読み直す
+    if (!window.__seMonthlyRefreshOnFocus) {
+      window.__seMonthlyRefreshOnFocus = true;
+      let hiddenAt = 0;
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) { hiddenAt = Date.now(); return; }
+        if (!hiddenAt || Date.now() - hiddenAt < 20000) return;
+        hiddenAt = 0;
+        try {
+          if (ctx.autoSaveInFlight) return;
+          if (ctx.tableHost && ctx.tableHost.querySelector('[data-dirty="1"]')) return;
+          if (ctx.role !== 'employee' && !ctx.actingUserId) return;
+          const ym = String(state.currentYM || ctx.initialYM || '').slice(0, 7);
+          if (ym) setMonth(ym, true, { spinner: false }).catch(() => {});
+        } catch (e) { /* silently ignored */ }
+      });
+    }
+
     // Do not block first month rendering on employee-list fetch.
     initUserPicker().then(() => {
       try { root.Events?.bindUserPicker?.(); } catch (e) { /* silently ignored */ }
