@@ -2070,34 +2070,33 @@
 
     const existing = document.getElementById('historyModal');
     if (existing) existing.remove();
-    if (!document.getElementById('hm-css')) {
+    if (!document.getElementById('hm-css2')) {
       const st = document.createElement('style');
-      st.id = 'hm-css';
+      st.id = 'hm-css2';
       st.textContent = `
-#historyModal{position:fixed;inset:0;background:rgba(15,23,42,.38);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
-#historyModal .hm{width:min(760px,calc(100vw - 32px));max-height:86vh;display:flex;flex-direction:column;background:#fff;border:1px solid #d5dde8;border-radius:6px;box-shadow:0 18px 48px rgba(15,23,42,.22);font-family:'Meiryo UI','Yu Gothic UI',sans-serif;color:#1f2937;overflow:hidden}
-#historyModal .hm-hd{padding:14px 18px 10px;display:flex;align-items:baseline;gap:12px;border-bottom:2px solid #0b2c66;color:#0b2c66}
-#historyModal .hm-hd b{font-size:16px}#historyModal .hm-hd span{font-size:12.5px;color:#475569}
-#historyModal .hm-x{margin-left:auto;align-self:center;background:none;border:0;color:#94a3b8;font-size:22px;line-height:1;cursor:pointer}
-#historyModal .hm-x:hover{color:#334155}
-#historyModal .hm-body{flex:1;overflow:auto;padding:6px 18px 4px}
-#historyModal .hm-meta{display:flex;gap:22px;flex-wrap:wrap;font-size:12.5px;color:#475569;padding:10px 0 2px}#historyModal .hm-meta b{color:#1f2937}
-#historyModal .hm-sec{padding:10px 0}
-#historyModal .hm-sec h4{margin:0 0 8px;font-size:12.5px;font-weight:700;color:#0b2c66;background:#f1f5f9;border-left:3px solid #0b2c66;padding:5px 8px;display:flex;align-items:center}
-#historyModal .hm-t{width:100%;border-collapse:collapse;font-size:13px}
-#historyModal .hm-t th{background:#f8fafc !important;color:#475569 !important;border:1px solid #e2e8f0 !important;padding:6px 10px !important;text-align:left;font-weight:600;font-size:12px}
-#historyModal .hm-t td{border:1px solid #e2e8f0 !important;padding:7px 10px !important;color:#1f2937}
-#historyModal .hm-ed{color:#b45309;font-weight:700;margin-left:4px;font-size:12px;cursor:help}
-#historyModal .hm-tl{margin-left:6px;padding-left:16px;border-left:2px solid #e2e8f0}
-#historyModal .hm-it{position:relative;padding:4px 0 10px;font-size:12.5px;line-height:1.6}
-#historyModal .hm-it:before{content:'';position:absolute;left:-23px;top:8px;width:10px;height:10px;border-radius:50%;background:#fff;border:2px solid #94a3b8}
-#historyModal .hm-it.admin:before{border-color:#b45309;background:#fff7ed}#historyModal .hm-it.request:before{border-color:#0b2c66;background:#eef4ff}
-#historyModal .hm-it .t{color:#64748b;font-size:12px}#historyModal .hm-it .who{color:#0b2c66;font-weight:600}#historyModal .hm-it .why{color:#64748b;font-size:12px}
-#historyModal .hm-tag{display:inline-block;padding:0 6px;font-size:11px;font-weight:600;border:1px solid;border-radius:3px;margin-right:4px}
-#historyModal .hm-tag.admin{color:#b45309;border-color:#fdba74;background:#fff7ed}#historyModal .hm-tag.request{color:#0b2c66;border-color:#c7d7f0;background:#eef4ff}#historyModal .hm-tag.self{color:#166534;border-color:#bbf7d0;background:#f0fdf4}
-#historyModal .hm-foot{padding:10px 18px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;gap:8px;font-size:11.5px;color:#64748b}
-#historyModal .hm-b{display:inline-block;height:30px;line-height:28px;padding:0 14px;border:1px solid #cbd5e1;border-radius:3px;background:#fff;font-size:12.5px;font-weight:600;color:#334155;cursor:pointer;font-family:inherit;text-decoration:none}
-#historyModal .hm-b:hover{background:#f1f5f9}
+#historyModal{position:fixed;inset:0;background:rgba(15,23,42,.35);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px}
+#historyModal .hm{width:min(640px,calc(100vw - 32px));max-height:86vh;display:flex;flex-direction:column;background:#fff;border:1px solid #6b7a90;box-shadow:0 8px 24px rgba(15,23,42,.25);font-family:'Meiryo UI','Yu Gothic UI',sans-serif;font-size:12px;color:#1f2937}
+#historyModal .hm-hd{background:#0b2c66;color:#fff;padding:5px 10px;display:flex;align-items:center;gap:10px}
+#historyModal .hm-hd b{font-size:13px}#historyModal .hm-hd span{font-size:12px;opacity:.9}
+#historyModal .hm-x{margin-left:auto;background:none;border:0;color:#fff;font-size:16px;line-height:1;cursor:pointer;padding:0 2px;opacity:.85}
+#historyModal .hm-body{flex:1;overflow:auto;padding:8px 10px 6px}
+#historyModal .hm-cap{margin:8px 0 3px;font-size:12px;font-weight:700;color:#0b2c66}
+#historyModal .hm-cap:first-child{margin-top:0}
+#historyModal .hm-cap small{float:right;font-weight:400;color:#64748b;font-size:11px}
+#historyModal table.hm-t{width:100%;border-collapse:collapse;font-size:12px;table-layout:auto}
+#historyModal table.hm-t th{background:#e9eef4 !important;color:#1f2937 !important;border:1px solid #9aa8ba !important;padding:2px 6px !important;font-weight:700;font-size:11.5px;text-align:center;white-space:nowrap;height:auto !important;line-height:1.5 !important}
+#historyModal table.hm-t td{border:1px solid #9aa8ba !important;padding:2px 6px !important;line-height:1.5 !important;height:auto !important;vertical-align:middle;color:#1f2937;background:#fff}
+#historyModal table.hm-t td.c{text-align:center;white-space:nowrap}
+#historyModal table.hm-t td.n{font-family:Consolas,'MS Gothic',monospace;white-space:nowrap}
+#historyModal table.hm-t td.sub{color:#475569}
+#historyModal table.hm-kv th{width:64px}#historyModal table.hm-kv td{width:auto}
+#historyModal .hm-ed{color:#b45309;font-weight:700;margin-left:3px;cursor:help}
+#historyModal .hm-k{display:inline-block;min-width:34px;padding:0 4px;font-size:11px;font-weight:700;border:1px solid;text-align:center;line-height:16px}
+#historyModal .hm-k.admin{color:#9a3412;border-color:#c2410c;background:#fff7ed}#historyModal .hm-k.request{color:#0b2c66;border-color:#0b2c66;background:#eef4ff}#historyModal .hm-k.self{color:#166534;border-color:#15803d;background:#f0fdf4}
+#historyModal tr.admin td{background:#fffaf3}
+#historyModal .hm-foot{padding:5px 10px;border-top:1px solid #9aa8ba;background:#f1f4f8;display:flex;align-items:center;gap:6px;font-size:11px;color:#475569}
+#historyModal .hm-b{display:inline-block;height:24px;line-height:22px;padding:0 10px;border:1px solid #6b7a90;background:#fff;font-size:12px;font-weight:600;color:#1f2937;cursor:pointer;font-family:inherit;text-decoration:none;border-radius:0}
+#historyModal .hm-b:hover{background:#e9eef4}
 #historyModal .hm-b.pri{background:#0b2c66;border-color:#0b2c66;color:#fff}#historyModal .hm-b.pri:hover{background:#163d82}`;
       document.head.appendChild(st);
     }
@@ -2112,10 +2111,10 @@
       const outHm = fromDateTime(s?.checkOut) || '—';
       const mark = (on) => (on && i === 0 && edited) ? `<span class="hm-ed" title="${editTitle}">✎</span>` : '';
       return `<tr>
-        <td style="text-align:center;width:36px;">${i + 1}</td>
-        <td><b>${esc(inHm)}</b>${mark(edited?.in)}</td>
-        <td><b>${esc(outHm)}</b>${mark(edited?.out)}</td>
-        <td>${esc(workTypeLabel(s?.workType) || '—')}</td>
+        <td class="c" style="width:28px;">${i + 1}</td>
+        <td class="c n"><b>${esc(inHm)}</b>${mark(edited?.in)}</td>
+        <td class="c n"><b>${esc(outHm)}</b>${mark(edited?.out)}</td>
+        <td class="c">${esc(workTypeLabel(s?.workType) || '—')}</td>
         <td>${esc(String(s?.location || (i === 0 ? daily?.location : '') || '').trim() || '—')}</td>
         <td style="max-width:220px;word-break:break-word;">${esc(String(s?.memo || (i === 0 ? daily?.memo : '') || '').trim() || '—')}</td></tr>`;
     }).join('') : '<tr><td colspan="6" style="text-align:center;color:#94a3b8;">打刻データがありません</td></tr>';
@@ -2129,18 +2128,17 @@
     backdrop.id = 'historyModal';
     const firstSeg = segs.find(s => s && s.id) || null;
     const footer = isManager
-      ? `<span>修正・取消・追加は 打刻編集 から（理由は必須）</span><span style="margin-left:auto"></span><button type="button" class="hm-b" data-hm="close">閉じる</button><button type="button" class="hm-b pri" data-hm="edit">✎ 打刻編集を開く</button>`
+      ? `<span>修正・取消・追加は 打刻編集 から（理由必須）</span><span style="margin-left:auto"></span><button type="button" class="hm-b" data-hm="close">閉じる</button><button type="button" class="hm-b pri" data-hm="edit">✎ 打刻編集を開く</button>`
       : `<span>時刻が違うときは 調整申請 を出してください</span><span style="margin-left:auto"></span><button type="button" class="hm-b" data-hm="close">閉じる</button>${firstSeg ? `<a class="hm-b pri" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(dateStr)}&attendanceId=${encodeURIComponent(firstSeg.id)}">調整申請</a>` : ''}`;
     backdrop.innerHTML = `<div class="hm" role="dialog" aria-label="履歴">
       <div class="hm-hd"><b>履歴</b><span>${esc(dateFmt)}　${esc(user.username || '')}${code ? `（${esc(code)}）` : ''}</span><button type="button" class="hm-x" data-hm="close" aria-label="閉じる">×</button></div>
       <div class="hm-body">
-        <div class="hm-meta"><span>勤務区分：<b>${esc(kubun)}</b></span><span>休憩：<b>${esc(breakM)}</b></span><span>状態：<b>${esc(statusText)}</b></span></div>
-        <div class="hm-sec"><h4>いまの打刻</h4>
-          <table class="hm-t"><thead><tr><th>No</th><th>開始</th><th>終了</th><th>勤務形態</th><th>現場</th><th>作業内容</th></tr></thead><tbody>${segRows}</tbody></table>
-        </div>
-        <div class="hm-sec"><h4>変更履歴<span style="margin-left:auto;font-weight:400;color:#64748b;font-size:11.5px;">新しい順</span></h4>
-          <div class="hm-tl" id="hmTimeline"><div style="color:#94a3b8;font-size:12.5px;padding:4px 0 8px;">読み込み中…</div></div>
-        </div>
+        <table class="hm-t hm-kv"><tbody><tr><th>勤務区分</th><td>${esc(kubun)}</td><th>休憩</th><td class="n">${esc(breakM)}</td><th>状態</th><td>${esc(statusText)}</td></tr></tbody></table>
+        <div class="hm-cap">いまの打刻</div>
+        <table class="hm-t"><thead><tr><th>No</th><th>開始</th><th>終了</th><th>勤務形態</th><th>現場</th><th>作業内容</th></tr></thead><tbody>${segRows}</tbody></table>
+        <div class="hm-cap">変更履歴<small>新しい順</small></div>
+        <table class="hm-t"><thead><tr><th style="width:74px;">日時</th><th style="width:44px;">区分</th><th style="width:96px;">操作者</th><th>内容</th><th>理由</th></tr></thead>
+          <tbody id="hmTimeline"><tr><td colspan="5" class="sub">読み込み中…</td></tr></tbody></table>
       </div>
       <div class="hm-foot">${footer}</div>
     </div>`;
@@ -2172,16 +2170,18 @@
       const when = (v) => { const s = String(v || ''); return s.length >= 16 ? `${Number(s.slice(5, 7))}/${Number(s.slice(8, 10))} ${s.slice(11, 16)}` : s; };
       tl.innerHTML = ev.length ? ev.map((x) => {
         if (x.kind === 'self') {
-          return `<div class="hm-it self"><span class="t">${esc(when(x.at))}</span>　<span class="hm-tag self">本人</span><span class="who">${esc(user.username || '')}</span>　${esc(x.label)} <b>${esc(x.time || '')}</b>${x.source && SRC[x.source] ? `<span style="color:#64748b;">（${esc(SRC[x.source])}）</span>` : ''}</div>`;
+          return `<tr><td class="c n">${esc(when(x.at))}</td><td class="c"><span class="hm-k self">本人</span></td><td>${esc(user.username || '')}</td>
+            <td>${esc(x.label)} <b>${esc(x.time || '')}</b>${x.source && SRC[x.source] ? `<span class="sub">（${esc(SRC[x.source])}）</span>` : ''}</td><td class="sub"></td></tr>`;
         }
-        const tag = x.kind === 'admin' ? '<span class="hm-tag admin">管理者</span>' : '<span class="hm-tag request">申請</span>';
+        const tag = x.kind === 'admin' ? '<span class="hm-k admin">管理者</span>' : '<span class="hm-k request">申請</span>';
         const rj = roleJa(x.byRole) === String(x.by || '') ? '' : roleJa(x.byRole);
         const text = esc(x.text || x.label).replace(/(\d{1,2}:\d{2})/g, '<b>$1</b>').replace('取消', '<b style="color:#b91c1c;">取消</b>');
-        return `<div class="hm-it ${x.kind}"><span class="t">${esc(when(x.at))}</span>　${tag}<span class="who">${esc(x.by || '')}${rj ? `（${rj}）` : ''}</span>　${text}${x.kind === 'admin' && /取消/.test(x.label) ? '（原本は保存）' : ''}${x.restored ? ' <span style="color:#64748b;font-size:11.5px;">（元に戻し済み）</span>' : ''}
-          ${x.reason || x.note ? `<br><span class="why">${x.kind === 'request' ? '申請理由' : '理由'}：${esc(x.reason || '')}${x.note ? `（${esc(x.note)}）` : ''}</span>` : ''}</div>`;
-      }).join('') : '<div style="color:#94a3b8;font-size:12.5px;padding:4px 0 8px;">この日の記録はありません</div>';
+        return `<tr class="${x.kind}"><td class="c n">${esc(when(x.at))}</td><td class="c">${tag}</td><td>${esc(x.by || '')}${rj ? `<span class="sub">（${rj}）</span>` : ''}</td>
+          <td>${text}${x.kind === 'admin' && /取消/.test(x.label) ? '<span class="sub">（原本は保存）</span>' : ''}${x.restored ? '<span class="sub">（元に戻し済み）</span>' : ''}</td>
+          <td class="sub">${x.kind === 'request' && x.reason ? '申請：' : ''}${esc(x.reason || '')}${x.note ? `（${esc(x.note)}）` : ''}</td></tr>`;
+      }).join('') : '<tr><td colspan="5" class="sub" style="text-align:center;">この日の記録はありません</td></tr>';
     } catch (e) {
-      tl.innerHTML = `<div style="color:#991b1b;font-size:12.5px;padding:4px 0 8px;">${esc(String(e?.message || '履歴を読み込めませんでした'))}</div>`;
+      tl.innerHTML = `<tr><td colspan="5" style="color:#991b1b;">${esc(String(e?.message || '履歴を読み込めませんでした'))}</td></tr>`;
     }
   };
 
