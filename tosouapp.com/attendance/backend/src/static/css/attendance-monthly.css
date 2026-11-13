@@ -3905,3 +3905,10 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 #workingStart .se-mp-foot { margin: 0 !important; padding: 5px 6px !important; border-top: 0 !important; background: #f4f6f9; }
 #workingStart .se-mp-today { border-radius: 0 !important; height: 22px !important; font-weight: 600 !important; border-color: #9aa8ba !important; color: #1f2937 !important; }
 #workingStart .se-mp-today:hover { background: #e8eef7 !important; color: #0b2c66 !important; }
+
+/* 画面下に固定した横スクロールバー（いつも見える・つかみやすい太さ） */
+#seStickyHScroll { scrollbar-width: auto; scrollbar-color: #8a97aa #eef2f7; }
+#seStickyHScroll::-webkit-scrollbar { height: 12px; }
+#seStickyHScroll::-webkit-scrollbar-track { background: #eef2f7; }
+#seStickyHScroll::-webkit-scrollbar-thumb { background: #8a97aa; border-radius: 6px; border: 2px solid #eef2f7; }
+#seStickyHScroll::-webkit-scrollbar-thumb:hover { background: #0b2c66; }

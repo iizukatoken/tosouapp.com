@@ -353,7 +353,57 @@
   // ではなく .se-month-scroll 自身になってしまい、ヘッダーが全く効かなくなる。
   // そのため CSS の sticky には頼らず、実ヘッダーの複製を position:fixed で
   // 独自に追従させることで、縦1本・横1本のスクロールバーのままヘッダー固定を実現する。
+  // 横スクロールバーを画面の下（戻る・保存 の帯のすぐ上）に固定表示する。
+  // 表を上下にスクロールしていても、いつでも横に動かせる。表の本来のスクロールバーが見えているときは隠す。
+  const updateStickyHScroll = () => {
+    try {
+      const wrapEl = document.querySelector('.se-month-scroll');
+      const table = wrapEl?.querySelector('#monthTableReal') || wrapEl?.querySelector('table');
+      let bar = document.getElementById('seStickyHScroll');
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'seStickyHScroll';
+        bar.setAttribute('aria-hidden', 'true');
+        bar.style.cssText = 'position:fixed;z-index:190;overflow-x:auto;overflow-y:hidden;height:16px;background:#f8fafc;border-top:1px solid #dfe5ee;display:none;';
+        bar.innerHTML = '<div style="height:1px;"></div>';
+        document.body.appendChild(bar);
+        bar.addEventListener('scroll', () => {
+          const w = document.querySelector('.se-month-scroll');
+          if (!w || bar.__syncing) return;
+          w.__syncingFromBar = true;
+          w.scrollLeft = bar.scrollLeft;
+          requestAnimationFrame(() => { w.__syncingFromBar = false; });
+        }, { passive: true });
+      }
+      if (!wrapEl || !table || document.body.classList.contains('view-plan')) { bar.style.display = 'none'; return; }
+      if (wrapEl.dataset.stickyHsBound !== '1') {
+        wrapEl.dataset.stickyHsBound = '1';
+        wrapEl.addEventListener('scroll', () => {
+          const b = document.getElementById('seStickyHScroll');
+          if (!b || wrapEl.__syncingFromBar) return;
+          b.__syncing = true;
+          b.scrollLeft = wrapEl.scrollLeft;
+          requestAnimationFrame(() => { b.__syncing = false; });
+        }, { passive: true });
+      }
+      const wr = wrapEl.getBoundingClientRect();
+      const bb = document.querySelector('.se-bottombar');
+      const bbTop = bb ? bb.getBoundingClientRect().top : window.innerHeight;
+      const needsScroll = wrapEl.scrollWidth > wrapEl.clientWidth + 2;
+      // 表が画面に出ていて、表の本来のスクロールバー（下端）が 帯の下に隠れているときだけ出す
+      const show = needsScroll && wr.top < bbTop - 40 && wr.bottom > bbTop;
+      if (!show) { bar.style.display = 'none'; return; }
+      bar.style.display = '';
+      bar.style.left = wr.left + 'px';
+      bar.style.width = wr.width + 'px';
+      bar.style.top = (bbTop - 16) + 'px';
+      bar.firstChild.style.width = wrapEl.scrollWidth + 'px';
+      if (Math.abs(bar.scrollLeft - wrapEl.scrollLeft) > 1) { bar.__syncing = true; bar.scrollLeft = wrapEl.scrollLeft; requestAnimationFrame(() => { bar.__syncing = false; }); }
+    } catch (e) { /* silently ignored */ }
+  };
+
   const updateFloatingHead = () => {
+    try { updateStickyHScroll(); } catch (e) { /* silently ignored */ }
     try {
       const floatWrap = window.__seFloatingHeadEl;
       if (!floatWrap) return;
