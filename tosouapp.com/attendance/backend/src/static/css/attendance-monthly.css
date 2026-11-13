@@ -3871,3 +3871,6 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 /* 開始・終了時間の入力欄を少し短く（列は 78px で固定） */
 #monthTable input.se-time[data-field="checkIn"],
 #monthTable input.se-time[data-field="checkOut"] { width: 70px !important; min-width: 70px !important; max-width: 70px !important; }
+
+/* 遅刻/早退 の列は 66px（「遅刻/早退」が入る最小幅） */
+#monthTable td[data-field="lateEarly"] { width: 66px !important; min-width: 66px !important; max-width: 66px !important; padding-left: 2px !important; padding-right: 2px !important; box-sizing: border-box !important; }
