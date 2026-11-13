@@ -418,6 +418,8 @@
               // 背景色などが消える。computed styleをそのままコピーして見た目を一致させる。
               try {
                 const cs = getComputedStyle(realCells[c]);
+                // 予定 表示などで隠している列は、浮遊ヘッダーでも隠す（隠さないと見出しが狭い列に詰まって重なる）
+                cloneCells[c].style.display = cs.display === 'none' ? 'none' : '';
                 cloneCells[c].style.background = cs.backgroundColor;
                 cloneCells[c].style.color = cs.color;
                 cloneCells[c].style.fontSize = cs.fontSize;
@@ -439,7 +441,16 @@
       floatWrap.style.display = '';
       floatWrap.style.top = stickTop + 'px';
       floatWrap.style.left = wrapRect.left + 'px';
-      floatWrap.style.width = wrapRect.width + 'px';
+      // 表が枠より狭いとき（予定 表示）は表の幅だけ。右側に白い帯が出ないように
+      let usedW = 0;
+      try {
+        const left = table.getBoundingClientRect().left;
+        for (const th of thead.querySelectorAll('th')) {
+          const r = th.getBoundingClientRect();
+          if (r.width > 0) usedW = Math.max(usedW, r.right - left);
+        }
+      } catch (e) { /* silently ignored */ }
+      floatWrap.style.width = Math.min(wrapRect.width, usedW || wrapRect.width) + 'px';
       clone.style.transform = `translateX(${-wrapEl.scrollLeft}px)`;
     } catch (e) { /* silently ignored */ }
   };
