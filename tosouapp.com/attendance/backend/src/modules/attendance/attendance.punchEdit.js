@@ -106,14 +106,36 @@ async function assertOpen(req, userId, workDate) {
   }
 }
 
-async function record(req, { userId, attendanceId, workDate, action, before, after, reason, note }) {
+/** 勤怠の変更と編集履歴を1つのトランザクションで（片方だけ残らないように） */
+async function tx(fn) {
   await ensureSchema();
-  const [res] = await db.query(
+  if (typeof db.getConnection !== 'function') return fn(db);
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    const out = await fn(conn);
+    await conn.commit();
+    return out;
+  } catch (e) {
+    try { await conn.rollback(); } catch (e2) { /* ignore */ }
+    throw e;
+  } finally {
+    conn.release();
+  }
+}
+
+async function insertEdit(q, req, { userId, attendanceId, workDate, action, before, after, reason, note }) {
+  const [res] = await q.query(
     `INSERT INTO attendance_punch_edits (tenant_id, user_id, attendance_id, work_date, action, before_json, after_json, reason, reason_note, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [req.tenantId ?? null, userId, attendanceId || null, workDate, action,
       before ? JSON.stringify(before) : null, after ? JSON.stringify(after) : null, reason, note, req.user?.id || null]
   );
+  return res.insertId;
+}
+
+/** コミット後: 監査ログと月の集計の更新（失敗しても編集履歴には残っている） */
+async function afterEdit(req, { userId, workDate, action, before, after, reason, note }) {
   try {
     await auditRepo.writeLog({
       userId: req.user?.id, tenantId: req.tenantId ?? null, action: `punch_${action}`, path: req.originalUrl || req.path, method: req.method,
@@ -126,7 +148,12 @@ async function record(req, { userId, attendanceId, workDate, action, before, aft
     const [y, m] = workDate.split('-').map(Number);
     await summaryRepo.markDirty(userId, y, m, req.tenantId ?? null);
   } catch (e) { /* 集計は次の更新で直る */ }
-  return res.insertId;
+}
+
+async function record(req, data, mutate) {
+  const id = await tx(async (q) => { await mutate(q); return insertEdit(q, req, data); });
+  await afterEdit(req, data);
+  return id;
 }
 
 async function notify(req, userId, workDate, message) {
@@ -180,14 +207,14 @@ async function voidPunch(req) {
   if (part === 'out' && !row.checkOut) throw httpError(400, 'この打刻には退勤がありません');
   if (part === 'out' && !row.checkIn) part = 'row'; // 出勤のない退勤だけの行は行ごと取消
   if (part === 'out') {
-    await db.query('UPDATE attendance SET checkOut = NULL WHERE id = ? AND userId = ?', [row.id, row.userId]);
-    const id = await record(req, { userId: row.userId, attendanceId: row.id, workDate, action: 'void_out', before: { checkIn: row.checkIn, checkOut: row.checkOut, outSource: row.out_locationSource || null }, after: { checkIn: row.checkIn, checkOut: null }, reason, note });
+    const id = await record(req, { userId: row.userId, attendanceId: row.id, workDate, action: 'void_out', before: { checkIn: row.checkIn, checkOut: row.checkOut, outSource: row.out_locationSource || null }, after: { checkIn: row.checkIn, checkOut: null }, reason, note },
+      (q) => q.query('UPDATE attendance SET checkOut = NULL WHERE id = ? AND userId = ?', [row.id, row.userId]));
     await notify(req, row.userId, workDate, `${workDate.slice(5).replace('-', '/')} の退勤（${hm(row.checkOut)}）は管理者により取り消されました。退勤時にもう一度打刻してください。（理由：${reason}）`);
     return { ok: true, editId: id };
   }
   // 行ごと取消: 行の内容を丸ごと原本として残し、勤怠からは外す（元に戻すで同じ id で復元）
-  await db.query('DELETE FROM attendance WHERE id = ? AND userId = ?', [row.id, row.userId]);
-  const id = await record(req, { userId: row.userId, attendanceId: row.id, workDate, action: 'void_row', before: { row }, after: null, reason, note });
+  const id = await record(req, { userId: row.userId, attendanceId: row.id, workDate, action: 'void_row', before: { row }, after: null, reason, note },
+    (q) => q.query('DELETE FROM attendance WHERE id = ? AND userId = ?', [row.id, row.userId]));
   await notify(req, row.userId, workDate, `${workDate.slice(5).replace('-', '/')} の打刻（${hm(row.checkIn) || '—'}〜${hm(row.checkOut) || '—'}）は管理者により取り消されました。（理由：${reason}）`);
   return { ok: true, editId: id };
 }
@@ -205,21 +232,27 @@ async function restorePunch(req) {
   const before = JSON.parse(e.before_json || '{}');
   const workDate = String(e.work_date instanceof Date ? e.work_date.toISOString() : e.work_date).slice(0, 10);
   await assertOpen(req, e.user_id, workDate);
+  let write;
   if (e.action === 'void_out') {
     const [[row]] = await db.query('SELECT id, checkIn, checkOut FROM attendance WHERE id = ? LIMIT 1', [e.attendance_id]);
     if (!row) throw httpError(409, '打刻の行がないため元に戻せません');
     if (row.checkOut) throw httpError(409, `すでに新しい退勤（${hm(row.checkOut)}）があるため元に戻せません。必要なら退勤を修正してください。`);
-    await db.query('UPDATE attendance SET checkOut = ? WHERE id = ?', [before.checkOut, row.id]);
+    write = (q) => q.query('UPDATE attendance SET checkOut = ? WHERE id = ? AND checkOut IS NULL', [before.checkOut, row.id]);
   } else {
     const snap = before.row || {};
     const [[exists]] = await db.query('SELECT id FROM attendance WHERE id = ? LIMIT 1', [snap.id]);
     if (exists) throw httpError(409, 'すでに同じ打刻があるため元に戻せません');
     const cols = Object.keys(snap).filter(k => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k));
     if (!cols.length) throw httpError(409, '原本の内容がないため元に戻せません');
-    await db.query(`INSERT INTO attendance (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map(k => snap[k]));
+    write = (q) => q.query(`INSERT INTO attendance (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`, cols.map(k => snap[k]));
   }
-  await db.query('UPDATE attendance_punch_edits SET restored_at = ?, restored_by = ? WHERE id = ?', [nowJST(), req.user?.id || null, e.id]);
-  const id = await record(req, { userId: e.user_id, attendanceId: e.attendance_id, workDate, action: 'restore', before: null, after: { restoredEditId: e.id, ...(e.action === 'void_out' ? { checkOut: before.checkOut } : { row: before.row }) }, reason, note });
+  const id = await record(req, { userId: e.user_id, attendanceId: e.attendance_id, workDate, action: 'restore', before: null, after: { restoredEditId: e.id, ...(e.action === 'void_out' ? { checkOut: before.checkOut } : { row: before.row }) }, reason, note },
+    async (q) => {
+      // 同時に2人が押しても1回だけ
+      const [r] = await q.query('UPDATE attendance_punch_edits SET restored_at = ?, restored_by = ? WHERE id = ? AND restored_at IS NULL', [nowJST(), req.user?.id || null, e.id]);
+      if (r && r.affectedRows === 0) throw httpError(409, 'すでに元に戻されています');
+      await write(q);
+    });
   await notify(req, e.user_id, workDate, `${workDate.slice(5).replace('-', '/')} の取り消された打刻は管理者により元に戻されました。（理由：${reason}）`);
   return { ok: true, editId: id };
 }
@@ -238,8 +271,8 @@ async function editPunch(req) {
   const nextIn = part === 'in' ? value : row.checkIn;
   const nextOut = part === 'out' ? value : row.checkOut;
   if (nextIn && nextOut && String(nextOut) <= String(nextIn)) throw httpError(400, '退勤は出勤より後にしてください（日をまたぐ場合は「翌日」）');
-  await db.query(`UPDATE attendance SET ${part === 'in' ? 'checkIn' : 'checkOut'} = ? WHERE id = ? AND userId = ?`, [value, row.id, row.userId]);
-  const id = await record(req, { userId: row.userId, attendanceId: row.id, workDate, action: part === 'in' ? 'edit_in' : 'edit_out', before: { checkIn: row.checkIn, checkOut: row.checkOut }, after: { checkIn: nextIn, checkOut: nextOut }, reason, note });
+  const id = await record(req, { userId: row.userId, attendanceId: row.id, workDate, action: part === 'in' ? 'edit_in' : 'edit_out', before: { checkIn: row.checkIn, checkOut: row.checkOut }, after: { checkIn: nextIn, checkOut: nextOut }, reason, note },
+    (q) => q.query(`UPDATE attendance SET ${part === 'in' ? 'checkIn' : 'checkOut'} = ? WHERE id = ? AND userId = ?`, [value, row.id, row.userId]));
   const old = hm(part === 'in' ? row.checkIn : row.checkOut) || 'なし';
   await notify(req, row.userId, workDate, `${workDate.slice(5).replace('-', '/')} の${part === 'in' ? '出勤' : '退勤'}が管理者により ${old} → ${time} に修正されました。（理由：${reason}）`);
   return { ok: true, editId: id };
@@ -259,21 +292,26 @@ async function addPunch(req) {
   const outV = cout ? `${req.body?.nextDay ? addDay(date, 1) : date} ${cout}:00` : null;
   if (inV && outV && outV <= inV) throw httpError(400, '退勤は出勤より後にしてください（日をまたぐ場合は「翌日」）');
   let attendanceId = null;
+  let open = null;
+  let insertSql = null; let insertParams = null;
   if (!inV) {
-    const [[open]] = await db.query('SELECT id, checkIn FROM attendance WHERE userId = ? AND checkIn IS NOT NULL AND checkOut IS NULL AND DATE(checkIn) = ? ORDER BY checkIn DESC LIMIT 1', [u.id, date]);
+    [[open]] = await db.query('SELECT id, checkIn FROM attendance WHERE userId = ? AND checkIn IS NOT NULL AND checkOut IS NULL AND DATE(checkIn) = ? ORDER BY checkIn DESC LIMIT 1', [u.id, date]);
     if (!open) throw httpError(400, 'この日に退勤前の出勤がありません。出勤も入力してください');
     if (outV <= String(open.checkIn)) throw httpError(400, '退勤は出勤より後にしてください');
-    await db.query('UPDATE attendance SET checkOut = ? WHERE id = ?', [outV, open.id]);
     attendanceId = open.id;
   } else {
-    const params = [u.id, inV, outV];
-    let sql = 'INSERT INTO attendance (userId, checkIn, checkOut';
-    if (u.tenant_id != null && (await getAttendanceColumnSet()).has('tenant_id')) { sql += ', tenant_id'; params.push(u.tenant_id); }
-    sql += `) VALUES (${params.map(() => '?').join(', ')})`;
-    const [res] = await db.query(sql, params);
-    attendanceId = res.insertId;
+    insertParams = [u.id, inV, outV];
+    insertSql = 'INSERT INTO attendance (userId, checkIn, checkOut';
+    if (u.tenant_id != null && (await getAttendanceColumnSet()).has('tenant_id')) { insertSql += ', tenant_id'; insertParams.push(u.tenant_id); }
+    insertSql += `) VALUES (${insertParams.map(() => '?').join(', ')})`;
   }
-  const id = await record(req, { userId: u.id, attendanceId, workDate: date, action: 'add', before: null, after: { checkIn: inV, checkOut: outV }, reason, note });
+  const data = { userId: u.id, attendanceId, workDate: date, action: 'add', before: null, after: { checkIn: inV, checkOut: outV }, reason, note };
+  const id = await record(req, data, async (q) => {
+    if (open) { await q.query('UPDATE attendance SET checkOut = ? WHERE id = ? AND checkOut IS NULL', [outV, open.id]); return; }
+    const [res] = await q.query(insertSql, insertParams);
+    attendanceId = res.insertId;
+    data.attendanceId = attendanceId; // 履歴にも新しい行の id を入れる
+  });
   await notify(req, u.id, date, `${date.slice(5).replace('-', '/')} に打刻（${cin || '—'}〜${cout || '—'}）が管理者により追加されました。（理由：${reason}）`);
   return { ok: true, editId: id, attendanceId };
 }
@@ -323,12 +361,140 @@ function describeEdits(list) {
   });
 }
 
+const AUDIT_KINDS = {
+  void: ['void_out', 'void_row'], edit: ['edit_in', 'edit_out'], add: ['add'], restore: ['restore']
+};
+const fmtAt = (v) => {
+  if (!v) return '';
+  const s = v instanceof Date ? new Date(v.getTime() + 9 * 3600 * 1000).toISOString() : String(v);
+  return s.replace('T', ' ').slice(0, 16);
+};
+const ymd = (v) => (v instanceof Date ? new Date(v.getTime() + 9 * 3600 * 1000).toISOString() : String(v || '')).slice(0, 10);
+
+/** 監査ログ（勤怠の修正）: 打刻編集 と 調整申請の承認 を1つの一覧に。対象日で絞り込み */
+async function listAudit(req) {
+  await ensureSchema();
+  const q = req.query || {};
+  const from = isDate(q.from) ? q.from : null;
+  const to = isDate(q.to) ? q.to : null;
+  if (!from || !to) throw httpError(400, '期間を指定してください');
+  const userId = parseInt(String(q.userId || ''), 10) || null;
+  const actorId = parseInt(String(q.actorId || ''), 10) || null;
+  const kind = String(q.kind || '');
+  const tid = req.tenantId ?? null;
+  const out = [];
+
+  if (kind !== 'adjust') {
+    const params = [from, to];
+    let sql = `SELECT e.*, au.username AS actorName, au.role AS actorRole, tu.username AS targetName, tu.employee_code AS targetCode
+                 FROM attendance_punch_edits e
+                 LEFT JOIN users au ON au.id = e.created_by
+                 JOIN users tu ON tu.id = e.user_id
+                WHERE e.work_date BETWEEN ? AND ?`;
+    if (tid != null) { sql += ' AND tu.tenant_id = ?'; params.push(tid); }
+    if (userId) { sql += ' AND e.user_id = ?'; params.push(userId); }
+    if (actorId) { sql += ' AND e.created_by = ?'; params.push(actorId); }
+    if (AUDIT_KINDS[kind]) { sql += ` AND e.action IN (${AUDIT_KINDS[kind].map(() => '?').join(',')})`; params.push(...AUDIT_KINDS[kind]); }
+    sql += ' ORDER BY e.created_at DESC, e.id DESC LIMIT 2000';
+    const [rows] = await db.query(sql, params);
+    for (const r of rows) {
+      let before = null; let after = null;
+      try { before = r.before_json ? JSON.parse(r.before_json) : null; after = r.after_json ? JSON.parse(r.after_json) : null; } catch (e) { /* ignore */ }
+      const b = before || {}; const a = after || {};
+      let change = '';
+      if (r.action === 'void_out') change = `退勤 ${hm(b.checkOut)} → （取消）`;
+      else if (r.action === 'void_row') change = `${hm(b.row?.checkIn) || '—'}〜${hm(b.row?.checkOut) || '—'} → （取消）`;
+      else if (r.action === 'edit_in') change = `出勤 ${hm(b.checkIn) || 'なし'} → ${hm(a.checkIn)}`;
+      else if (r.action === 'edit_out') change = `退勤 ${hm(b.checkOut) || 'なし'} → ${hm(a.checkOut)}`;
+      else if (r.action === 'add') change = `（なし） → ${hm(a.checkIn) || '—'}〜${hm(a.checkOut) || '—'}`;
+      else if (r.action === 'restore') change = a.checkOut ? `退勤 （取消） → ${hm(a.checkOut)}` : `（取消） → ${hm(a.row?.checkIn) || '—'}〜${hm(a.row?.checkOut) || '—'}`;
+      out.push({
+        at: fmtAt(r.created_at), actorName: r.actorName || '', actorRole: r.actorRole || '',
+        targetName: r.targetName || '', targetCode: r.targetCode || '', workDate: ymd(r.work_date),
+        kind: r.action, label: ACTION_LABEL[r.action] || r.action, change,
+        reason: r.reason + (r.reason_note ? `：${r.reason_note}` : ''), restored: !!r.restored_at
+      });
+    }
+  }
+
+  if (!kind || kind === 'adjust') {
+    try {
+      const params = [from, to];
+      let sql = `SELECT t.*, au.username AS actorName, au.role AS actorRole, tu.username AS targetName, tu.employee_code AS targetCode,
+                        DATE(COALESCE(t.requestedCheckIn, t.requestedCheckOut)) AS workDate
+                   FROM time_adjust_requests t
+                   LEFT JOIN users au ON au.id = t.processed_by
+                   JOIN users tu ON tu.id = t.userId
+                  WHERE t.status = 'approved' AND DATE(COALESCE(t.requestedCheckIn, t.requestedCheckOut)) BETWEEN ? AND ?`;
+      if (tid != null) { sql += ' AND tu.tenant_id = ?'; params.push(tid); }
+      if (userId) { sql += ' AND t.userId = ?'; params.push(userId); }
+      if (actorId) { sql += ' AND t.processed_by = ?'; params.push(actorId); }
+      sql += ' ORDER BY t.processed_at DESC, t.id DESC LIMIT 2000';
+      const [rows] = await db.query(sql, params);
+      for (const r of rows) {
+        const del = String(r.request_type || '') === 'delete';
+        out.push({
+          at: fmtAt(r.processed_at || r.updated_at), actorName: r.actorName || '', actorRole: r.actorRole || '',
+          targetName: r.targetName || '', targetCode: r.targetCode || '', workDate: ymd(r.workDate),
+          kind: 'adjust', label: del ? '調整申請（行の削除）の承認' : '調整申請の承認',
+          change: del ? `${hm(r.requestedCheckIn) || '—'}〜${hm(r.requestedCheckOut) || '—'} → （削除）` : `申請 ${hm(r.requestedCheckIn) || '—'}〜${hm(r.requestedCheckOut) || '—'}`,
+          reason: `本人の申請 #${r.id}${r.reason ? `：${String(r.reason).slice(0, 80)}` : ''}`, restored: false
+        });
+      }
+    } catch (e) { /* 調整申請のテーブルがない環境 */ }
+  }
+  out.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+  return { from, to, items: out };
+}
+
+async function exportAuditXlsx(req, res) {
+  try {
+    const { from, to, items } = await listAudit(req);
+    const ExcelJS = require('exceljs');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('監査ログ（勤怠の修正）', { views: [{ state: 'frozen', ySplit: 3 }], pageSetup: { paperSize: 9, orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 } });
+    ws.columns = [{ width: 17 }, { width: 18 }, { width: 18 }, { width: 11 }, { width: 24 }, { width: 30 }, { width: 44 }];
+    ws.mergeCells(1, 1, 1, 7);
+    ws.getCell(1, 1).value = `監査ログ（勤怠の修正）　対象日 ${from} 〜 ${to}`;
+    ws.getCell(1, 1).font = { name: 'Meiryo UI', size: 13, bold: true, color: { argb: 'FF0B2C66' } };
+    const head = ws.getRow(3);
+    ['日時', '操作者', '対象社員', '対象日', '操作', '変更内容（前 → 後）', '理由'].forEach((t, i) => {
+      const c = head.getCell(i + 1);
+      c.value = t;
+      c.font = { name: 'Meiryo UI', size: 9, bold: true, color: { argb: 'FFFFFFFF' } };
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0B2C66' } };
+      c.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+    const thin = { style: 'thin', color: { argb: 'FFC3CDDA' } };
+    items.forEach((r, i) => {
+      const row = ws.getRow(4 + i);
+      const role = { admin: '管理者', manager: 'マネージャー' }[String(r.actorRole).toLowerCase()] || '';
+      [r.at, `${r.actorName}${role ? `（${role}）` : ''}`, `${r.targetName}${r.targetCode ? `（${r.targetCode}）` : ''}`, r.workDate, r.label + (r.restored ? '（元に戻し済み）' : ''), r.change, r.reason]
+        .forEach((v, j) => {
+          const c = row.getCell(j + 1);
+          c.value = v;
+          c.font = { name: 'Meiryo UI', size: 9, color: { argb: j === 4 && /取消/.test(r.label) ? 'FFB91C1C' : 'FF1F2937' } };
+          c.alignment = { vertical: 'middle', wrapText: j >= 5 };
+          c.border = { top: thin, bottom: thin, left: thin, right: thin };
+        });
+    });
+    const name = encodeURIComponent(`監査ログ_勤怠の修正_${from}_${to}.xlsx`);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${name}"; filename*=UTF-8''${name}`);
+    await wb.xlsx.write(res);
+    res.end();
+  } catch (err) {
+    res.status(Number(err?.status || 500)).json({ message: err.message });
+  }
+}
+
 const wrap = (fn) => async (req, res) => {
   try { res.status(200).json(await fn(req)); } catch (err) { res.status(Number(err?.status || 500)).json({ message: err.message }); }
 };
 
 module.exports = {
   REASONS, ACTION_LABEL, ensureSchema, editedMap, describeEdits,
+  listAudit: wrap(listAudit), exportAuditXlsx,
   getDay: wrap(getDay), voidPunch: wrap(voidPunch), restorePunch: wrap(restorePunch), editPunch: wrap(editPunch), addPunch: wrap(addPunch),
   _impl: { getDay, voidPunch, restorePunch, editPunch, addPunch }
 };

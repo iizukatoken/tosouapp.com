@@ -210,6 +210,8 @@ router.post('/admin/punches/void', authenticate, authorize('manager', 'admin'), 
 router.post('/admin/punches/restore', authenticate, authorize('manager', 'admin'), punchEdit.restorePunch);
 router.post('/admin/punches/edit', authenticate, authorize('manager', 'admin'), punchEdit.editPunch);
 router.post('/admin/punches/add', authenticate, authorize('manager', 'admin'), punchEdit.addPunch);
+router.get('/admin/punch-audit', authenticate, authorize('manager', 'admin'), punchEdit.listAudit);
+router.get('/admin/punch-audit/export.xlsx', authenticate, authorize('manager', 'admin'), punchEdit.exportAuditXlsx);
 
 // 36協定 月次サマリー (monthly_summaries) — 手動実行は重いので admin のみ
 const summaryCtrl = require('./attendance.summary.controller');
