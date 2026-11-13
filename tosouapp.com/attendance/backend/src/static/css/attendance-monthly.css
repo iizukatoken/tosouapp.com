@@ -1600,7 +1600,7 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
 }
 #monthTable.se-table table {
   /* 2300px から 出社/在宅/現場・休憩/深夜休憩/勤務時間 を狭めた分を引いた幅 (他の列の表示幅は従来どおり) */
-  min-width: 2082px; /* 履歴・行操作 を狭めた分（-44px） */
+  min-width: 1903px; /* 列幅を詰めた合計（作業内容 300px） */
   width: max-content;
   table-layout: auto;
   border-collapse: collapse;
@@ -3877,3 +3877,11 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 
 /* 日付 の列は 72px（「11/01(日)」が入る幅） */
 #monthTable thead th.sticky-col-1, #monthTable tbody td.sticky-col-1 { width: 72px !important; min-width: 72px !important; max-width: 72px !important; padding-left: 2px !important; padding-right: 2px !important; box-sizing: border-box !important; text-align: center; white-space: nowrap; }
+
+/* 承認者 の列は 70px */
+#monthTable thead th:nth-child(18), #monthTable tbody td:nth-child(18) { width: 70px !important; min-width: 70px !important; max-width: 70px !important; padding-left: 2px !important; padding-right: 2px !important; box-sizing: border-box !important; }
+
+/* ステータス: 列は 94px（「作業内容未入力」が入る幅）、表示は 枠いっぱい（左右 3px） */
+#monthTable tbody td:nth-child(17) { padding-left: 3px !important; padding-right: 3px !important; }
+#monthTable tbody td:nth-child(17) .se-status-wrap { width: 100% !important; display: block !important; }
+#monthTable tbody td:nth-child(17) .se-status { display: block !important; width: 100% !important; max-width: none !important; box-sizing: border-box !important; text-align: center; white-space: nowrap; overflow: hidden; padding-left: 2px !important; padding-right: 2px !important; }
