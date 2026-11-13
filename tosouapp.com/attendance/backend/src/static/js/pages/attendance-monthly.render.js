@@ -621,11 +621,11 @@
       tr.innerHTML = `
       <td class="sticky-col-1">${showDateDow ? `<span style="font-weight:900; color:${esc(dowColor)};">${esc(dateMmdd)}(${esc(dow)})</span>` : ''}</td>
       <td>
-        <div class="se-kubun-wrap" style="flex-wrap:wrap;${!showDateDow ? 'visibility:hidden;' : ''}">
+        <div class="se-kubun-wrap" style="position:relative;${!showDateDow ? 'visibility:hidden;' : ''}">
           <select id="classification_${dateStr}_${rowId}" name="classification_${dateStr}_${rowId}" class="se-select se-kubun-select ${kubunClass}" data-field="classification" ${state.editableMonth ? '' : 'disabled'}>
             ${kubunOptionsHtml}
           </select>
-          ${kubunWarning ? `<div class="se-kubun-warning" data-kubun-warning="1" title="${esc(kubunWarning)}" style="flex-basis:100%;font-size:10px;font-weight:700;color:#b45309;line-height:1.2;margin-top:2px;white-space:normal;">⚠ ${esc(kubunWarning)}</div>` : ''}
+          ${kubunWarning ? `<div class="se-kubun-warning" data-kubun-warning="1" title="${esc(kubunWarning)}" aria-label="${esc(kubunWarning)}" style="position:absolute;top:-6px;left:100px;z-index:2;font-size:11px;line-height:13px;padding:0 2px;background:#fff7ed;border:1px solid #fdba74;border-radius:2px;color:#b45309;font-weight:700;cursor:help;">⚠</div>` : ''}
           <input id="furikaeDate_${dateStr}_${rowId}" name="furikaeDate_${dateStr}_${rowId}" class="se-input se-furikae-date" data-field="furikaeHolidayDate" type="date" value="${esc(daily?.furikae_holiday_date ? String(daily.furikae_holiday_date).slice(0, 10) : '')}" title="振替休日の日付" placeholder="振替休日" style="width:110px;font-size:11px;margin-top:2px;${kubunInit === '振替出勤' ? '' : 'display:none;'}" ${state.editableMonth ? '' : 'disabled'}>
         </div>
       </td>
