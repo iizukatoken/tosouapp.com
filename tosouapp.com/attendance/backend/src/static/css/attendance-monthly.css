@@ -1656,10 +1656,17 @@ body.embed #monthTable .se-month-scroll::-webkit-scrollbar {
   padding-right: 1px;
 }
 #monthTable thead th:nth-child(18),
-#monthTable thead th:nth-child(20),
-#monthTable tbody td:nth-child(18),
-#monthTable tbody td:nth-child(20) {
+#monthTable tbody td:nth-child(18) {
   min-width: 72px;
+  text-align: center;
+}
+/* 履歴: アイコンだけなので幅は最小（右の外枠にそろえる） */
+#monthTable thead th:nth-child(20),
+#monthTable tbody td:nth-child(20) {
+  min-width: 34px !important;
+  width: 34px !important;
+  max-width: 34px !important;
+  padding: 0 !important;
   text-align: center;
 }
 #monthTable thead th:nth-child(19),

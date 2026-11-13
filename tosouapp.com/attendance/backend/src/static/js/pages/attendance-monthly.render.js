@@ -111,7 +111,7 @@
       <th>ステータス</th>
         <th>承認者</th>
       <th style="width: 60px !important; min-width: 60px !important; max-width: 60px !important; text-align: center; box-sizing: border-box; padding-left: 0; padding-right: 0;">行操作</th>
-      <th>履歴</th>
+      <th style="width:34px !important;min-width:34px !important;max-width:34px !important;padding:0 !important;text-align:center;font-size:10px;letter-spacing:-1px;">履歴</th>
       </tr>
     </thead>
   `;
@@ -810,7 +810,7 @@
         }
         
         const defaultWidths = [
-          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 45, 80, 100, 150, 62, 80, 50, 50
+          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 45, 80, 100, 150, 62, 80, 50, 34
         ]; // 20 columns (出社/在宅/現場・休憩/深夜休憩/勤務時間/超過時間/ステータス は狭く。表の min-width も同じ比率で縮めている — CSS #monthTable.se-table table)
         
         const cg = document.createElement('colgroup');
