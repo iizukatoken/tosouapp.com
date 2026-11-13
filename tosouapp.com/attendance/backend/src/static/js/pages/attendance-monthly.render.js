@@ -741,7 +741,7 @@
           ${st.fix ? (isAdminView ? `<span class="se-status ${esc(st.cls)} se-pe-mark" role="button" tabindex="0" data-pe-date="${esc(dateStr)}" data-pe-uid="${esc(String(detail?.user?.id || ''))}" data-pe-name="${esc(String(detail?.user?.username || ''))}" data-pe-code="${esc(String(detail?.user?.employeeCode || detail?.user?.employee_code || ''))}" title="退勤の打刻がありません。クリックで 打刻編集（退勤を追加）" style="cursor:pointer;">${esc(st.text)} ›</span>` : `<a class="se-status ${esc(st.cls)}" href="/ui/adjust?type=time_adjust&date=${encodeURIComponent(dateStr)}${seg?.id ? `&attendanceId=${encodeURIComponent(seg.id)}` : ''}" title="退勤の打刻がありません。クリックで 調整申請" style="cursor:pointer;text-decoration:none;">${esc(st.text)} ›</a>`) : `<span class="se-status ${esc(st.cls)}" title="${esc(st.text)}">${esc(st.text)}</span>`}
         </div>
       </td>
-      <td ${showDateDow ? 'data-field="approver"' : ''} style="text-align:center;color:#0f172a;font-weight:800;">${showDateDow ? esc(st.approver) : '—'}</td>
+      <td ${showDateDow ? 'data-field="approver"' : ''} style="text-align:center;color:#0b2c66;font-weight:800;font-size:11.5px;letter-spacing:-0.2px;white-space:nowrap;">${showDateDow ? esc(st.approver) : '—'}</td>
       <td style="text-align:center;">
          <div style="display:flex; justify-content:center; gap:4px; flex-wrap:wrap;">
            ${showDateDow ? `<button type="button" class="se-icon-btn primary" data-action="add" ${(state.editableMonth && canAddMore) ? '' : 'disabled'} title="${canAddMore ? '行追加' : '1日は最大3件まで'}" style="font-weight:bold; font-size:14px; padding:0; width:22px; height:22px;">+</button>` : ''}
