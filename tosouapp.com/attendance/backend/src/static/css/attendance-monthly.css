@@ -3852,7 +3852,10 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
   font-size: 13px !important; font-weight: 700 !important; text-decoration: none !important;
   background: #fff !important; border: 1px solid #9aa8ba !important; color: #0b2c66 !important;
 }
-#monthTable tbody td:nth-child(19) .se-icon-btn.secondary { color: #64748b !important; }
+#monthTable tbody td:nth-child(19) .se-icon-btn.primary { background: #0b2c66 !important; border-color: #0b2c66 !important; color: #fff !important; }
+#monthTable tbody td:nth-child(19) .se-icon-btn.primary:not(:disabled):hover { background: #163d82 !important; }
+#monthTable tbody td:nth-child(19) .se-icon-btn.secondary { background: #64748b !important; border-color: #64748b !important; color: #fff !important; }
+#monthTable tbody td:nth-child(19) .se-icon-btn.secondary:not(:disabled):hover { background: #475569 !important; }
 #monthTable tbody td:nth-child(19) .se-adj-btn { font-size: 11px !important; }
 #monthTable tbody td:nth-child(19) :is(.se-icon-btn, .se-adj-btn):not(:disabled):hover { background: #e9eef4 !important; }
 #monthTable tbody td:nth-child(19) .se-icon-btn:disabled { opacity: .35 !important; }
