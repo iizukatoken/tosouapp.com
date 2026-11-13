@@ -3859,3 +3859,6 @@ input.se-time[disabled][data-row-disabled="1"][data-manual="1"]::-webkit-datetim
 #monthTable tbody td:nth-child(19) .se-adj-btn { font-size: 11px !important; }
 #monthTable tbody td:nth-child(19) :is(.se-icon-btn, .se-adj-btn):not(:disabled):hover { background: #e9eef4 !important; }
 #monthTable tbody td:nth-child(19) .se-icon-btn:disabled { opacity: .35 !important; }
+
+/* 区分の警告（例: 有給休暇なのに打刻あり）は 区分 の下に出し、区分の選択欄を縮めない */
+.se-kubun-wrap .se-kubun-select { flex-shrink: 0; }
