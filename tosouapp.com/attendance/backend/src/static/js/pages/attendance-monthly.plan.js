@@ -94,7 +94,7 @@
         if (half) {
           p.stdMin = Math.round(p.stdMin / 2);
           // 午前休・午後休 が決まっていれば 勤務する半日の時間帯（未選択は従来どおり 1日の時刻）
-          const hp = String(daily?.halfPeriod || '');
+          const hp = String(daily?.halfPeriod || sr?.halfPeriod || '');
           const w = (globalThis.MonthlyMonthlyRender?.halfWindow || (() => null))(s, e, br, hp);
           if (w) { p.time = `${w.start}〜${w.end}`; p.halfWin = w; }
         }
@@ -104,7 +104,7 @@
         if (half && !p.halfWin) { p.start = null; p.end = null; } else { p.start = p.halfWin ? p.halfWin.startMin : toMin(s); p.end = p.halfWin ? p.halfWin.endMin : toMin(e); }
       }
       p.place = PLACE[String(plan?.workType || plan?.work_type || '')] || (plan ? '—' : '出社');
-      if (half) p.label = `${half}${daily?.halfPeriod === 'am' ? '・午前' : daily?.halfPeriod === 'pm' ? '・午後' : ''}`;
+      if (half) p.label = `${half}${(daily?.halfPeriod || sr?.halfPeriod) === 'am' ? '・午前' : (daily?.halfPeriod || sr?.halfPeriod) === 'pm' ? '・午後' : ''}`;
     } else if (kind === 'leave') {
       const sm = Number(shift?.standard_minutes) || 0;
       p.std = sm ? `(${fmt(sm)})` : '—';

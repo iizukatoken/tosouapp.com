@@ -627,7 +627,7 @@
         else if (k === '欠勤') optStyle = 'color:#ea580c; font-weight:bold;';
         
         if (k === '半休' || k === '半休(有給)') {
-          const hp = String(daily?.halfPeriod || '');
+          const hp = String(daily?.halfPeriod || shiftRequest?.halfPeriod || '');
           const legacy = kubunInit === k && !hp
             ? `<option value="${esc(k)}" selected title="午前・午後を選んでください">${esc(k)}</option>` : '';
           return legacy + ['am', 'pm'].map((h) => `<option value="${esc(k)}" data-half="${h}" ${kubunInit === k && hp === h ? 'selected' : ''}>${esc(k)}・${h === 'am' ? '午前' : '午後'}</option>`).join('');
@@ -712,7 +712,7 @@
         if (isFlexUser) return '—';
         // 半休/半休(有給): 午前休・午後休 が決まっていれば その半日の時間帯で判定。未選択（これまでのデータ）は出さない
         if (isHankyuu) {
-          const w = halfWindow(String(shiftStart).slice(0, 5), String(shiftEnd).slice(0, 5), shift?.break_minutes ?? 60, String(daily?.halfPeriod || ''));
+          const w = halfWindow(String(shiftStart).slice(0, 5), String(shiftEnd).slice(0, 5), shift?.break_minutes ?? 60, String(daily?.halfPeriod || shiftRequest?.halfPeriod || ''));
           if (!w || !primary) return '—';
           const a = parseHm(finalIn); const b2 = parseHm(finalOut);
           const lm = a != null && a > w.startMin ? a - w.startMin : 0;
@@ -859,7 +859,7 @@
         }
         
         const defaultWidths = [
-          75, 110, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 45, 80, 100, 150, 62, 80, 46, 34
+          75, 152, 32, 32, 32, 120, 150, 80, 80, 45, 45, 45, 45, 80, 100, 150, 62, 80, 46, 34
         ]; // 20 columns (出社/在宅/現場・休憩/深夜休憩/勤務時間/超過時間/ステータス は狭く。表の min-width も同じ比率で縮めている — CSS #monthTable.se-table table)
         
         // 行操作（19列目）・履歴（20列目）はボタンだけなので幅を固定。表の最小幅との差は他の列で分ける

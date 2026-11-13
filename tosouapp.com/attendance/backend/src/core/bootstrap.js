@@ -471,6 +471,13 @@ async function runMigrations() {
           // 半休・半休(有給) の 午前休('am') / 午後休('pm')。NULL = 未選択（これまでのデータ）
           try { await conn.query(`ALTER TABLE attendance_daily ADD COLUMN half_period VARCHAR(2) NULL`); } catch (e) { /* already exists */ }
         }
+      },
+      {
+        id: '20261113_02_shift_requests_half_period',
+        up: async () => {
+          // シフト申請の 半休 の 午前休('am') / 午後休('pm')
+          try { await conn.query(`ALTER TABLE shift_requests ADD COLUMN half_period VARCHAR(2) NULL`); } catch (e) { /* already exists / table not yet created */ }
+        }
       }
     ];
     for (const m of migrations) {

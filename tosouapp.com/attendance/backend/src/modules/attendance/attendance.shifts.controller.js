@@ -286,6 +286,30 @@ exports.deleteShiftAssignment = async (req, res) => {
 
 // ─── Lưu hàng loạt / duyệt / bảng ca ─────────────────────────────────────────
 
+// シフト申請の 半休: 画面では 'paid_half_am' / 'paid_half_pm' / 'half_am' / 'half_pm'。
+// DB の leaveType は今までどおり 'paid_half' / 'half'（有給の計算などはそのまま）、午前・午後 は half_period 列へ
+const splitHalfLeave = (lt) => {
+  const m = /^(paid_half|half)_(am|pm)$/.exec(String(lt || ''));
+  return m ? { leaveType: m[1], halfPeriod: m[2] } : { leaveType: lt || null, halfPeriod: null };
+};
+const joinHalfLeave = (row) => {
+  if (row && (row.leaveType === 'paid_half' || row.leaveType === 'half') && (row.half_period === 'am' || row.half_period === 'pm')) {
+    return { ...row, leaveType: `${row.leaveType}_${row.half_period}`, halfPeriod: row.half_period };
+  }
+  return row;
+};
+let shiftHalfCol = null;
+async function hasShiftHalfCol() {
+  if (shiftHalfCol != null) return shiftHalfCol;
+  try {
+    const [r] = await db.query("SHOW COLUMNS FROM shift_requests LIKE 'half_period'");
+    shiftHalfCol = Array.isArray(r) && r.length > 0;
+  } catch (e) { shiftHalfCol = false; }
+  return shiftHalfCol;
+}
+exports._splitHalfLeave = splitHalfLeave;
+exports._joinHalfLeave = joinHalfLeave;
+
 exports.postShiftsBulk = async (req, res) => {
   try {
     const userId = await resolveTargetUserId(req);
@@ -296,16 +320,27 @@ exports.postShiftsBulk = async (req, res) => {
     if (!month || !Array.isArray(shifts)) {
       return res.status(400).json({ success: false, message: 'Invalid payload' });
     }
+    const withHalf = await hasShiftHalfCol();
     const conn = await db.getConnection();
     try {
       await conn.beginTransaction();
       for (const shift of shifts) {
         if (!shift.date) continue;
-        await conn.query(`
-          INSERT INTO shift_requests (userId, date, status, leaveType, reason, detail, tenant_id)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON DUPLICATE KEY UPDATE status = VALUES(status), leaveType = VALUES(leaveType), reason = VALUES(reason), detail = VALUES(detail)
-        `, [userId, shift.date, shift.status || 'OFF', shift.leaveType || null, shift.reason || null, shift.detail || null, tid]);
+        const { leaveType, halfPeriod } = splitHalfLeave(shift.leaveType);
+        const half = String(shift.status || '') === 'LEAVE' ? halfPeriod : null;
+        if (withHalf) {
+          await conn.query(`
+            INSERT INTO shift_requests (userId, date, status, leaveType, reason, detail, tenant_id, half_period)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE status = VALUES(status), leaveType = VALUES(leaveType), reason = VALUES(reason), detail = VALUES(detail), half_period = VALUES(half_period)
+          `, [userId, shift.date, shift.status || 'OFF', leaveType || null, shift.reason || null, shift.detail || null, tid, half]);
+        } else {
+          await conn.query(`
+            INSERT INTO shift_requests (userId, date, status, leaveType, reason, detail, tenant_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE status = VALUES(status), leaveType = VALUES(leaveType), reason = VALUES(reason), detail = VALUES(detail)
+          `, [userId, shift.date, shift.status || 'OFF', leaveType || null, shift.reason || null, shift.detail || null, tid]);
+        }
       }
       await conn.query(`
         INSERT INTO shift_month_status (userId, month, status, tenant_id) VALUES (?, ?, 'PENDING', ?)
@@ -562,8 +597,9 @@ exports.getUserShiftsForMonth = async (req, res) => {
       const [userRows] = await db.query('SELECT id FROM users WHERE id = ? AND tenant_id = ? LIMIT 1', [userId, tid]);
       if (!userRows || userRows.length === 0) return res.status(404).json({ message: 'User not found in tenant' });
     }
-    const [rows] = await db.query(`SELECT date, status, leaveType, reason, detail FROM shift_requests WHERE userId = ? AND date LIKE ?`, [userId, `${month}-%`]);
-    res.status(200).json(rows);
+    const cols = (await hasShiftHalfCol()) ? ', half_period' : '';
+    const [rows] = await db.query(`SELECT date, status, leaveType, reason, detail${cols} FROM shift_requests WHERE userId = ? AND date LIKE ?`, [userId, `${month}-%`]);
+    res.status(200).json(rows.map(joinHalfLeave));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -591,8 +627,9 @@ exports.getMyMonthlyShifts = async (req, res) => {
 
     let schedule = {};
     try {
-      const [shiftRows] = await db.query(`SELECT date, status, leaveType, reason, detail FROM shift_requests WHERE userId = ? AND date LIKE ?`, [userId, `${month}-%`]);
-      shiftRows.forEach(r => { schedule[String(r.date).slice(0, 10)] = r; });
+      const cols = (await hasShiftHalfCol()) ? ', half_period' : '';
+      const [shiftRows] = await db.query(`SELECT date, status, leaveType, reason, detail${cols} FROM shift_requests WHERE userId = ? AND date LIKE ?`, [userId, `${month}-%`]);
+      shiftRows.forEach(r => { schedule[String(r.date).slice(0, 10)] = joinHalfLeave(r); });
     } catch (e) { /* bảng có thể chưa tồn tại */ }
 
     res.status(200).json({ success: true, data: { submission_status, schedule } });
